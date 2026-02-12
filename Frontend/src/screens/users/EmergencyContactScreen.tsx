@@ -12,9 +12,9 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../../../App';
 import { MaterialIcons } from '@expo/vector-icons';
-import { userAPI, EmergencyContactData } from '../services/api'; // ✅ Import type
+import { userAPI, EmergencyContactData } from '../../services/api'; // ✅ Import type
 
 type EmergencyContactScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'EmergencyContact'>;

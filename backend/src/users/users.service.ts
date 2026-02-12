@@ -1,11 +1,16 @@
-import { Injectable, ConflictException, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
 import {
   RegisterUserDto,
-  RegisterDoctorDto,
   CreateHealthProfileDto,
   CreateEmergencyContactsDto,
   LoginDto,
@@ -37,58 +42,24 @@ export class UsersService {
 
     return {
       success: true,
-      message: `${registerUserDto.userType === 'doctor' ? 'Doctor' : 'User'} registered successfully`,
+      message: 'User registered successfully',
       user: userObject,
     };
   }
 
-  // ✅ NEW - Doctor registration with professional info
-  async registerDoctor(registerDoctorDto: RegisterDoctorDto): Promise<any> {
-    const existingUser = await this.userModel.findOne({
-      email: registerDoctorDto.email,
-    });
-
-    if (existingUser) {
-      throw new ConflictException('Doctor with this email already exists');
-    }
-
-    const hashedPassword = await bcrypt.hash(registerDoctorDto.password, 10);
-
-    const newDoctor = new this.userModel({
-      fullName: registerDoctorDto.fullName,
-      email: registerDoctorDto.email,
-      password: hashedPassword,
-      userType: 'doctor',
-      doctorProfile: {
-        licenseNumber: registerDoctorDto.licenseNumber,
-        specialization: registerDoctorDto.specialization,
-        certificates: registerDoctorDto.certificates || [],
-        isVerified: false,
-      },
-    });
-
-    const savedDoctor = await newDoctor.save();
-    const doctorObject: any = savedDoctor.toObject();
-    delete doctorObject.password;
-
-    return {
-      success: true,
-      message: 'Doctor registered successfully. Account pending verification.',
-      user: doctorObject,
-    };
-  }
-
   async login(loginDto: LoginDto): Promise<any> {
-    const user = await this.userModel.findOne({ 
+    const user = await this.userModel.findOne({
       email: loginDto.email,
-      userType: loginDto.userType,
     });
 
     if (!user) {
-      throw new NotFoundException('Invalid credentials or wrong account type');
+      throw new NotFoundException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      loginDto.password,
+      user.password,
+    );
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
@@ -112,10 +83,6 @@ export class UsersService {
 
     if (!user) {
       throw new NotFoundException('User not found');
-    }
-
-    if (user.userType === 'doctor') {
-      throw new BadRequestException('Doctors do not have health profiles');
     }
 
     user.healthProfile = healthProfileDto as any;
@@ -171,22 +138,7 @@ export class UsersService {
     };
   }
 
-  async getUsersByType(userType: string): Promise<any> {
-    const users = await this.userModel.find({ userType }).select('-password');
-
-    return {
-      success: true,
-      count: users.length,
-      userType,
-      users,
-    };
-  }
-
   async updateUser(userId: string, updateData: Partial<User>): Promise<any> {
-    if (updateData.userType) {
-      delete updateData.userType;
-    }
-
     const user = await this.userModel
       .findByIdAndUpdate(userId, updateData, { new: true })
       .select('-password');

@@ -1,86 +1,57 @@
 
-import { IsString, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  IsNumber,
+  MinLength,
+  IsArray,
+  ValidateNested,
+  IsOptional,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class RegisterUserDto {
-  @IsString()
   @IsNotEmpty()
+  @IsString()
   fullName: string;
 
-  @IsNumber()
   @IsNotEmpty()
+  @IsNumber()
   age: number;
 
   @IsEmail()
-  @IsNotEmpty()
   email: string;
 
-  @IsString()
   @IsNotEmpty()
+  @MinLength(6)
   password: string;
 
-  @IsString()
   @IsNotEmpty()
+  @IsString()
   gender: string;
-
-  @IsEnum(['user', 'doctor'])
-  @IsNotEmpty()
-  userType: 'user' | 'doctor';
 }
-
-// ✅ NEW - Doctor-specific registration DTO
-export class RegisterDoctorDto {
-  @IsString()
-  @IsNotEmpty()
-  fullName: string;
-
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-
-  @IsString()
-  @IsNotEmpty()
-  licenseNumber: string;
-
-  @IsString()
-  @IsNotEmpty()
-  specialization: string;
-
-  @IsArray()
-  @IsOptional()
-
-  certificates?: string[]; // Array of certificate URLs/paths
-
-}
-
 
 export class LoginDto {
   @IsEmail()
-  @IsNotEmpty()
   email: string;
 
-  @IsString()
   @IsNotEmpty()
   password: string;
-
-  @IsEnum(['user', 'doctor'])
-  @IsNotEmpty()
-  userType: 'user' | 'doctor';
 }
 
 export class CreateHealthProfileDto {
+  @IsOptional()
   @IsNumber()
-  sleepDuration: number;
+  sleepDuration?: number;
 
+  @IsOptional()
   @IsString()
-  stressLevel: string;
+  stressLevel?: string;
 
+  @IsOptional()
   @IsString()
-  dietPreference: string;
+  dietPreference?: string;
 
   @IsOptional()
   @IsString()
@@ -88,16 +59,16 @@ export class CreateHealthProfileDto {
 }
 
 export class EmergencyContactDto {
-  @IsString()
   @IsNotEmpty()
+  @IsString()
   fullName: string;
 
-  @IsString()
   @IsNotEmpty()
+  @IsString()
   phoneNumber: string;
 
-  @IsString()
   @IsNotEmpty()
+  @IsString()
   relationship: string;
 }
 

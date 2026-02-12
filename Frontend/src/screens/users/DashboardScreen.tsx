@@ -1,22 +1,22 @@
-
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../../../App';
 import { MaterialIcons } from '@expo/vector-icons';
 
-type DashboardScreenProps = {
+type UserDashboardScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
   route: RouteProp<RootStackParamList, 'Dashboard'>;
 };
 
-export default function DashboardScreen({ navigation, route }: DashboardScreenProps) {
+export default function UserDashboardScreen({ navigation, route }: UserDashboardScreenProps) {
   const { userId } = route.params;
 
   return (
@@ -24,6 +24,7 @@ export default function DashboardScreen({ navigation, route }: DashboardScreenPr
       <View style={styles.header}>
         <Text style={styles.greeting}>Welcome to</Text>
         <Text style={styles.appName}>TruHeal-Link</Text>
+        <Text style={styles.userBadge}>👤 Patient Dashboard</Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -41,6 +42,32 @@ export default function DashboardScreen({ navigation, route }: DashboardScreenPr
             You can now connect with doctors, manage your health profile, and access
             emergency contacts anytime.
           </Text>
+        </View>
+
+        <View style={styles.featuresContainer}>
+          <TouchableOpacity style={styles.featureCard}>
+            <MaterialIcons name="medical-services" size={40} color="#7B8CDE" />
+            <Text style={styles.featureTitle}>Find Doctors</Text>
+            <Text style={styles.featureText}>Connect with verified doctors</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.featureCard}>
+            <MaterialIcons name="health-and-safety" size={40} color="#7B8CDE" />
+            <Text style={styles.featureTitle}>Health Profile</Text>
+            <Text style={styles.featureText}>View your health information</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.featureCard}>
+            <MaterialIcons name="contact-phone" size={40} color="#7B8CDE" />
+            <Text style={styles.featureTitle}>Emergency Contacts</Text>
+            <Text style={styles.featureText}>Manage emergency contacts</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.featureCard}>
+            <MaterialIcons name="calendar-today" size={40} color="#7B8CDE" />
+            <Text style={styles.featureTitle}>Appointments</Text>
+            <Text style={styles.featureText}>Schedule appointments</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -70,6 +97,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     marginTop: 5,
+  },
+  userBadge: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.9,
   },
   content: {
     flex: 1,
@@ -107,6 +140,7 @@ const styles = StyleSheet.create({
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 20,
   },
   infoText: {
     flex: 1,
@@ -114,5 +148,36 @@ const styles = StyleSheet.create({
     color: '#2C3E50',
     marginLeft: 15,
     lineHeight: 20,
+  },
+  featuresContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  featureCard: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  featureTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2C3E50',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  featureText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
+    textAlign: 'center',
   },
 });

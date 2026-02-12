@@ -11,9 +11,9 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../../../App';
 import { MaterialIcons } from '@expo/vector-icons';
-import { userAPI } from '../services/api';
+import { userAPI } from '../../services/api';
 
 type HealthProfileScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'HealthProfile'>;

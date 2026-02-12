@@ -48,7 +48,6 @@ export interface RegisterData {
   userType: 'user' | 'doctor';
 }
 
-// ✅ NEW - Doctor registration data
 export interface RegisterDoctorData {
   fullName: string;
   email: string;
@@ -77,13 +76,10 @@ export interface EmergencyContactData {
   relationship: string;
 }
 
+// User API endpoints
 export const userAPI = {
   register: (data: RegisterData) => 
     apiClient.post('/users/register', data),
-  
-  // ✅ NEW - Doctor registration
-  registerDoctor: (data: RegisterDoctorData) =>
-    apiClient.post('/users/register-doctor', data),
   
   login: (data: LoginData) => 
     apiClient.post('/users/login', data),
@@ -102,6 +98,30 @@ export const userAPI = {
   
   deleteUser: (userId: string) => 
     apiClient.delete(`/users/${userId}`),
+};
+
+// ✅ NEW: Separate Doctor API endpoints
+export const doctorAPI = {
+  register: (data: FormData) => {
+    return axios.post(`${API_URL}/doctors/register`, data, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      timeout: 30000, // Increase timeout for file uploads
+    });
+  },
+  
+  login: (data: LoginData) => 
+    apiClient.post('/doctors/login', data),
+  
+  getDoctor: (doctorId: string) => 
+    apiClient.get(`/doctors/${doctorId}`),
+  
+  updateDoctor: (doctorId: string, data: any) =>
+    apiClient.put(`/doctors/${doctorId}`, data),
+  
+  getVerificationStatus: (doctorId: string) =>
+    apiClient.get(`/doctors/${doctorId}/verification-status`),
 };
 
 export default apiClient;

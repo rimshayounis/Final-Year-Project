@@ -5,18 +5,20 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SplashScreen from './src/screens/SplashScreen';
 import LoginTypeScreen from './src/screens/LoginTypeScreen';
 import LoginScreen from './src/screens/LoginScreen';
-import CreateAccountScreen from './src/screens/CreateAccountScreen';
-import CreateDoctorAccountScreen from './src/screens/CreateDoctorAccountScreen'; // ✅ NEW
-import HealthProfileScreen from './src/screens/HealthProfileScreen';
-import EmergencyContactScreen from './src/screens/EmergencyContactScreen';
-import DashboardScreen from './src/screens/DashboardScreen';
+import CreateAccountScreen from './src/screens/users/CreateAccountScreen';
+import CreateDoctorAccountScreen from './src/screens/doctors/CreateDoctorAccountScreen';
+import DoctorDashboardScreen from './src/screens/doctors/DoctorDashboardScreen'; // ✅ ADDED
+import HealthProfileScreen from './src/screens/users/HealthProfileScreen';
+import EmergencyContactScreen from './src/screens/users/EmergencyContactScreen';
+import DashboardScreen from './src/screens/users/DashboardScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
   LoginType: undefined;
   Login: { userType: 'user' | 'doctor' };
   CreateAccount: { userType: 'user' | 'doctor' };
-  CreateDoctorAccount: undefined; // ✅ NEW
+  CreateDoctorAccount: undefined;
+  DoctorDashboard: { doctorId: string }; // ✅ ADDED
   HealthProfile: { userId: string };
   EmergencyContact: { userId: string };
   Dashboard: { userId: string };
@@ -38,7 +40,8 @@ export default function App() {
         <Stack.Screen name="LoginType" component={LoginTypeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
-        <Stack.Screen name="CreateDoctorAccount" component={CreateDoctorAccountScreen} /> 
+        <Stack.Screen name="CreateDoctorAccount" component={CreateDoctorAccountScreen} />
+        <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} /> 
         <Stack.Screen name="HealthProfile" component={HealthProfileScreen} />
         <Stack.Screen name="EmergencyContact" component={EmergencyContactScreen} />
         <Stack.Screen name="Dashboard" component={DashboardScreen} />

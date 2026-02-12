@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -12,9 +11,9 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../../../App';
 import { MaterialIcons } from '@expo/vector-icons';
-import { userAPI } from '../services/api';
+import { userAPI, API_URL } from '../../services/api';
 
 type CreateAccountScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'CreateAccount'>;
@@ -25,7 +24,7 @@ export default function CreateAccountScreen({
   navigation,
   route,
 }: CreateAccountScreenProps) {
-  const { userType } = route.params; // 'user' ya 'doctor'
+  const { userType } = route.params;
   
   const [formData, setFormData] = useState({
     fullName: '',
@@ -73,30 +72,73 @@ export default function CreateAccountScreen({
     if (!validateForm()) return;
 
     setLoading(true);
+    
+    const requestData = {
+      fullName: formData.fullName,
+      age: parseInt(formData.age),
+      email: formData.email,
+      password: formData.password,
+      gender: formData.gender,
+      userType: userType,
+    };
+
     try {
-      const response = await userAPI.register({
-        fullName: formData.fullName,
-        age: parseInt(formData.age),
-        email: formData.email,
-        password: formData.password,
-        gender: formData.gender,
-        userType: userType, // 'user' or 'doctor'
-      });
+      console.log('🔗 API URL:', API_URL);
+      console.log('📤 Sending registration request...');
+      console.log('📋 Request data:', requestData);
+
+      const response = await userAPI.register(requestData);
+
+      console.log('✅ Registration successful!');
+      console.log('📥 Response:', response.data);
 
       if (response.data.success) {
-        if (userType === 'user') {
-          navigation.navigate('HealthProfile', { userId: response.data.user._id });
-        } else {
-          // Doctor ke liye alag flow
-          Alert.alert('Success', 'Account created! Please complete your profile.');
-          // navigation.navigate('DoctorProfile', { doctorId: response.data.user._id });
-        }
+        Alert.alert('Success', 'Account created successfully!', [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('HealthProfile', { 
+              userId: response.data.user._id 
+            }),
+          },
+        ]);
       }
     } catch (error: any) {
-      Alert.alert(
-        'Error',
-        error.response?.data?.message || 'Registration failed. Please try again.'
-      );
+      console.log('❌ ===== ERROR DETAILS =====');
+      console.log('Error object:', error);
+      
+      if (error.response) {
+        // Server responded with error
+        console.log('📛 Server Error Response:');
+        console.log('Status:', error.response.status);
+        console.log('Data:', error.response.data);
+        console.log('Headers:', error.response.headers);
+        
+        Alert.alert(
+          'Registration Failed',
+          error.response.data?.message || `Server Error: ${error.response.status}`
+        );
+      } else if (error.request) {
+        // Request made but no response
+        console.log('🌐 Network Error - No Response:');
+        console.log('Request:', error.request);
+        console.log('Message:', error.message);
+        
+        Alert.alert(
+          'Network Error',
+          `Cannot connect to server at ${API_URL}\n\nError: ${error.message}\n\nPlease check:\n1. Backend is running\n2. IP address is correct\n3. Same WiFi network`
+        );
+      } else {
+        // Something else happened
+        console.log('⚠️ Unknown Error:');
+        console.log('Message:', error.message);
+        
+        Alert.alert(
+          'Error',
+          error.message || 'Registration failed. Please try again.'
+        );
+      }
+      
+      console.log('❌ ===== END ERROR DETAILS =====');
     } finally {
       setLoading(false);
     }
@@ -116,10 +158,8 @@ export default function CreateAccountScreen({
           <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         
-        <Text style={styles.stepIndicator}>1/3</Text>
-        <Text style={styles.userTypeBadge}>
-          {userType === 'user' ? '👤 User' : '⚕️ Doctor'}
-        </Text>
+        <Text style={styles.stepIndicator}>1/2</Text>
+        <Text style={styles.userTypeBadge}>👤 User</Text>
         <Text style={styles.headerTitle}>Create Account</Text>
       </View>
 

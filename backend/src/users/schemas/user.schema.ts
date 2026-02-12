@@ -33,33 +33,14 @@ export class EmergencyContact {
   relationship: string;
 }
 
-// Doctor Professional Info Schema
-@Schema({ _id: false })
-export class DoctorProfile {
-  @Prop({ required: true })
-  licenseNumber: string;
-
-  @Prop({ required: true })
-  specialization: string;
-
-  @Prop({ type: [String], default: [] })
-  certificates: string[];
-
-  @Prop({ default: false })
-  isVerified: boolean;
-
-  @Prop({ default: Date.now })
-  registeredAt: Date;
-}
-
-// Main User Schema
+// User Schema (regular users only)
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true })
   fullName: string;
 
-  @Prop({ required: false }) // Not required for doctors
-  age?: number;
+  @Prop({ required: true })
+  age: number;
 
   @Prop({ required: true, unique: true })
   email: string;
@@ -67,27 +48,18 @@ export class User {
   @Prop({ required: true })
   password: string;
 
-  @Prop({ required: false }) // Not required for doctors
-  gender?: string;
+  @Prop({ required: true })
+  gender: string;
 
-  @Prop({ required: true, enum: ['user', 'doctor'], default: 'user' })
-  userType: string;
-
-  // ✅ For regular users ONLY
   @Prop({ type: HealthProfile, required: false })
   healthProfile?: HealthProfile;
 
-  // ✅ UPDATED - Only for regular users, NOT for doctors
   @Prop({ 
     type: [EmergencyContact], 
-    default: undefined, // Changed from [] to undefined
+    default: undefined,
     required: false 
   })
   emergencyContacts?: EmergencyContact[];
-
-  // ✅ For doctors ONLY
-  @Prop({ type: DoctorProfile, required: false })
-  doctorProfile?: DoctorProfile;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

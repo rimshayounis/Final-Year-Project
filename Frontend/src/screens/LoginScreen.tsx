@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -8,14 +7,14 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI } from '../services/api';
+import { userAPI, doctorAPI } from '../services/api';
 
 type LoginScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Login'>;
@@ -46,31 +45,61 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
 
     setLoading(true);
     try {
-      const response = await userAPI.login({
-        email: email.trim(),
-        password: password,
-        userType: userType,
-      });
+      // Use different API based on userType
+      const response = userType === 'doctor' 
+        ? await doctorAPI.login({
+            email: email.trim(),
+            password: password,
+            userType: userType,
+          })
+        : await userAPI.login({
+            email: email.trim(),
+            password: password,
+            userType: userType,
+          });
 
+      console.log('Full Response:', JSON.stringify(response.data, null, 2));
+
+      // Handle the response - backend returns the user/doctor object directly
+      // or wrapped in success/user/doctor properties
+      let userData;
       if (response.data.success) {
+        userData = response.data.user || response.data.doctor;
+      } else if (response.data._id) {
+        // Backend returned the doctor/user object directly
+        userData = response.data;
+      } else {
+        userData = response.data.user || response.data.doctor || response.data;
+      }
+
+      if (userData && userData._id) {
+        const userName = userData.fullName || userData.name || 'User';
+        
         Alert.alert(
           'Success',
-          `Welcome back, ${response.data.user.fullName}!`,
+          `Welcome back, ${userName}!`,
           [
             {
               text: 'OK',
               onPress: () => {
                 if (userType === 'user') {
                   navigation.navigate('Dashboard', {
-                    userId: response.data.user._id,
+                    userId: userData._id,
+                  });
+                } else if (userType === 'doctor') {
+                  navigation.navigate('DoctorDashboard', {
+                    doctorId: userData._id,
                   });
                 }
               },
             },
           ]
         );
+      } else {
+        Alert.alert('Login Failed', 'Unexpected response from server');
       }
     } catch (error: any) {
+      console.log('Error Response:', JSON.stringify(error.response?.data, null, 2));
       Alert.alert(
         'Login Failed',
         error.response?.data?.message || 'Invalid email or password'
@@ -81,7 +110,13 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
   };
 
   const handleSignUp = () => {
-    navigation.navigate('CreateAccount', { userType });
+    if (userType === 'doctor') {
+      // Doctor ke liye CreateDoctorAccount screen pe jao
+      navigation.navigate('CreateDoctorAccount');
+    } else {
+      // Normal user ke liye CreateAccount screen pe jao
+      navigation.navigate('CreateAccount', { userType: 'user' });
+    }
   };
 
   const handleForgotPassword = () => {
