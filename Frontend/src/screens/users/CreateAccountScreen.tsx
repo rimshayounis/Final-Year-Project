@@ -93,14 +93,10 @@ export default function CreateAccountScreen({
       console.log('📥 Response:', response.data);
 
       if (response.data.success) {
-        Alert.alert('Success', 'Account created successfully!', [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('HealthProfile', { 
-              userId: response.data.user._id 
-            }),
-          },
-        ]);
+        // Navigate to next step without showing success message
+        navigation.navigate('HealthProfile', { 
+          userId: response.data.user._id 
+        });
       }
     } catch (error: any) {
       console.log('❌ ===== ERROR DETAILS =====');
@@ -151,16 +147,18 @@ export default function CreateAccountScreen({
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={handleBackToLogin}
-        >
-          <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerTop}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBackToLogin}
+          >
+            <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          
+        </View>
         
-        <Text style={styles.stepIndicator}>1/2</Text>
-        <Text style={styles.userTypeBadge}>👤 User</Text>
         <Text style={styles.headerTitle}>Create Account</Text>
+        <Text style={styles.stepIndicator}>Step 1/3</Text>
       </View>
 
       <View style={styles.form}>
@@ -297,7 +295,7 @@ export default function CreateAccountScreen({
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.signUpButtonText}>Sign Up</Text>
+            <Text style={styles.signUpButtonText}>Continue</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -311,43 +309,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   header: {
-    backgroundColor: '#7B8CDE',
-    paddingTop: 60,
+    backgroundColor: '#6B7FED',
+    paddingTop: 50,
     paddingBottom: 30,
-    paddingHorizontal: 30,
+    paddingHorizontal: 20,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-    position: 'relative',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
   },
   backButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  stepIndicator: {
-    position: 'absolute',
-    top: 20,
-    right: 30,
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  userTypeBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    marginBottom: 10,
-  },
+  
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     color: '#FFFFFF',
     fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  stepIndicator: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '500',
+    textAlign: 'center',
+    opacity: 0.85,
   },
   form: {
     padding: 30,

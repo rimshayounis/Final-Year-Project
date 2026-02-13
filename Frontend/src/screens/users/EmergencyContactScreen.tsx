@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import {
   View,
@@ -14,7 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../../App';
 import { MaterialIcons } from '@expo/vector-icons';
-import { userAPI, EmergencyContactData } from '../../services/api'; // ✅ Import type
+import { userAPI, EmergencyContactData } from '../../services/api';
 
 type EmergencyContactScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'EmergencyContact'>;
@@ -93,7 +94,6 @@ export default function EmergencyContactScreen({
 
     setLoading(true);
     try {
-      // ✅ Remove 'id' field and create proper array
       const contactsData: EmergencyContactData[] = contacts.map(
         ({ fullName, phoneNumber, relationship }) => ({
           fullName,
@@ -122,17 +122,20 @@ export default function EmergencyContactScreen({
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.stepIndicator}>3/3</Text>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Emergency Contact</Text>
-          <MaterialIcons name="phone" size={28} color="#FFFFFF" style={styles.headerIcon} />
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          <MaterialIcons name="phone" size={32} color="#FFFFFF" />
         </View>
+        
+        <Text style={styles.headerTitle}>Emergency Contact</Text>
+
+        <Text style={styles.stepIndicator}>Step 3/3</Text>
       </View>
 
       <View style={styles.form}>
@@ -232,51 +235,50 @@ export default function EmergencyContactScreen({
   );
 }
 
-// Styles remain the same...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
   header: {
-    backgroundColor: '#7B8CDE',
-    paddingTop: 60,
+    backgroundColor: '#6B7FED',
+    paddingTop: 50,
     paddingBottom: 30,
-    paddingHorizontal: 30,
+    paddingHorizontal: 20,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
+
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+
   backButton: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepIndicator: {
-    position: 'absolute',
-    top: 20,
-    right: 30,
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     color: '#FFFFFF',
     fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  headerIcon: {
-    marginLeft: 10,
+
+  stepIndicator: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '500',
+    textAlign: 'center',
+    opacity: 0.85,
   },
   form: {
     padding: 30,
