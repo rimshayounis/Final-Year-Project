@@ -38,6 +38,23 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+export interface CreatePostData {
+  userId: string;
+  title: string;
+  description: string;
+  category: string;
+  backgroundColor?: string;
+  mediaUrls?: string[];
+}
+
+export const postAPI = {
+  createPost: (formData: FormData) =>
+    axios.post(`${API_URL}/posts`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000, // for large uploads
+    }),
+};
+
 
 export interface RegisterData {
   fullName: string;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -10,196 +10,196 @@ import {
   Modal,
   Image,
   StatusBar,
+  ActivityIndicator,
   Platform,
-} from 'react-native';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  KeyboardAvoidingView,
+} from "react-native";
+import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { postAPI } from "../../services/api";
+import { getUserId } from "../../services/storage";
 
 interface MediaFile {
   uri: string;
-  type: 'image' | 'video';
+  type: "image" | "video";
 }
 
 const BACKGROUND_COLORS = [
-  '#6B7FED', // Blue
-  '#FF6B6B', // Red
-  '#4ECDC4', // Teal
-  '#FFE66D', // Yellow
-  '#A8E6CF', // Mint
-  '#FF8B94', // Pink
-  '#C7CEEA', // Lavender
-  '#FFDAB9', // Peach
-  '#98D8C8', // Seafoam
-  '#F7DC6F', // Gold
-  '#BB8FCE', // Purple
-  '#85C1E2', // Sky Blue
+  "#6B7FED",
+  "#FF6B6B",
+  "#4ECDC4",
+  "#FFE66D",
+  "#A8E6CF",
+  "#FF8B94",
+  "#C7CEEA",
+  "#FFDAB9",
+  "#98D8C8",
+  "#F7DC6F",
+  "#BB8FCE",
+  "#85C1E2",
 ];
 
 export default function CreatePostScreen() {
   const insets = useSafeAreaInsets();
-  const [postTitle, setPostTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [postTitle, setPostTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showColorModal, setShowColorModal] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
-  const [selectedColor, setSelectedColor] = useState('');
+  const [selectedColor, setSelectedColor] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const categories = [
-    'Hair & Skin',
-    'Mental Health',
-    'Nutrition',
-    'Fitness',
-    'Heart Health',
-    'General Health',
-    'Other',
+    "Hair & Skin",
+    "Mental Health",
+    "Nutrition",
+    "Fitness",
+    "Heart Health",
+    "General Health",
+    "Other",
   ];
 
+  // CATEGORY & COLOR SELECT
   const handleCategorySelect = (category: string) => {
     setSelectedCategory(category);
     setShowCategoryModal(false);
   };
-
   const handleColorSelect = (color: string) => {
     setSelectedColor(color);
     setShowColorModal(false);
   };
 
+  // MEDIA PICKER
   const handlePickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Please grant permission to access your photos');
-      return;
-    }
+    if (status !== "granted")
+      return Alert.alert("Permission Needed", "Allow gallery access");
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: false,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const newMedia: MediaFile = {
-        uri: result.assets[0].uri,
-        type: 'image',
-      };
-      setMediaFiles([...mediaFiles, newMedia]);
-    }
+  const newMedia: MediaFile[] = result.assets.map(asset => ({
+    uri: asset.uri,
+    type: 'image',
+  }));
+  setMediaFiles(prev => [...prev, ...newMedia]);
+}
+
   };
 
   const handleTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    
-    if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Please grant permission to access your camera');
-      return;
-    }
+    if (status !== "granted")
+      return Alert.alert("Permission Needed", "Allow camera access");
 
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       quality: 0.8,
     });
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const newMedia: MediaFile = {
-        uri: result.assets[0].uri,
-        type: 'image',
-      };
+    if (!result.canceled && result.assets.length > 0) {
+      const newMedia: MediaFile = { uri: result.assets[0].uri, type: "image" };
       setMediaFiles([...mediaFiles, newMedia]);
     }
   };
 
   const handleMediaOptions = () => {
-    Alert.alert(
-      'Add Media',
-      'Choose an option',
-      [
-        {
-          text: 'Take Photo',
-          onPress: handleTakePhoto,
-        },
-        {
-          text: 'Choose from Gallery',
-          onPress: handlePickMedia,
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ],
-    );
+    Alert.alert("Add Media", "Choose an option", [
+      { text: "Take Photo", onPress: handleTakePhoto },
+      { text: "Choose from Gallery", onPress: handlePickMedia },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const handleRemoveMedia = (index: number) => {
-    const updatedMedia = mediaFiles.filter((_, i) => i !== index);
-    setMediaFiles(updatedMedia);
+    const updated = mediaFiles.filter((_, i) => i !== index);
+    setMediaFiles(updated);
   };
 
-  const handleSubmit = () => {
-    if (!postTitle.trim()) {
-      Alert.alert('Error', 'Please enter a post title');
-      return;
-    }
-    if (!description.trim()) {
-      Alert.alert('Error', 'Please enter a description');
-      return;
-    }
-    if (!selectedCategory) {
-      Alert.alert('Error', 'Please select a category');
+  // SUBMIT POST
+ const handleSubmit = async () => {
+  if (!postTitle.trim() || !description.trim() || !selectedCategory) {
+    Alert.alert('Error', 'Please fill all required fields');
+    return;
+  }
+
+  try {
+    // ✅ Await the userId from AsyncStorage
+    const userId = await getUserId();
+    if (!userId) {
+      Alert.alert('Error', 'User not found. Please login again.');
       return;
     }
 
-    console.log('Post Data:', {
-      title: postTitle,
-      description,
-      category: selectedCategory,
-      media: mediaFiles,
-      backgroundColor: selectedColor,
+    const formData = new FormData();
+    formData.append('userId', userId); // now userId is valid
+    formData.append('title', postTitle);
+    formData.append('description', description);
+    formData.append('category', selectedCategory);
+    if (selectedColor) formData.append('backgroundColor', selectedColor);
+
+    mediaFiles.forEach((file) => {
+      const uriParts = file.uri.split('/');
+      const fileName = uriParts[uriParts.length - 1];
+      formData.append('media', {
+        uri: file.uri,
+        name: fileName,
+        type: 'image/jpeg', // adjust for video if needed
+      } as any);
     });
 
+    const response = await postAPI.createPost(formData);
+    console.log('Post created:', response.data);
     Alert.alert('Success', 'Post created successfully!');
-    
+
     // Clear form
     setPostTitle('');
     setDescription('');
     setSelectedCategory('');
-    setMediaFiles([]);
     setSelectedColor('');
-  };
+    setMediaFiles([]);
+
+  } catch (error: any) {
+    console.error('Error creating post:', error.response?.data || error.message);
+    Alert.alert('Error', 'Failed to create post');
+  }
+};
+
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#6B7FED" }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
-      
-      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Text style={styles.headerTitle}>Create Post</Text>
       </View>
 
       <View style={styles.formCard}>
-        <ScrollView 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {/* Post Title */}
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          {/* Title */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Post Title</Text>
             <TextInput
               style={styles.input}
-              placeholder=""
-              placeholderTextColor="#999"
+              placeholder="Enter title"
               value={postTitle}
               onChangeText={setPostTitle}
             />
           </View>
 
-          {/* Description with Background Color */}
+          {/* Description */}
           <View style={styles.inputGroup}>
             <View style={styles.descriptionHeader}>
               <Text style={styles.label}>Description</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.colorPickerButton}
                 onPress={() => setShowColorModal(true)}
               >
@@ -207,22 +207,26 @@ export default function CreatePostScreen() {
                 <Text style={styles.colorPickerText}>Background</Text>
               </TouchableOpacity>
             </View>
-            <View style={[
-              styles.descriptionContainer,
-              selectedColor && { backgroundColor: selectedColor }
-            ]}>
+            <View
+              style={[
+                styles.descriptionContainer,
+                selectedColor && { backgroundColor: selectedColor },
+              ]}
+            >
               <TextInput
                 style={[
-                  styles.input, 
+                  styles.input,
                   styles.textArea,
-                  selectedColor && { backgroundColor: 'transparent' },
-                  selectedColor && { color: '#FFFFFF' }
+                  selectedColor && {
+                    backgroundColor: "transparent",
+                    color: "#FFF",
+                  },
                 ]}
-                placeholder=""
-                placeholderTextColor={selectedColor ? 'rgba(255,255,255,0.7)' : '#999'}
+                placeholder="Enter description"
+                placeholderTextColor={
+                  selectedColor ? "rgba(255,255,255,0.7)" : "#999"
+                }
                 multiline
-                numberOfLines={6}
-                textAlignVertical="top"
                 value={description}
                 onChangeText={setDescription}
               />
@@ -234,46 +238,58 @@ export default function CreatePostScreen() {
             style={styles.categorySelector}
             onPress={() => setShowCategoryModal(true)}
           >
-            <Text style={[
-              styles.categoryText,
-              !selectedCategory && styles.categoryPlaceholder
-            ]}>
-              {selectedCategory || 'Select Category (hair, skin etc)'}
+            <Text
+              style={[
+                styles.categoryText,
+                !selectedCategory && styles.categoryPlaceholder,
+              ]}
+            >
+              {selectedCategory || "Select Category"}
             </Text>
             <MaterialIcons name="keyboard-arrow-down" size={24} color="#666" />
           </TouchableOpacity>
 
-          {/* Add Media */}
-          <TouchableOpacity style={styles.mediaButton} onPress={handleMediaOptions}>
+          {/* Media */}
+          <TouchableOpacity
+            style={styles.mediaButton}
+            onPress={handleMediaOptions}
+          >
             <Text style={styles.mediaButtonText}>Add Media</Text>
             <Ionicons name="camera-outline" size={24} color="#6B7FED" />
           </TouchableOpacity>
 
-          {/* Display Selected Media */}
           {mediaFiles.length > 0 && (
             <View style={styles.mediaPreviewContainer}>
-              {mediaFiles.map((media, index) => (
-                <View key={index} style={styles.mediaPreview}>
-                  <Image source={{ uri: media.uri }} style={styles.mediaImage} />
+              {mediaFiles.map((file, i) => (
+                <View key={i} style={styles.mediaPreview}>
+                  <Image source={{ uri: file.uri }} style={styles.mediaImage} />
                   <TouchableOpacity
                     style={styles.removeMediaButton}
-                    onPress={() => handleRemoveMedia(index)}
+                    onPress={() => handleRemoveMedia(i)}
                   >
-                    <MaterialIcons name="close" size={18} color="#FFFFFF" />
+                    <MaterialIcons name="close" size={18} color="#FFF" />
                   </TouchableOpacity>
                 </View>
               ))}
             </View>
           )}
 
-          {/* Submit Button */}
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.submitButtonText}>Submit</Text>
+          {/* Submit */}
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.submitButtonText}>Submit</Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
       </View>
 
-      {/* Category Selection Modal */}
+      {/* CATEGORY MODAL */}
       <Modal
         visible={showCategoryModal}
         transparent
@@ -288,24 +304,25 @@ export default function CreatePostScreen() {
                 <MaterialIcons name="close" size={24} color="#666" />
               </TouchableOpacity>
             </View>
-            
             <ScrollView style={styles.categoryList}>
-              {categories.map((category) => (
+              {categories.map((c) => (
                 <TouchableOpacity
-                  key={category}
+                  key={c}
                   style={[
                     styles.categoryOption,
-                    selectedCategory === category && styles.categoryOptionActive
+                    selectedCategory === c && styles.categoryOptionActive,
                   ]}
-                  onPress={() => handleCategorySelect(category)}
+                  onPress={() => handleCategorySelect(c)}
                 >
-                  <Text style={[
-                    styles.categoryOptionText,
-                    selectedCategory === category && styles.categoryOptionTextActive
-                  ]}>
-                    {category}
+                  <Text
+                    style={[
+                      styles.categoryOptionText,
+                      selectedCategory === c && styles.categoryOptionTextActive,
+                    ]}
+                  >
+                    {c}
                   </Text>
-                  {selectedCategory === category && (
+                  {selectedCategory === c && (
                     <MaterialIcons name="check" size={20} color="#6B7FED" />
                   )}
                 </TouchableOpacity>
@@ -315,7 +332,7 @@ export default function CreatePostScreen() {
         </View>
       </Modal>
 
-      {/* Background Color Selection Modal */}
+      {/* COLOR MODAL */}
       <Modal
         visible={showColorModal}
         transparent
@@ -330,41 +347,21 @@ export default function CreatePostScreen() {
                 <MaterialIcons name="close" size={24} color="#666" />
               </TouchableOpacity>
             </View>
-            
             <ScrollView style={styles.colorList}>
               <View style={styles.colorGrid}>
-                {/* None Option */}
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    styles.noneOption,
-                    !selectedColor && styles.colorOptionActive
-                  ]}
-                  onPress={() => handleColorSelect('')}
-                >
-                  <MaterialIcons name="block" size={24} color="#999" />
-                  <Text style={styles.noneText}>None</Text>
-                  {!selectedColor && (
-                    <View style={styles.checkmark}>
-                      <MaterialIcons name="check" size={16} color="#FFFFFF" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                {/* Color Options */}
                 {BACKGROUND_COLORS.map((color) => (
                   <TouchableOpacity
                     key={color}
                     style={[
                       styles.colorOption,
                       { backgroundColor: color },
-                      selectedColor === color && styles.colorOptionActive
+                      selectedColor === color && styles.colorOptionActive,
                     ]}
                     onPress={() => handleColorSelect(color)}
                   >
                     {selectedColor === color && (
                       <View style={styles.checkmark}>
-                        <MaterialIcons name="check" size={20} color="#FFFFFF" />
+                        <MaterialIcons name="check" size={20} color="#FFF" />
                       </View>
                     )}
                   </TouchableOpacity>
@@ -374,119 +371,88 @@ export default function CreatePostScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
+// Styles are same as your previous code; can reuse
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#6B7FED',
-  },
+  container: { flex: 1, backgroundColor: "#6B7FED" },
   header: {
     paddingBottom: 20,
     paddingHorizontal: 20,
-    backgroundColor: '#6B7FED',
+    backgroundColor: "#6B7FED",
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
+  headerTitle: { fontSize: 24, fontWeight: "700", color: "#FFF" },
   formCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFF",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 25,
     paddingTop: 30,
   },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 10,
-  },
+  inputGroup: { marginBottom: 20 },
+  label: { fontSize: 16, fontWeight: "600", color: "#000", marginBottom: 10 },
   descriptionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   colorPickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F4FF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F4FF",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
   colorPickerText: {
     fontSize: 13,
-    color: '#6B7FED',
-    fontWeight: '600',
+    color: "#6B7FED",
+    fontWeight: "600",
     marginLeft: 5,
   },
-  descriptionContainer: {
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
+  descriptionContainer: { borderRadius: 10, overflow: "hidden" },
   input: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: "#F5F5F5",
     borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#2C3E50',
+    color: "#2C3E50",
     minHeight: 50,
   },
-  textArea: {
-    minHeight: 120,
-    paddingTop: 12,
-    textAlignVertical: 'top',
-  },
+  textArea: { minHeight: 120, paddingTop: 12, textAlignVertical: "top" },
   categorySelector: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: "#F5F5F5",
     borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
     minHeight: 50,
   },
-  categoryText: {
-    fontSize: 15,
-    color: '#2C3E50',
-  },
-  categoryPlaceholder: {
-    color: '#999',
-  },
+  categoryText: { fontSize: 15, color: "#2C3E50" },
+  categoryPlaceholder: { color: "#999" },
   mediaButton: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: "#F5F5F5",
     borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
     minHeight: 50,
   },
-  mediaButtonText: {
-    fontSize: 15,
-    color: '#2C3E50',
-  },
+  mediaButtonText: { fontSize: 15, color: "#2C3E50" },
   mediaPreviewContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     marginBottom: 20,
   },
   mediaPreview: {
@@ -495,139 +461,91 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginRight: 10,
     marginBottom: 10,
-    position: 'relative',
+    position: "relative",
   },
-  mediaImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 10,
-  },
+  mediaImage: { width: "100%", height: "100%", borderRadius: 10 },
   removeMediaButton: {
-    position: 'absolute',
+    position: "absolute",
     top: -5,
     right: -5,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#FF4444',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#FF4444",
+    justifyContent: "center",
+    alignItems: "center",
   },
   submitButton: {
-    backgroundColor: '#6B7FED',
+    backgroundColor: "#6B7FED",
     borderRadius: 15,
     paddingVertical: 16,
-    alignItems: 'center',
-    shadowColor: '#6B7FED',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    alignItems: "center",
   },
-  submitButtonText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  // Modal Styles
+  submitButtonText: { fontSize: 17, fontWeight: "700", color: "#FFF" },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFF",
     borderTopLeftRadius: 25,
     borderTopRightRadius: 25,
     paddingTop: 20,
     paddingBottom: 40,
-    maxHeight: '70%',
+    maxHeight: "70%",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 25,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: "#F0F0F0",
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#2C3E50',
-  },
-  categoryList: {
-    paddingHorizontal: 25,
-    paddingTop: 10,
-  },
+  modalTitle: { fontSize: 20, fontWeight: "700", color: "#2C3E50" },
+  categoryList: { paddingHorizontal: 25, paddingTop: 10 },
   categoryOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 15,
     paddingHorizontal: 15,
     borderRadius: 10,
     marginBottom: 10,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: "#F8F8F8",
   },
-  categoryOptionActive: {
-    backgroundColor: '#E8F0FE',
-  },
-  categoryOptionText: {
-    fontSize: 16,
-    color: '#2C3E50',
-  },
-  categoryOptionTextActive: {
-    color: '#6B7FED',
-    fontWeight: '600',
-  },
-  // Color Picker Styles
-  colorList: {
-    paddingHorizontal: 25,
-    paddingTop: 20,
-  },
+  categoryOptionActive: { backgroundColor: "#E8F0FE" },
+  categoryOptionText: { fontSize: 16, color: "#2C3E50" },
+  categoryOptionTextActive: { color: "#6B7FED", fontWeight: "600" },
+  colorList: { paddingHorizontal: 25, paddingTop: 20 },
   colorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
   },
   colorOption: {
-    width: '22%',
+    width: "22%",
     aspectRatio: 1,
     borderRadius: 12,
     marginBottom: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
-  colorOptionActive: {
-    borderColor: '#2C3E50',
-    borderWidth: 3,
-  },
-  noneOption: {
-    backgroundColor: '#F5F5F5',
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    borderStyle: 'dashed',
-  },
-  noneText: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 5,
-    fontWeight: '600',
-  },
+  colorOptionActive: { borderColor: "#2C3E50", borderWidth: 3 },
   checkmark: {
-    position: 'absolute',
+    position: "absolute",
     top: 5,
     right: 5,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.3)",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

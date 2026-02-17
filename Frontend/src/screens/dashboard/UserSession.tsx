@@ -17,7 +17,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import { useAudioRecorder, AudioModule, RecordingPresets } from "expo-audio";
+import VoiceRecorder from "../../components/VoiceRecorder";
+import VoicePlayer from "../../components/VoicePlayer";
 
 type Message = {
   id: string;
@@ -25,6 +26,7 @@ type Message = {
   image?: string;
   file?: string;
   audio?: string;
+  audioDuration?: number;
   sender: "user" | "doctor";
 };
 
@@ -40,9 +42,7 @@ export default function UserSession() {
   const [timeLeft, setTimeLeft] = useState<number>(duration);
   const [message, setMessage] = useState("");
   const [showOptions, setShowOptions] = useState(false);
-
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -163,37 +163,27 @@ export default function UserSession() {
   };
 
   /* ---------------- VOICE ---------------- */
-  const startRecording = async () => {
-    const permission = await AudioModule.requestRecordingPermissionsAsync();
-
-    if (!permission.granted) {
-      alert("Microphone permission required");
-      return;
-    }
-
-    await recorder.prepareToRecordAsync();
-    await recorder.record();
-    setIsRecording(true);
+  const startVoiceRecording = () => {
+    setIsRecordingVoice(true);
+    setShowOptions(false);
   };
 
-  const stopRecording = async () => {
-    await recorder.stop();
-    setIsRecording(false);
-
-    const uri = recorder.uri;
-
-    if (uri) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          audio: uri,
-          sender: "user",
-        },
-      ]);
-    }
-
+  const handleVoiceSend = (audioUri: string, audioDuration: number) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        audio: audioUri,
+        audioDuration: audioDuration,
+        sender: "user",
+      },
+    ]);
+    setIsRecordingVoice(false);
     scrollToBottom();
+  };
+
+  const handleVoiceCancel = () => {
+    setIsRecordingVoice(false);
   };
 
   /* ---------------- UI ---------------- */
@@ -247,16 +237,25 @@ export default function UserSession() {
               {item.image && (
                 <Image
                   source={{ uri: item.image }}
-                  style={{ width: 150, height: 150, borderRadius: 10 }}
+                  style={{ width: 200, height: 200, borderRadius: 10 }}
                 />
               )}
 
               {item.file && (
-                <Text style={{ color: "#fff" }}>📎 {item.file}</Text>
+                <View style={styles.fileContainer}>
+                  <MaterialIcons name="insert-drive-file" size={24} color={item.sender === "doctor" ? "#FFFFFF" : "#6B7FED"} />
+                  <Text style={item.sender === "doctor" ? styles.doctorText : styles.userText}>
+                    {item.file}
+                  </Text>
+                </View>
               )}
 
               {item.audio && (
-                <Text style={{ color: "#fff" }}>🎤 Voice Message</Text>
+                <VoicePlayer
+                  audioUri={item.audio}
+                  duration={item.audioDuration || 0}
+                  isUserMessage={item.sender === "user"}
+                />
               )}
             </View>
           )}
@@ -282,43 +281,46 @@ export default function UserSession() {
           </View>
         )}
 
-        {/* INPUT */}
-        <View
-          style={[styles.inputContainer, { paddingBottom: insets.bottom + 5 }]}
-        >
-          <TouchableOpacity
-            style={styles.plusButton}
-            onPress={() => setShowOptions(!showOptions)}
+        {/* VOICE RECORDER */}
+        {isRecordingVoice ? (
+          <VoiceRecorder onSend={handleVoiceSend} onCancel={handleVoiceCancel} />
+        ) : (
+          /* INPUT */
+          <View
+            style={[styles.inputContainer, { paddingBottom: insets.bottom + 5 }]}
           >
-            <Ionicons name="add" size={26} color="#6B7FED" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.plusButton}
+              onPress={() => setShowOptions(!showOptions)}
+            >
+              <Ionicons name="add" size={26} color="#6B7FED" />
+            </TouchableOpacity>
 
-          <View style={styles.inputBox}>
-            <TextInput
-              placeholder="Type a message"
-              value={message}
-              onChangeText={setMessage}
-              style={styles.textInput}
-              multiline
-            />
+            <View style={styles.inputBox}>
+              <TextInput
+                placeholder="Type a message"
+                value={message}
+                onChangeText={setMessage}
+                style={styles.textInput}
+                multiline
+              />
 
-            {message.trim().length === 0 ? (
-              <TouchableOpacity
-                onPress={isRecording ? stopRecording : startRecording}
-              >
-                <MaterialIcons
-                  name={isRecording ? "stop" : "keyboard-voice"}
-                  size={24}
-                  color={isRecording ? "red" : "#6B7FED"}
-                />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={sendMessage}>
-                <Ionicons name="send" size={24} color="#6B7FED" />
-              </TouchableOpacity>
-            )}
+              {message.trim().length === 0 ? (
+                <TouchableOpacity onPress={startVoiceRecording}>
+                  <MaterialIcons
+                    name="keyboard-voice"
+                    size={24}
+                    color="#6B7FED"
+                  />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={sendMessage}>
+                  <Ionicons name="send" size={24} color="#6B7FED" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        </View>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -367,6 +369,12 @@ const styles = StyleSheet.create({
 
   userText: { color: "#000" },
   doctorText: { color: "#fff" },
+
+  fileContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
 
   inputContainer: {
     flexDirection: "row",

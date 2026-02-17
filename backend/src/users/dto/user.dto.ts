@@ -38,7 +38,12 @@ export class LoginDto {
 
   @IsNotEmpty()
   password: string;
+
+  @IsOptional()
+  @IsString()
+  userType?: string;
 }
+
 
 export class CreateHealthProfileDto {
   @IsOptional()
