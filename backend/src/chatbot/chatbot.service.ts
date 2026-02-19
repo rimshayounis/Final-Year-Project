@@ -22,7 +22,8 @@ export class ChatbotService implements OnModuleInit {
     if (!this.apiKey) {
       throw new Error('GEMINI_API_KEY is not defined in environment variables');
     }
-this.url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`;
+    this.url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${this.apiKey}`;
+
     // Gemini API standard structure. We attach the key as a query parameter.
     console.log('✅ Gemini initialized successfully');
   }

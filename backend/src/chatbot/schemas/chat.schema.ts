@@ -11,8 +11,9 @@ export class Chat extends Document {
   @Prop({ required: true })
   message: string;
 
-  @Prop({ required: true })
-  response: string;
+// chat.schema.ts
+@Prop({ required: false, default: '' })
+response: string;
 
   @Prop({ default: null })
   imageUrl: string;

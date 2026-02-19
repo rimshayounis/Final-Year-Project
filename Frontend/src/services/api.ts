@@ -1,7 +1,6 @@
-
 import axios from 'axios';
 
-export const API_URL = 'http://172.20.10.2:3000/api';
+export const API_URL = 'http://192.168.100.10:3000/api';
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -38,6 +37,7 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 export interface CreatePostData {
   userId: string;
   title: string;
@@ -51,10 +51,9 @@ export const postAPI = {
   createPost: (formData: FormData) =>
     axios.post(`${API_URL}/posts`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 30000, // for large uploads
+      timeout: 30000,
     }),
 };
-
 
 export interface RegisterData {
   fullName: string;
@@ -93,52 +92,71 @@ export interface EmergencyContactData {
   relationship: string;
 }
 
+export interface SendMessageData {
+  userId: string;
+  message: string;
+  imageUrl?: string;
+  fileUrl?: string;
+}
+
 // User API endpoints
 export const userAPI = {
-  register: (data: RegisterData) => 
+  register: (data: RegisterData) =>
     apiClient.post('/users/register', data),
-  
-  login: (data: LoginData) => 
+
+  login: (data: LoginData) =>
     apiClient.post('/users/login', data),
-  
+
   createHealthProfile: (userId: string, data: HealthProfileData) =>
     apiClient.post(`/users/${userId}/health-profile`, data),
-  
+
   createEmergencyContacts: (userId: string, data: EmergencyContactData[]) =>
     apiClient.post(`/users/${userId}/emergency-contacts`, { contacts: data }),
-  
-  getUser: (userId: string) => 
+
+  getUser: (userId: string) =>
     apiClient.get(`/users/${userId}`),
-  
+
   updateUser: (userId: string, data: any) =>
     apiClient.put(`/users/${userId}`, data),
-  
-  deleteUser: (userId: string) => 
+
+  deleteUser: (userId: string) =>
     apiClient.delete(`/users/${userId}`),
 };
 
-// ✅ NEW: Separate Doctor API endpoints
+// Doctor API endpoints
 export const doctorAPI = {
-  register: (data: FormData) => {
-    return axios.post(`${API_URL}/doctors/register`, data, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      timeout: 30000, // Increase timeout for file uploads
-    });
-  },
-  
-  login: (data: LoginData) => 
+  register: (data: FormData) =>
+    axios.post(`${API_URL}/doctors/register`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000,
+    }),
+
+  login: (data: LoginData) =>
     apiClient.post('/doctors/login', data),
-  
-  getDoctor: (doctorId: string) => 
+
+  getDoctor: (doctorId: string) =>
     apiClient.get(`/doctors/${doctorId}`),
-  
+
   updateDoctor: (doctorId: string, data: any) =>
     apiClient.put(`/doctors/${doctorId}`, data),
-  
+
   getVerificationStatus: (doctorId: string) =>
     apiClient.get(`/doctors/${doctorId}/verification-status`),
+};
+
+// Chatbot API endpoints
+export const chatbotAPI = {
+  sendMessage: (data: SendMessageData) =>
+    apiClient.post('/chatbot/message', data),
+
+  getChatHistory: (userId: string, page = 1, limit = 50) =>
+    apiClient.get(`/chatbot/history/${userId}?page=${page}&limit=${limit}`),
+
+  clearHistory: (userId: string) =>
+    apiClient.delete(`/chatbot/history/${userId}`),
+
+  getStats: (userId: string) =>
+    apiClient.get(`/chatbot/stats/${userId}`),
 };
 
 export default apiClient;
