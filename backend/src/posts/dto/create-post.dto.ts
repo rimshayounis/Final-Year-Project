@@ -15,20 +15,10 @@ export class CreatePostDto {
 
   @IsNotEmpty()
   @IsString()
-  @IsIn([
-    'Hair & Skin',
-    'Mental Health',
-    'Nutrition',
-    'Fitness',
-    'Heart Health',
-    'General Health',
-    'Other',
-  ])
   category: string;
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
   mediaUrls?: string[];
 
   @IsOptional()

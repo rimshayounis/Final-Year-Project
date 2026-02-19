@@ -1,3 +1,4 @@
+
 import {
   Controller,
   Get,
@@ -9,7 +10,7 @@ import {
   Query,
   UseInterceptors,
   UploadedFiles,
-  BadRequestException,
+  BadRequestException, 
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -23,7 +24,6 @@ import { ApprovePostDto } from './dto/approve-post.dto';
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
-  // Create new post with media upload
   @Post()
   @UseInterceptors(
     FilesInterceptor('media', 5, {
@@ -41,18 +41,18 @@ export class PostsController {
         }
         callback(null, true);
       },
-      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+      limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )
   async create(
     @Body() createPostDto: CreatePostDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    if (files && files.length > 0) {
-      createPostDto.mediaUrls = files.map((file) => `/uploads/posts/${file.filename}`);
-    }
+    const mediaUrls = files && files.length > 0
+      ? files.map((file) => `/uploads/posts/${file.filename}`)
+      : [];
 
-    const post = await this.postsService.create(createPostDto);
+    const post = await this.postsService.create(createPostDto, mediaUrls);
 
     return {
       success: true,
@@ -61,7 +61,6 @@ export class PostsController {
     };
   }
 
-  // Get approved posts for feed
   @Get('feed')
   async getFeed(
     @Query('page') page: number = 1,
@@ -82,7 +81,6 @@ export class PostsController {
     };
   }
 
-  // Get user's own posts (all statuses)
   @Get('user/:userId')
   async getUserPosts(
     @Param('userId') userId: string,
@@ -103,7 +101,6 @@ export class PostsController {
     };
   }
 
-  // Get pending posts (for doctors)
   @Get('pending')
   async getPendingPosts(
     @Query('page') page: number = 1,
@@ -123,7 +120,6 @@ export class PostsController {
     };
   }
 
-  // Get single post
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const post = await this.postsService.findOne(id);
@@ -134,7 +130,6 @@ export class PostsController {
     };
   }
 
-  // Update post (only pending posts by owner)
   @Patch(':id')
   @UseInterceptors(
     FilesInterceptor('media', 5, {
@@ -166,7 +161,6 @@ export class PostsController {
     };
   }
 
-  // Delete post (only pending posts by owner)
   @Delete(':id/:userId')
   async delete(@Param('id') id: string, @Param('userId') userId: string) {
     await this.postsService.delete(id, userId);
@@ -177,7 +171,6 @@ export class PostsController {
     };
   }
 
-  // Doctor approves or rejects post
   @Post(':id/review')
   async reviewPost(@Param('id') id: string, @Body() approvePostDto: ApprovePostDto) {
     const post = await this.postsService.approveOrReject(id, approvePostDto);
@@ -189,40 +182,24 @@ export class PostsController {
     };
   }
 
-  // Like post
   @Post(':id/like')
   async likePost(@Param('id') id: string) {
     const post = await this.postsService.incrementLikes(id);
-
-    return {
-      success: true,
-      data: post,
-    };
+    return { success: true, data: post };
   }
 
-  // Comment on post (increment counter)
   @Post(':id/comment')
   async commentPost(@Param('id') id: string) {
     const post = await this.postsService.incrementComments(id);
-
-    return {
-      success: true,
-      data: post,
-    };
+    return { success: true, data: post };
   }
 
-  // Share post (increment counter)
   @Post(':id/share')
   async sharePost(@Param('id') id: string) {
     const post = await this.postsService.incrementShares(id);
-
-    return {
-      success: true,
-      data: post,
-    };
+    return { success: true, data: post };
   }
 
-  // Get posts by category
   @Get('category/:category')
   async getByCategory(
     @Param('category') category: string,

@@ -51,6 +51,10 @@ export class User {
   @Prop({ required: true })
   gender: string;
 
+    @Prop({ required: true })
+    userType: string;
+
+
   @Prop({ type: HealthProfile, required: false })
   healthProfile?: HealthProfile;
 

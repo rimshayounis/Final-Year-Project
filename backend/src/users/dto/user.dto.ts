@@ -30,6 +30,9 @@ export class RegisterUserDto {
   @IsNotEmpty()
   @IsString()
   gender: string;
+   @IsNotEmpty()        // ← ADD KARO
+  @IsString()          // ← ADD KARO
+  userType: string; 
 }
 
 export class LoginDto {
