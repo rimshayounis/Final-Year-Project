@@ -6,11 +6,13 @@ import { join } from 'path';
 import { UsersModule } from './users/users.module';
 import { DoctorsModule } from './doctors/doctor.module';
 import { PostsModule } from './posts/posts.module';
+import {ChatbotModule} from './chatbot/chatbot.module'
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
     }),
     MongooseModule.forRoot(
       process.env.MONGODB_URI || 'mongodb://localhost:27017/truheal-link'
@@ -23,6 +25,7 @@ import { PostsModule } from './posts/posts.module';
     UsersModule,
     DoctorsModule,
     PostsModule, // ✅ Add Posts Module
+    ChatbotModule,
   ],
 })
 export class AppModule {}
