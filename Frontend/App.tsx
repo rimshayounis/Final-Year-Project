@@ -7,7 +7,7 @@ import LoginTypeScreen from './src/screens/LoginTypeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import CreateAccountScreen from './src/screens/users/CreateAccountScreen';
 import CreateDoctorAccountScreen from './src/screens/doctors/CreateDoctorAccountScreen';
-import DoctorDashboardScreen from './src/screens/doctors/DoctorDashboardScreen';
+import DoctorPendingScreen from './src/screens/doctors/DoctorPendingScreen';
 import HealthProfileScreen from './src/screens/users/HealthProfileScreen';
 import EmergencyContactScreen from './src/screens/users/EmergencyContactScreen';
 import UserDashboardScreen from './src/screens/dashboard/UserDashboardScreen';
@@ -20,10 +20,13 @@ export type RootStackParamList = {
   Login: { userType: 'user' | 'doctor' };
   CreateAccount: { userType: 'user' | 'doctor' };
   CreateDoctorAccount: undefined;
-  DoctorDashboard: { doctorId: string };
+  DoctorUnverified: { doctorId: string };
   HealthProfile: { userId: string };
   EmergencyContact: { userId: string };
-  Dashboard: { userId: string };
+ Dashboard: {
+  id: string;
+  role: 'user' | 'doctor';
+};
   BookAppointments: undefined; 
   userSession:undefined;
 };
@@ -46,7 +49,7 @@ export default function App() {
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
           <Stack.Screen name="CreateDoctorAccount" component={CreateDoctorAccountScreen} />
-          <Stack.Screen name="DoctorDashboard" component={DoctorDashboardScreen} /> 
+          <Stack.Screen name="DoctorUnverified" component={DoctorPendingScreen} /> 
           <Stack.Screen name="HealthProfile" component={HealthProfileScreen} />
           <Stack.Screen name="EmergencyContact" component={EmergencyContactScreen} />
           <Stack.Screen name="Dashboard" component={UserDashboardScreen} />

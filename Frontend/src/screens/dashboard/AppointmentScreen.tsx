@@ -11,15 +11,21 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
-export default function AppointmentScreen() {
+interface AppointmentScreenProps {
+  id: string;   // user ID
+  role: string; // user role
+}
+
+export default function AppointmentScreen({ id, role }: AppointmentScreenProps) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
+  // You can now use `id` and `role` dynamically in API calls or logic
   const appointments = [
     {
       id: '1',
-      patient: 'Ali Khan',
-      doctor: 'Dr. Sarah Ahmed',
+      patient: role === 'doctor' ? 'Ali Khan' : 'You',
+      doctor: role === 'doctor' ? 'You' : 'Dr. Sarah Ahmed',
       date: '18 Feb 2026',
       time: '10:30 AM',
       duration: '30 Minutes',
@@ -27,8 +33,8 @@ export default function AppointmentScreen() {
     },
     {
       id: '2',
-      patient: 'Hassan Raza',
-      doctor: 'Dr. John Smith',
+      patient: role === 'doctor' ? 'Hassan Raza' : 'You',
+      doctor: role === 'doctor' ? 'You' : 'Dr. John Smith',
       date: '20 Feb 2026',
       time: '02:00 PM',
       duration: '45 Minutes',
@@ -37,17 +43,18 @@ export default function AppointmentScreen() {
   ];
 
   const handleBookAppointment = () => {
-    navigation.navigate('BookAppointments');
+    navigation.navigate('BookAppointments', { userId: id, role });
   };
 
-  const handleContinueSession = () => {
-    console.log('appointment start');
-
-  navigation.navigate('userSession', {
-    doctorName: 'Dr. Sarah Ahmed',
-    doctorImage: 'https://i.pravatar.cc/150?img=12',
-    duration: 1800,
-  });
+  const handleContinueSession = (doctorName: string) => {
+    console.log('Starting appointment with', doctorName);
+    navigation.navigate('userSession', {
+      doctorName,
+      doctorImage: 'https://i.pravatar.cc/150?img=12',
+      duration: 1800,
+      userId: id,
+      role,
+    });
   };
 
   return (
@@ -57,7 +64,6 @@ export default function AppointmentScreen() {
       {/* HEADER */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Text style={styles.headerTitle}>Appointments</Text>
-
         <TouchableOpacity style={styles.notificationButton}>
           <MaterialIcons name="notifications" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -67,7 +73,6 @@ export default function AppointmentScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {appointments.map((item) => (
           <View key={item.id} style={styles.card}>
-            
             {/* Status Badge */}
             <View
               style={[
@@ -83,38 +88,32 @@ export default function AppointmentScreen() {
             <Text style={styles.label}>
               Patient: <Text style={styles.value}>{item.patient}</Text>
             </Text>
-
             <Text style={styles.label}>
               Doctor: <Text style={styles.value}>{item.doctor}</Text>
             </Text>
-
             <Text style={styles.label}>
               Date: <Text style={styles.value}>{item.date}</Text>
             </Text>
-
             <Text style={styles.label}>
               Time: <Text style={styles.value}>{item.time}</Text>
             </Text>
-
             <Text style={styles.label}>
               Duration: <Text style={styles.value}>{item.duration}</Text>
             </Text>
 
-            {/* Continue Session Button (Only if Active) */}
+            {/* Continue Session Button */}
             {item.status === 'Active' && (
               <TouchableOpacity
                 style={styles.continueButton}
-                onPress={handleContinueSession}
+                onPress={() => handleContinueSession(item.doctor)}
               >
-                <Text style={styles.continueButtonText}>
-                  Continue Session
-                </Text>
+                <Text style={styles.continueButtonText}>Continue Session</Text>
               </TouchableOpacity>
             )}
           </View>
         ))}
 
-        {/* BOOK BUTTON */}
+        {/* BOOK APPOINTMENT BUTTON */}
         <TouchableOpacity
           style={styles.bookButton}
           onPress={handleBookAppointment}
@@ -127,11 +126,7 @@ export default function AppointmentScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-
+  container: { flex: 1, backgroundColor: '#F5F5F5' },
   header: {
     backgroundColor: '#6B7FED',
     paddingBottom: 15,
@@ -140,21 +135,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  notificationButton: {
-    padding: 5,
-  },
-
-  content: {
-    padding: 20,
-  },
-
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
+  notificationButton: { padding: 5 },
+  content: { padding: 20 },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 15,
@@ -162,20 +145,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     elevation: 3,
     borderWidth: 1.5,
-    borderColor: '#6B7FED', // Blue theme border
+    borderColor: '#6B7FED',
   },
-
-  label: {
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 6,
-  },
-
-  value: {
-    fontWeight: '600',
-    color: '#2C3E50',
-  },
-
+  label: { fontSize: 14, color: '#555', marginBottom: 6 },
+  value: { fontWeight: '600', color: '#2C3E50' },
   statusBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
@@ -183,21 +156,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 10,
   },
-
-  activeBadge: {
-    backgroundColor: '#D4F8E8',
-  },
-
-  pendingBadge: {
-    backgroundColor: '#FFE8C7',
-  },
-
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
-  },
-
+  activeBadge: { backgroundColor: '#D4F8E8' },
+  pendingBadge: { backgroundColor: '#FFE8C7' },
+  statusText: { fontSize: 12, fontWeight: '600', color: '#333' },
   continueButton: {
     backgroundColor: '#6B7FED',
     paddingVertical: 10,
@@ -205,13 +166,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
   },
-
-  continueButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
+  continueButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   bookButton: {
     backgroundColor: '#6B7FED',
     paddingVertical: 15,
@@ -219,10 +174,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-
-  bookButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  bookButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
 });

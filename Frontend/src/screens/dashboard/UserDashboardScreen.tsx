@@ -10,31 +10,43 @@ import CreatePostScreen from './CreatePostScreen';
 import AppointmentScreen from './AppointmentScreen';
 import ProfileScreen from './ProfileScreen';
 
-// Export this type so BottomTabBar can use it
-export type TabName = 'Feed' | 'Chatbot' | 'CreatePost' | 'Appointment' | 'Profile';
+export type TabName =
+  | 'Feed'
+  | 'Chatbot'
+  | 'CreatePost'
+  | 'Appointment'
+  | 'Profile';
 
-type UserDashboardScreenProps = {
+type DashboardScreenProps = {
   route: RouteProp<RootStackParamList, 'Dashboard'>;
 };
 
-export default function UserDashboardScreen({ route }: UserDashboardScreenProps) {
-  const { userId } = route.params;
+export default function DashboardScreen({ route }: DashboardScreenProps) {
+  const { id, role } = route.params; // ✅ Use id and role directly
+
   const [activeTab, setActiveTab] = useState<TabName>('Feed');
 
   const renderScreen = () => {
     switch (activeTab) {
       case 'Feed':
-        return <FeedScreen />;
+        return <FeedScreen id={id} role={role} />;
+
       case 'Chatbot':
-        return <ChatbotScreen />;
+        return <ChatbotScreen id={id} role={role} />;
+
       case 'CreatePost':
-        return <CreatePostScreen />;
+        return role === 'doctor'
+          ? <CreatePostScreen id={id} />
+          : <FeedScreen id={id} role={role} />;
+
       case 'Appointment':
-        return <AppointmentScreen />;
+        return <AppointmentScreen id={id} role={role} />;
+
       case 'Profile':
-        return <ProfileScreen />;
+        return <ProfileScreen id={id} role={role} />;
+
       default:
-        return <FeedScreen />;
+        return <FeedScreen id={id} role={role} />;
     }
   };
 
@@ -42,7 +54,11 @@ export default function UserDashboardScreen({ route }: UserDashboardScreenProps)
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <View style={styles.mainContainer}>
         {renderScreen()}
-        <BottomTabBar activeTab={activeTab} onTabChange={setActiveTab} />
+        <BottomTabBar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+         // optional: customize tabs by role
+        />
       </View>
     </SafeAreaView>
   );

@@ -18,12 +18,16 @@ import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { postAPI } from "../../services/api";
-import { getUserId } from "../../services/storage";
 
 interface MediaFile {
   uri: string;
   type: "image" | "video";
 }
+
+type CreatePostScreenProps = {
+  id: string; // user or doctor id
+  role: "doctor" | "user";
+};
 
 const BACKGROUND_COLORS = [
   "#6B7FED",
@@ -40,8 +44,9 @@ const BACKGROUND_COLORS = [
   "#85C1E2",
 ];
 
-export default function CreatePostScreen() {
+export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
   const insets = useSafeAreaInsets();
+
   const [postTitle, setPostTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -61,7 +66,7 @@ export default function CreatePostScreen() {
     "Other",
   ];
 
-  // CATEGORY & COLOR SELECT
+  // ---------------- CATEGORY & COLOR ----------------
   const handleCategorySelect = (category: string) => {
     setSelectedCategory(category);
     setShowCategoryModal(false);
@@ -71,7 +76,7 @@ export default function CreatePostScreen() {
     setShowColorModal(false);
   };
 
-  // MEDIA PICKER
+  // ---------------- MEDIA PICKER ----------------
   const handlePickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted")
@@ -83,14 +88,13 @@ export default function CreatePostScreen() {
       quality: 0.8,
     });
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-  const newMedia: MediaFile[] = result.assets.map(asset => ({
-    uri: asset.uri,
-    type: 'image',
-  }));
-  setMediaFiles(prev => [...prev, ...newMedia]);
-}
-
+    if (!result.canceled && result.assets.length > 0) {
+      const newMedia: MediaFile[] = result.assets.map((asset) => ({
+        uri: asset.uri,
+        type: "image",
+      }));
+      setMediaFiles((prev) => [...prev, ...newMedia]);
+    }
   };
 
   const handleTakePhoto = async () => {
@@ -99,13 +103,13 @@ export default function CreatePostScreen() {
       return Alert.alert("Permission Needed", "Allow camera access");
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets.length > 0) {
       const newMedia: MediaFile = { uri: result.assets[0].uri, type: "image" };
-      setMediaFiles([...mediaFiles, newMedia]);
+      setMediaFiles((prev) => [...prev, newMedia]);
     }
   };
 
@@ -118,60 +122,60 @@ export default function CreatePostScreen() {
   };
 
   const handleRemoveMedia = (index: number) => {
-    const updated = mediaFiles.filter((_, i) => i !== index);
-    setMediaFiles(updated);
+    setMediaFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // SUBMIT POST
- const handleSubmit = async () => {
-  if (!postTitle.trim() || !description.trim() || !selectedCategory) {
-    Alert.alert('Error', 'Please fill all required fields');
-    return;
-  }
-
-  try {
-    // ✅ Await the userId from AsyncStorage
-    const userId = await getUserId();
-    if (!userId) {
-      Alert.alert('Error', 'User not found. Please login again.');
+  // ---------------- SUBMIT POST ----------------
+  const handleSubmit = async () => {
+    if (!postTitle.trim() || !description.trim() || !selectedCategory) {
+      Alert.alert("Error", "Please fill all required fields");
       return;
     }
 
-    const formData = new FormData();
-    formData.append('userId', userId); // now userId is valid
-    formData.append('title', postTitle);
-    formData.append('description', description);
-    formData.append('category', selectedCategory);
-    if (selectedColor) formData.append('backgroundColor', selectedColor);
+    try {
+      setLoading(true);
 
-    mediaFiles.forEach((file) => {
-      const uriParts = file.uri.split('/');
-      const fileName = uriParts[uriParts.length - 1];
-      formData.append('media', {
-        uri: file.uri,
-        name: fileName,
-        type: 'image/jpeg', // adjust for video if needed
-      } as any);
-    });
+      // Determine status based on role
+      const status = role === "doctor" ? "approved" : "pending";
 
-    const response = await postAPI.createPost(formData);
-    console.log('Post created:', response.data);
-    Alert.alert('Success', 'Post created successfully!');
+      const formData = new FormData();
+      formData.append("userId", id); // from props
+      formData.append("title", postTitle);
+      formData.append("description", description);
+      formData.append("category", selectedCategory);
+      formData.append("status", status);
+      if (selectedColor) formData.append("backgroundColor", selectedColor);
 
-    // Clear form
-    setPostTitle('');
-    setDescription('');
-    setSelectedCategory('');
-    setSelectedColor('');
-    setMediaFiles([]);
+      mediaFiles.forEach((file) => {
+        const uriParts = file.uri.split("/");
+        const fileName = uriParts[uriParts.length - 1];
+        formData.append("media", {
+          uri: file.uri,
+          name: fileName,
+          type: "image/jpeg",
+        } as any);
+      });
 
-  } catch (error: any) {
-    console.error('Error creating post:', error.response?.data || error.message);
-    Alert.alert('Error', 'Failed to create post');
-  }
-};
+      const response = await postAPI.createPost(formData);
+      Alert.alert("Success", "Post created successfully!");
 
+      setPostTitle("");
+      setDescription("");
+      setSelectedCategory("");
+      setSelectedColor("");
+      setMediaFiles([]);
+    } catch (error: any) {
+      console.error(
+        "Error creating post:",
+        error.response?.data || error.message,
+      );
+      Alert.alert("Error", "Failed to create post");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // ---------------- RENDER ----------------
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: "#6B7FED" }}
@@ -233,7 +237,7 @@ export default function CreatePostScreen() {
             </View>
           </View>
 
-          {/* Category Selector */}
+          {/* Category */}
           <TouchableOpacity
             style={styles.categorySelector}
             onPress={() => setShowCategoryModal(true)}
@@ -375,7 +379,7 @@ export default function CreatePostScreen() {
   );
 }
 
-// Styles are same as your previous code; can reuse
+// ---------------- STYLES ----------------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#6B7FED" },
   header: {

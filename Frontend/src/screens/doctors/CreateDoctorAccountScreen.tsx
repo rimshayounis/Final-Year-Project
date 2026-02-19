@@ -21,15 +21,18 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { doctorAPI } from '../../services/api';
 import * as DocumentPicker from 'expo-document-picker';
 
-type CreateDoctorAccountScreenProps = {
+type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'CreateDoctorAccount'>;
   route: RouteProp<RootStackParamList, 'CreateDoctorAccount'>;
 };
 
-export default function CreateDoctorAccountScreen({
-  navigation,
-  route,
-}: CreateDoctorAccountScreenProps) {
+interface CertificateFile {
+  uri: string;
+  name: string;
+  mimeType: string;
+}
+
+export default function CreateDoctorAccountScreen({ navigation }: Props) {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -37,447 +40,282 @@ export default function CreateDoctorAccountScreen({
     licenseNumber: '',
     specialization: '',
   });
-  
-  const [certificates, setCertificates] = useState<{uri: string, name: string, mimeType: string}[]>([]);
+
+  const [certificates, setCertificates] = useState<CertificateFile[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData({ ...formData, [field]: value });
+  /* ------------------ INPUT HANDLER ------------------ */
+  const handleChange = (field: keyof typeof formData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  /* ------------------ FILE UPLOAD ------------------ */
   const handleUploadCertificates = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'application/pdf'],
-        copyToCacheDirectory: true,
         multiple: true,
+        copyToCacheDirectory: true,
       });
 
-      if (!result.canceled) {
-        Alert.alert('Success', `${result.assets.length} certificate(s) uploaded!`);
-        
-        const files = result.assets.map(asset => ({
-          uri: asset.uri,
-          name: asset.name,
-          mimeType: asset.mimeType || 'application/pdf',
-        }));
-        
-        setCertificates([...certificates, ...files]);
-      }
+      if (result.canceled) return;
+
+      const files: CertificateFile[] = result.assets.map(asset => ({
+        uri: asset.uri,
+        name: asset.name,
+        mimeType:
+          asset.mimeType ||
+          (asset.name.endsWith('.pdf')
+            ? 'application/pdf'
+            : asset.name.endsWith('.png')
+            ? 'image/png'
+            : 'image/jpeg'),
+      }));
+
+      setCertificates(prev => [...prev, ...files]);
+
+      Alert.alert('Success', `${files.length} certificate(s) uploaded.`);
     } catch (error) {
-      console.error('Upload error:', error);
-      Alert.alert('Error', 'Failed to upload certificates');
+      console.error('Certificate upload error:', error);
+      Alert.alert('Error', 'Failed to upload certificates.');
     }
   };
 
-  const validateForm = () => {
-    if (!formData.fullName.trim()) {
-      Alert.alert('Error', 'Please enter your full name');
-      return false;
-    }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email');
-      return false;
-    }
-    if (!formData.password.trim() || formData.password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
-      return false;
-    }
-    if (!formData.licenseNumber.trim()) {
-      Alert.alert('Error', 'Please enter your license number');
-      return false;
-    }
-    if (!formData.specialization.trim()) {
-      Alert.alert('Error', 'Please enter your specialization');
-      return false;
-    }
-    if (certificates.length === 0) {
-      Alert.alert('Error', 'Please upload at least one certificate');
-      return false;
-    }
+  /* ------------------ VALIDATION ------------------ */
+  const validate = () => {
+    if (!formData.fullName.trim())
+      return Alert.alert('Error', 'Full name is required'), false;
+
+    if (!formData.email.includes('@'))
+      return Alert.alert('Error', 'Valid email is required'), false;
+
+    if (formData.password.length < 6)
+      return Alert.alert('Error', 'Password must be at least 6 characters'), false;
+
+    if (!formData.licenseNumber.trim())
+      return Alert.alert('Error', 'License number is required'), false;
+
+    if (!formData.specialization.trim())
+      return Alert.alert('Error', 'Specialization is required'), false;
+
+    if (certificates.length === 0)
+      return Alert.alert('Error', 'Upload at least one certificate'), false;
+
     return true;
   };
 
+  /* ------------------ SIGNUP ------------------ */
   const handleSignUp = async () => {
-    if (!validateForm()) return;
+    if (!validate()) return;
 
     setLoading(true);
-    try {
-      const formDataToSend = new FormData();
-      
-      formDataToSend.append('fullName', formData.fullName);
-      formDataToSend.append('email', formData.email);
-      formDataToSend.append('password', formData.password);
-      formDataToSend.append('licenseNumber', formData.licenseNumber);
-      formDataToSend.append('specialization', formData.specialization);
-      
-      certificates.forEach((cert, index) => {
-        const fileExtension = cert.name.split('.').pop()?.toLowerCase();
-        let mimeType = cert.mimeType;
-        
-        if (!mimeType) {
-          if (fileExtension === 'pdf') {
-            mimeType = 'application/pdf';
-          } else if (['jpg', 'jpeg'].includes(fileExtension || '')) {
-            mimeType = 'image/jpeg';
-          } else if (fileExtension === 'png') {
-            mimeType = 'image/png';
-          }
-        }
 
-        formDataToSend.append('certificates', {
-          uri: Platform.OS === 'ios' ? cert.uri.replace('file://', '') : cert.uri,
-          type: mimeType,
+    try {
+      const body = new FormData();
+
+      body.append('fullName', formData.fullName.trim());
+      body.append('email', formData.email.trim().toLowerCase());
+      body.append('password', formData.password);
+      body.append('licenseNumber', formData.licenseNumber.trim());
+      body.append('specialization', formData.specialization.trim());
+
+      certificates.forEach(cert => {
+        body.append('certificates', {
+          uri: Platform.OS === 'ios'
+            ? cert.uri.replace('file://', '')
+            : cert.uri,
           name: cert.name,
+          type: cert.mimeType,
         } as any);
       });
 
-      console.log('Sending registration request...');
-      const response = await doctorAPI.register(formDataToSend);
-
-      console.log('Registration response:', response.data);
+      const response = await doctorAPI.register(body);
 
       if (response.data.success) {
         Alert.alert(
-          'Success',
-          'Account created! Your profile is pending verification.',
+          'Registration Successful',
+          'Your account is pending verification by admin.',
           [
             {
               text: 'OK',
-              onPress: () => navigation.navigate('DoctorDashboard', { 
-                doctorId: response.data.doctor._id 
-              }),
+              onPress: () =>
+                navigation.replace('DoctorUnverified', {
+                  doctorId: response.data.doctor._id,
+                }),
             },
           ]
         );
       }
     } catch (error: any) {
-      console.error('Registration error:', error);
-      console.error('Error response:', error.response?.data);
+      console.error('Doctor registration error:', error);
       Alert.alert(
         'Error',
-        error.response?.data?.message || 'Registration failed. Please try again.'
+        error.response?.data?.message || 'Registration failed.'
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleBackToLogin = () => {
-    navigation.goBack();
-  };
-
+  /* ------------------ UI ------------------ */
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.innerContainer}>
-            {/* Header - Fixed at top */}
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.header}>
-              <TouchableOpacity style={styles.backButton} onPress={handleBackToLogin}>
-                <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+              <TouchableOpacity onPress={() => navigation.goBack()}>
+                <MaterialIcons name="arrow-back" size={24} color="#fff" />
               </TouchableOpacity>
-              
               <Text style={styles.headerTitle}>Create Doctor Account</Text>
             </View>
 
-            {/* Scrollable Form */}
-            <ScrollView 
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              bounces={false}
-            >
-              <View style={styles.form}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Full Name</Text>
-                  <View style={styles.inputContainer}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter Your Full Name"
-                      value={formData.fullName}
-                      onChangeText={(value) => handleInputChange('fullName', value)}
-                      placeholderTextColor="#999"
-                      returnKeyType="next"
-                    />
-                    <MaterialIcons name="person" size={20} color="#999" style={styles.inputIcon} />
-                  </View>
-                </View>
+            <View style={styles.form}>
+              {renderInput('Full Name', 'fullName', formData.fullName)}
+              {renderInput('Email', 'email', formData.email, 'email-address')}
+              {renderPasswordInput()}
+              {renderInput('License Number', 'licenseNumber', formData.licenseNumber)}
+              {renderInput('Specialization', 'specialization', formData.specialization)}
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Email</Text>
-                  <View style={styles.inputContainer}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter Your Email"
-                      value={formData.email}
-                      onChangeText={(value) => handleInputChange('email', value)}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      placeholderTextColor="#999"
-                      returnKeyType="next"
-                    />
-                    <MaterialIcons name="email" size={20} color="#999" style={styles.inputIcon} />
-                  </View>
-                </View>
+              <TouchableOpacity style={styles.uploadBtn} onPress={handleUploadCertificates}>
+                <MaterialIcons name="upload-file" size={22} color="#6B7FED" />
+                <Text style={styles.uploadText}>
+                  {certificates.length
+                    ? `Add More Certificates (${certificates.length})`
+                    : 'Upload Certificates'}
+                </Text>
+              </TouchableOpacity>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Password</Text>
-                  <View style={styles.inputContainer}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter Your Password"
-                      value={formData.password}
-                      onChangeText={(value) => handleInputChange('password', value)}
-                      secureTextEntry={!showPassword}
-                      placeholderTextColor="#999"
-                      returnKeyType="next"
-                    />
-                    <TouchableOpacity
-                      onPress={() => setShowPassword(!showPassword)}
-                      style={styles.inputIcon}
-                    >
-                      <MaterialIcons
-                        name={showPassword ? 'visibility' : 'visibility-off'}
-                        size={20}
-                        color="#999"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>License Number</Text>
-                  <View style={styles.inputContainer}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter License Number"
-                      value={formData.licenseNumber}
-                      onChangeText={(value) => handleInputChange('licenseNumber', value)}
-                      placeholderTextColor="#999"
-                      returnKeyType="next"
-                    />
-                    <MaterialIcons name="badge" size={20} color="#999" style={styles.inputIcon} />
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Specialization</Text>
-                  <View style={styles.inputContainer}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g., Cardiologist"
-                      value={formData.specialization}
-                      onChangeText={(value) => handleInputChange('specialization', value)}
-                      placeholderTextColor="#999"
-                      returnKeyType="done"
-                    />
-                    <MaterialIcons name="medical-services" size={20} color="#999" style={styles.inputIcon} />
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.uploadButton}
-                  onPress={handleUploadCertificates}
-                >
-                  <MaterialIcons name="upload-file" size={24} color="#6B7FED" />
-                  <Text style={styles.uploadButtonText}>
-                    {certificates.length > 0 ? 'Add More Certificates' : 'Upload Certificates'}
-                  </Text>
-                </TouchableOpacity>
-
-                {certificates.length > 0 && (
-                  <View style={styles.certificatesContainer}>
-                    <Text style={styles.certificatesLabel}>Uploaded: {certificates.length} file(s)</Text>
-                    {certificates.map((cert, index) => (
-                      <View key={index} style={styles.certificateItem}>
-                        <MaterialIcons name="description" size={16} color="#6B7FED" />
-                        <Text style={styles.certificateText} numberOfLines={1}> {cert.name}</Text>
-                      </View>
-                    ))}
-                  </View>
+              <TouchableOpacity
+                style={styles.signUpBtn}
+                onPress={handleSignUp}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.signUpText}>Sign Up</Text>
                 )}
-
-                <TouchableOpacity
-                  style={styles.signUpButton}
-                  onPress={handleSignUp}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.signUpButtonText}>Sign Up</Text>
-                  )}
-                </TouchableOpacity>
-
-                <View style={styles.loginContainer}>
-                  <Text style={styles.loginText}>Already have account? </Text>
-                  <TouchableOpacity onPress={handleBackToLogin} disabled={loading}>
-                    <Text style={styles.loginLink}>Login</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Extra bottom padding for keyboard */}
-              <View style={{ height: 100 }} />
-            </ScrollView>
-          </View>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+
+  /* ------------------ REUSABLE INPUT ------------------ */
+  function renderInput(
+    label: string,
+    field: keyof typeof formData,
+    value: string,
+    keyboardType: any = 'default'
+  ) {
+    return (
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>{label}</Text>
+        <TextInput
+          style={styles.input}
+          value={value}
+          keyboardType={keyboardType}
+          autoCapitalize="none"
+          onChangeText={text => handleChange(field, text)}
+        />
+      </View>
+    );
+  }
+
+  function renderPasswordInput() {
+    return (
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Password</Text>
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={{ flex: 1 }}
+            value={formData.password}
+            secureTextEntry={!showPassword}
+            onChangeText={text => handleChange('password', text)}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <MaterialIcons
+              name={showPassword ? 'visibility' : 'visibility-off'}
+              size={20}
+              color="#777"
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 }
 
+/* ------------------ STYLES ------------------ */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  innerContainer: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  scrollContent: { paddingBottom: 80 },
   header: {
     backgroundColor: '#6B7FED',
-    paddingTop: 20,
-    paddingBottom: 25,
-    paddingHorizontal: 30,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    zIndex: 10,
+    padding: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   headerTitle: {
-    fontSize: 24,
-    color: '#FFFFFF',
+    color: '#fff',
+    fontSize: 22,
     fontWeight: '700',
-    textAlign: 'center',
+    marginTop: 12,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 20,
-  },
-  form: {
-    padding: 20,
-  },
-  inputGroup: {
-    marginBottom: 18,
-  },
-  label: {
-    fontSize: 15,
-    color: '#2C3E50',
-    fontWeight: '600',
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
+  form: { padding: 24 },
+  inputGroup: { marginBottom: 16 },
+  label: { fontWeight: '600', marginBottom: 6 },
   input: {
-    flex: 1,
-    height: 52,
-    fontSize: 15,
-    color: '#2C3E50',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 50,
   },
-  inputIcon: {
-    marginLeft: 10,
-  },
-  uploadButton: {
+  passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
     borderRadius: 12,
-    paddingVertical: 16,
-    marginTop: 8,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#6B7FED',
-    borderStyle: 'dashed',
+    paddingHorizontal: 14,
+    height: 50,
   },
-  uploadButtonText: {
-    fontSize: 15,
+  uploadBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#6B7FED',
+    padding: 14,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  uploadText: {
+    marginLeft: 8,
     color: '#6B7FED',
     fontWeight: '600',
-    marginLeft: 10,
   },
-  certificatesContainer: {
-    backgroundColor: '#E8F4F8',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  certificatesLabel: {
-    fontSize: 14,
-    color: '#2C3E50',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  certificateItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  certificateText: {
-    fontSize: 13,
-    color: '#555',
-    marginLeft: 6,
-    flex: 1,
-  },
-  signUpButton: {
+  signUpBtn: {
     backgroundColor: '#6B7FED',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 12,
-    shadowColor: '#6B7FED',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
+    marginTop: 24,
   },
-  signUpButtonText: {
-    color: '#FFFFFF',
+  signUpText: {
+    color: '#fff',
     fontSize: 17,
     fontWeight: '700',
-  },
-  loginContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-    paddingBottom: 10,
-  },
-  loginText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  loginLink: {
-    fontSize: 14,
-    color: '#6B7FED',
-    fontWeight: '600',
   },
 });
