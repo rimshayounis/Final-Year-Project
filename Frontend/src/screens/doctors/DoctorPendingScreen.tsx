@@ -13,11 +13,11 @@ import { RootStackParamList } from '../../../App';
 import { MaterialIcons } from '@expo/vector-icons';
 
 type DoctorDashboardScreenProps = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'DoctorDashboard'>;
-  route: RouteProp<RootStackParamList, 'DoctorDashboard'>;
+  navigation: NativeStackNavigationProp<RootStackParamList, 'DoctorUnverified'>;
+  route: RouteProp<RootStackParamList, 'DoctorUnverified'>;
 };
 
-export default function DoctorDashboardScreen({ 
+export default function DoctorPendingScreen({ 
   navigation, 
   route 
 }: DoctorDashboardScreenProps) {

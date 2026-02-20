@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from 'axios'
 
 export const API_URL = 'http://192.168.100.10:3000/api';
 

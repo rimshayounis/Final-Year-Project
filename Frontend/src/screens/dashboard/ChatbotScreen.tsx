@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -30,38 +29,100 @@ interface Message {
   image?: string;
 }
 
-export default function ChatbotScreen() {
+type ChatbotScreenProps = {
+  id: string;
+  role: 'user' | 'doctor';
+};
+
+export default function ChatbotScreen({ id, role }: ChatbotScreenProps) {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
-
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Hi! I am your TruHeal-Link health assistant. Ask me anything about your health! 😊',
-      isUser: false,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [userId, setUserId] = useState<string>('');
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [userId, setUserId] = useState('');
 
-  // ✅ FIXED: using getUser() from storage instead of AsyncStorage directly
+  const defaultWelcome: Message = {
+    id: 'welcome',
+    text:
+      role === 'doctor'
+        ? 'Hi Doctor! I am your TruHeal-Link assistant. How can I help you today? 😊'
+        : 'Hi! I am your TruHeal-Link health assistant. Ask me anything about your health! 😊',
+    isUser: false,
+    timestamp: new Date(),
+  };
+
+  /* ================= LOAD USER + HISTORY ================= */
   useEffect(() => {
-    const loadUser = async () => {
+    const loadUserAndHistory = async () => {
       try {
+        setIsLoadingHistory(true);
+
         const userData = await getUser();
-        if (userData && userData._id) {
-          setUserId(userData._id);
+        if (!userData?._id) {
+          setMessages([defaultWelcome]);
+          return;
         }
+
+        setUserId(userData._id);
+
+        const response = await chatbotAPI.getChatHistory(userData._id);
+
+        // Adjust this path based on your actual API response shape
+        const history =
+          response.data.data?.messages ||
+          response.data.data ||
+          response.data ||
+          [];
+
+        if (!history || history.length === 0) {
+          setMessages([defaultWelcome]);
+          return;
+        }
+
+        const loadedMessages: Message[] = history
+          .map((item: any) => {
+            const msgs: Message[] = [];
+
+            // User message
+            if (item.message) {
+              msgs.push({
+                id: item._id + '_user',
+                text: item.message,
+                isUser: true,
+                timestamp: new Date(item.createdAt),
+                image: item.imageUrl || undefined,
+              });
+            }
+
+            // Bot response
+            if (item.response) {
+              msgs.push({
+                id: item._id + '_bot',
+                text: item.response,
+                isUser: false,
+                timestamp: new Date(item.createdAt),
+              });
+            }
+
+            return msgs;
+          })
+          .flat();
+
+        setMessages(loadedMessages.length > 0 ? loadedMessages : [defaultWelcome]);
       } catch (error) {
-        console.error('Failed to load user:', error);
+        console.error('Failed to load history:', error);
+        setMessages([defaultWelcome]);
+      } finally {
+        setIsLoadingHistory(false);
       }
     };
-    loadUser();
+
+    loadUserAndHistory();
   }, []);
 
-  // Auto scroll when messages update
+  /* ================= AUTO SCROLL ================= */
   useEffect(() => {
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -69,7 +130,6 @@ export default function ChatbotScreen() {
   }, [messages]);
 
   /* ================= CLEAR CHAT ================= */
-
   const handleClearChat = () => {
     Alert.alert(
       'Clear Chat',
@@ -84,8 +144,11 @@ export default function ChatbotScreen() {
               if (userId) await chatbotAPI.clearHistory(userId);
               setMessages([
                 {
-                  id: '1',
-                  text: 'Chat cleared! How can I help you? 😊',
+                  id: 'welcome',
+                  text:
+                    role === 'doctor'
+                      ? 'Chat cleared! How can I help you, Doctor? 😊'
+                      : 'Chat cleared! How can I help you? 😊',
                   isUser: false,
                   timestamp: new Date(),
                 },
@@ -100,14 +163,12 @@ export default function ChatbotScreen() {
   };
 
   /* ================= COPY MESSAGE ================= */
-
   const handleCopy = async (text: string) => {
     await Clipboard.setStringAsync(text);
     Alert.alert('Copied', 'Message copied to clipboard');
   };
 
   /* ================= SEND MESSAGE ================= */
-
   const handleSend = async (imageUrl?: string, fileUrl?: string) => {
     const textToSend = message.trim();
 
@@ -125,6 +186,7 @@ export default function ChatbotScreen() {
       timestamp: new Date(),
       image: imageUrl,
     };
+
     setMessages((prev) => [...prev, userMsg]);
     setMessage('');
     setIsLoading(true);
@@ -138,7 +200,6 @@ export default function ChatbotScreen() {
       });
 
       const botData = response.data.data.botResponse;
-
       const botMsg: Message = {
         id: botData.id,
         text: botData.text,
@@ -162,7 +223,6 @@ export default function ChatbotScreen() {
   };
 
   /* ================= MEDIA OPTIONS ================= */
-
   const handleMediaOptions = () => {
     Alert.alert('Select Option', 'Choose media type', [
       { text: 'Camera', onPress: handleOpenCamera },
@@ -207,96 +267,105 @@ export default function ChatbotScreen() {
   };
 
   /* ================= UI ================= */
-
   return (
     <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={[styles.container, { paddingTop: insets.top }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
 
       {/* HEADER */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <View style={styles.header}>
         <Text style={styles.headerTitle}>Chatbot</Text>
         <TouchableOpacity style={styles.menuButton} onPress={handleClearChat}>
-          <MaterialIcons name="more-horiz" size={24} color="#FFFFFF" />
+          <MaterialIcons name="delete-outline" size={24} color="#FFF" />
         </TouchableOpacity>
       </View>
 
       {/* MESSAGES */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.botAvatarContainer}>
-          <Text style={styles.botAvatar}>🤖</Text>
-          <Text style={styles.sparkle}>✨</Text>
+      {isLoadingHistory ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6B7FED" />
+          <Text style={styles.loadingText}>Loading chat history...</Text>
         </View>
+      ) : (
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.botAvatarContainer}>
+            <Text style={styles.botAvatar}>🤖</Text>
+            <Text style={styles.sparkle}>✨</Text>
+          </View>
 
-        {messages.map((msg) => (
-          <View
-            key={msg.id}
-            style={[
-              styles.messageWrapper,
-              msg.isUser ? styles.userMessageWrapper : styles.botMessageWrapper,
-            ]}
-          >
+          {messages.map((msg) => (
             <View
+              key={msg.id}
               style={[
-                styles.messageBubble,
-                msg.isUser ? styles.userMessage : styles.botMessage,
+                styles.messageWrapper,
+                msg.isUser ? styles.userMessageWrapper : styles.botMessageWrapper,
               ]}
             >
-              {msg.image && (
-                <Image source={{ uri: msg.image }} style={styles.messageImage} />
-              )}
-              <Text
+              <View
                 style={[
-                  styles.messageText,
-                  msg.isUser ? styles.userMessageText : styles.botMessageText,
+                  styles.messageBubble,
+                  msg.isUser ? styles.userMessage : styles.botMessage,
                 ]}
               >
-                {msg.text}
-              </Text>
+                {msg.image && (
+                  <Image
+                    source={{ uri: msg.image }}
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.messageText,
+                    msg.isUser ? styles.userMessageText : styles.botMessageText,
+                  ]}
+                >
+                  {msg.text}
+                </Text>
+              </View>
+
+              {!msg.isUser && (
+                <TouchableOpacity
+                  style={styles.copyButton}
+                  onPress={() => handleCopy(msg.text)}
+                >
+                  <Ionicons name="copy-outline" size={16} color="#999" />
+                </TouchableOpacity>
+              )}
             </View>
+          ))}
 
-            {!msg.isUser && (
-              <TouchableOpacity
-                style={styles.copyButton}
-                onPress={() => handleCopy(msg.text)}
-              >
-                <MaterialIcons name="content-copy" size={16} color="#999" />
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
-
-        {isLoading && (
-          <View style={[styles.messageWrapper, styles.botMessageWrapper]}>
-            <View style={[styles.messageBubble, styles.botMessage]}>
+          {isLoading && (
+            <View style={styles.botMessageWrapper}>
               <ActivityIndicator size="small" color="#6B7FED" />
             </View>
-          </View>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
+      )}
 
       {/* INPUT AREA */}
-      <View style={styles.inputContainer}>
+      <View style={[styles.inputContainer, { paddingBottom: insets.bottom || 15 }]}>
         <TouchableOpacity style={styles.mediaButton} onPress={handleMediaOptions}>
-          <MaterialIcons name="add" size={24} color="#FFF" />
+          <Ionicons name="attach" size={22} color="#FFF" />
         </TouchableOpacity>
 
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
-            placeholder="Reply..."
+            placeholder="Type a message..."
             placeholderTextColor="#999"
             value={message}
             onChangeText={setMessage}
             multiline
-            editable={!isLoading}
+            maxLength={1000}
           />
         </View>
 
@@ -315,8 +384,6 @@ export default function ChatbotScreen() {
   );
 }
 
-/* ================= STYLES ================= */
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F5' },
   header: {
@@ -329,6 +396,17 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
   menuButton: { padding: 5 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6B7FED',
+    marginTop: 8,
+  },
   messagesContainer: { flex: 1 },
   messagesContent: { padding: 20, paddingBottom: 10 },
   botAvatarContainer: {
@@ -349,10 +427,39 @@ const styles = StyleSheet.create({
   botMessageText: { color: '#2C3E50' },
   messageImage: { width: '100%', height: 200, borderRadius: 10, marginBottom: 8 },
   copyButton: { padding: 8, marginLeft: 8 },
-  inputContainer: { flexDirection: 'row', padding: 15, backgroundColor: '#FFF', alignItems: 'flex-end' },
-  mediaButton: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#6B7FED', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  inputWrapper: { flex: 1, backgroundColor: '#F5F5F5', borderRadius: 25, paddingHorizontal: 15, paddingVertical: 10, marginRight: 10, minHeight: 45, justifyContent: 'center' },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 15,
+    backgroundColor: '#FFF',
+    alignItems: 'flex-end',
+  },
+  mediaButton: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    backgroundColor: '#6B7FED',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  inputWrapper: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 25,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginRight: 10,
+    minHeight: 45,
+    justifyContent: 'center',
+  },
   input: { fontSize: 15, color: '#2C3E50' },
-  sendButton: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#6B7FED', justifyContent: 'center', alignItems: 'center' },
+  sendButton: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    backgroundColor: '#6B7FED',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   sendButtonDisabled: { backgroundColor: '#CCC' },
 });

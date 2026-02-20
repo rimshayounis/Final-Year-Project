@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,12 +14,23 @@ import {
   Share,
   Modal,
   TextInput,
-} from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
-import { getUserId } from '../../services/storage';
-import apiClient from '../../services/api';
+  Dimensions,
+} from "react-native";
+import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
+import * as ImagePicker from "expo-image-picker";
+import apiClient from "../../services/api";
+
+const { width } = Dimensions.get("window");
+
+interface Comment {
+  _id: string;
+  userId: string;
+  userName?: string;
+  text: string;
+  createdAt: string;
+}
 
 interface Post {
   _id: string;
@@ -28,32 +39,76 @@ interface Post {
   category: string;
   mediaUrls: string[];
   backgroundColor: string | null;
-  status: 'pending' | 'approved' | 'rejected';
+  status: "pending" | "approved" | "rejected";
   likes: number;
   comments: number;
   shares: number;
   createdAt: string;
   rejectionReason?: string;
+  commentsList?: Comment[];
 }
 
-export default function ProfileScreen() {
+interface UserProfile {
+  _id: string;
+  fullName: string;
+  email: string;
+  age?: number;
+  gender?: string;
+  profileImage?: string;
+  bio?: string;
+  userType?: string;
+}
+
+type ProfileScreenProps = {
+  id: string;
+  role?: "user" | "doctor";
+};
+
+export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [commentModal, setCommentModal] = useState(false);
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
-  const fetchUserPosts = async (uid: string) => {
+  // Edit Profile Modal
+  const [editModal, setEditModal] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Comment Modal
+  const [commentModal, setCommentModal] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [commentsLoading, setCommentsLoading] = useState(false);
+
+  // Expanded posts
+  const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
+
+  /* ===== FETCH PROFILE ===== */
+  const fetchProfile = async () => {
     try {
-      const response = await apiClient.get(`/posts/user/${uid}`);
-      setPosts(response.data.data);
+      const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
+      const response = await apiClient.get(endpoint);
+      const data = response.data.data || response.data;
+      setUserProfile(data);
+      setEditName(data.fullName || "");
+      setEditBio(data.bio || "");
+    } catch (error) {
+      console.error("Failed to load profile:", error);
+    }
+  };
+
+  /* ===== FETCH POSTS ===== */
+  const fetchUserPosts = async () => {
+    try {
+      const response = await apiClient.get(`/posts/user/${id}`);
+      setPosts(response.data.data || []);
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to load posts');
+      Alert.alert("Error", "Failed to load posts");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -62,282 +117,631 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const load = async () => {
-        setLoading(true);
-        const uid = await getUserId();
-        setUserId(uid);
-        if (uid) fetchUserPosts(uid);
-      };
-      load();
-    }, [])
+      setLoading(true);
+      fetchProfile();
+      fetchUserPosts();
+    }, [id])
   );
 
   const handleRefresh = () => {
     setRefreshing(true);
-    if (userId) fetchUserPosts(userId);
+    fetchProfile();
+    fetchUserPosts();
   };
 
-  // ===== LIKE =====
-  const handleLike = async (postId: string) => {
-    if (actionLoading === postId + '_like') return;
-
-    const alreadyLiked = likedPosts.has(postId);
-    if (alreadyLiked) {
-      Alert.alert('', 'You already liked this post!');
+  /* ===== EDIT PROFILE ===== */
+  const handleEditProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert("Error", "Name cannot be empty");
       return;
     }
+    setEditLoading(true);
+    try {
+      const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
+      await apiClient.put(endpoint, { fullName: editName, bio: editBio });
+      setUserProfile((prev) =>
+        prev ? { ...prev, fullName: editName, bio: editBio } : prev
+      );
+      setEditModal(false);
+      Alert.alert("Success", "Profile updated!");
+    } catch (error) {
+      Alert.alert("Error", "Failed to update profile");
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
-    setActionLoading(postId + '_like');
+  /* ===== PICK PROFILE PHOTO ===== */
+  const handlePickProfilePhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Needed", "Allow gallery access");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      // Upload profile image
+      try {
+        const formData = new FormData();
+        formData.append("profileImage", {
+          uri: result.assets[0].uri,
+          name: "profile.jpg",
+          type: "image/jpeg",
+        } as any);
+        const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
+        await apiClient.put(endpoint, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        setUserProfile((prev) =>
+          prev ? { ...prev, profileImage: result.assets[0].uri } : prev
+        );
+      } catch (error) {
+        Alert.alert("Error", "Failed to update profile photo");
+      }
+    }
+  };
+
+  /* ===== LIKE ===== */
+  const handleLike = async (postId: string) => {
+    if (actionLoading === postId + "_like") return;
+    if (likedPosts.has(postId)) {
+      Alert.alert("", "You already liked this post!");
+      return;
+    }
+    setActionLoading(postId + "_like");
     try {
       await apiClient.post(`/posts/${postId}/like`);
-
-      // Update likes count locally
-      setPosts(prev =>
-        prev.map(p =>
-          p._id === postId ? { ...p, likes: p.likes + 1 } : p
-        )
+      setPosts((prev) =>
+        prev.map((p) => (p._id === postId ? { ...p, likes: p.likes + 1 } : p))
       );
-      setLikedPosts(prev => new Set([...prev, postId]));
+      setLikedPosts((prev) => new Set([...prev, postId]));
+      // Update selected post if comment modal open
+      if (selectedPost?._id === postId) {
+        setSelectedPost((prev) =>
+          prev ? { ...prev, likes: prev.likes + 1 } : prev
+        );
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to like post');
+      Alert.alert("Error", "Failed to like post");
     } finally {
       setActionLoading(null);
     }
   };
 
-  // ===== COMMENT =====
-  const handleOpenComment = (postId: string) => {
-    setSelectedPostId(postId);
+  /* ===== OPEN COMMENTS ===== */
+  const handleOpenComment = async (post: Post) => {
+    setSelectedPost(post);
     setCommentModal(true);
+    setCommentsLoading(true);
+    try {
+      const response = await apiClient.get(`/posts/${post._id}/comments`);
+      const commentsList = response.data.data || response.data || [];
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === post._id ? { ...p, commentsList } : p
+        )
+      );
+      setSelectedPost((prev) => (prev ? { ...prev, commentsList } : prev));
+    } catch (error) {
+      // Comments may not load, that's ok
+    } finally {
+      setCommentsLoading(false);
+    }
   };
 
+  /* ===== SUBMIT COMMENT ===== */
   const handleSubmitComment = async () => {
     if (!commentText.trim()) {
-      Alert.alert('Error', 'Please write a comment');
+      Alert.alert("Error", "Please write a comment");
       return;
     }
-    if (!selectedPostId) return;
+    if (!selectedPost) return;
 
-    setActionLoading(selectedPostId + '_comment');
+    setActionLoading(selectedPost._id + "_comment");
     try {
-      await apiClient.post(`/posts/${selectedPostId}/comment`);
+      const response = await apiClient.post(
+        `/posts/${selectedPost._id}/comment`,
+        { userId: id, text: commentText }
+      );
 
-      // Update comment count locally
-      setPosts(prev =>
-        prev.map(p =>
-          p._id === selectedPostId ? { ...p, comments: p.comments + 1 } : p
+      const newComment: Comment = response.data.data || {
+        _id: Date.now().toString(),
+        userId: id,
+        userName: userProfile?.fullName || "You",
+        text: commentText,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Update posts list count
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === selectedPost._id
+            ? {
+                ...p,
+                comments: p.comments + 1,
+                commentsList: [...(p.commentsList || []), newComment],
+              }
+            : p
         )
       );
 
-      setCommentText('');
-      setCommentModal(false);
-      Alert.alert('Success', 'Comment added!');
+      // Update modal post
+      setSelectedPost((prev) =>
+        prev
+          ? {
+              ...prev,
+              comments: prev.comments + 1,
+              commentsList: [...(prev.commentsList || []), newComment],
+            }
+          : prev
+      );
+
+      setCommentText("");
     } catch (error) {
-      Alert.alert('Error', 'Failed to add comment');
+      Alert.alert("Error", "Failed to add comment");
     } finally {
       setActionLoading(null);
     }
   };
 
-  // ===== SHARE =====
+  /* ===== SHARE ===== */
   const handleShare = async (post: Post) => {
-    setActionLoading(post._id + '_share');
+    setActionLoading(post._id + "_share");
     try {
-      const shareMessage = `${post.title}\n\n${post.description}\n\nCategory: ${post.category}`;
-
-      const result = await Share.share({
-        message: shareMessage,
+      const shareContent = {
         title: post.title,
-      });
+        message: `📋 ${post.title}\n\n${post.description}\n\n🏷️ Category: ${post.category}\n\n🔗 Shared via TruHeal-Link`,
+        url:
+          post.mediaUrls?.length > 0
+            ? `http://192.168.100.10:3000${post.mediaUrls[0]}`
+            : undefined,
+      };
+
+      const result = await Share.share(shareContent);
 
       if (result.action === Share.sharedAction) {
-        // Increment share count on backend
         await apiClient.post(`/posts/${post._id}/share`);
-
-        // Update shares count locally
-        setPosts(prev =>
-          prev.map(p =>
+        setPosts((prev) =>
+          prev.map((p) =>
             p._id === post._id ? { ...p, shares: p.shares + 1 } : p
           )
         );
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to share post');
+      Alert.alert("Error", "Failed to share post");
     } finally {
       setActionLoading(null);
     }
   };
 
+  const toggleExpand = (postId: string) => {
+    setExpandedPosts((prev) => {
+      const next = new Set(prev);
+      next.has(postId) ? next.delete(postId) : next.add(postId);
+      return next;
+    });
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'approved': return '#4CAF50';
-      case 'rejected': return '#F44336';
-      default: return '#FF9800';
+      case "approved": return "#00B374";
+      case "rejected": return "#E53E3E";
+      default: return "#F6A623";
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'approved': return 'check-circle';
-      case 'rejected': return 'cancel';
-      default: return 'schedule';
+      case "approved": return "Published";
+      case "rejected": return "Rejected";
+      default: return "Under Review";
     }
   };
 
-  const renderPost = ({ item }: { item: Post }) => {
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diff < 60) return "Just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  /* ===== RENDER POST ===== */
+  const renderPost = ({ item, index }: { item: Post; index: number }) => {
     const isLiked = likedPosts.has(item._id);
+    const isExpanded = expandedPosts.has(item._id);
+    const descLimit = 120;
+    const needsExpand = item.description.length > descLimit;
 
     return (
       <View style={styles.postCard}>
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-          <MaterialIcons
-            name={getStatusIcon(item.status) as any}
-            size={14}
-            color={getStatusColor(item.status)}
-          />
-          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-          </Text>
+        {/* Post Header */}
+        <View style={styles.postHeader}>
+          <View style={styles.postAuthorRow}>
+            <View style={styles.postAvatar}>
+              {userProfile?.profileImage ? (
+                <Image
+                  source={{ uri: userProfile.profileImage }}
+                  style={styles.postAvatarImg}
+                />
+              ) : (
+                <Text style={styles.postAvatarText}>
+                  {userProfile?.fullName?.charAt(0)?.toUpperCase() || "U"}
+                </Text>
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.postAuthorName}>
+                {userProfile?.fullName || "You"}
+              </Text>
+              <View style={styles.postMeta}>
+                <Text style={styles.postTime}>{formatDate(item.createdAt)}</Text>
+                <Text style={styles.postMetaDot}>·</Text>
+                <View
+                  style={[
+                    styles.statusPill,
+                    { backgroundColor: getStatusColor(item.status) + "18" },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.statusDot,
+                      { backgroundColor: getStatusColor(item.status) },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusPillText,
+                      { color: getStatusColor(item.status) },
+                    ]}
+                  >
+                    {getStatusLabel(item.status)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+          <View style={styles.categoryChip}>
+            <Text style={styles.categoryChipText}>{item.category}</Text>
+          </View>
         </View>
 
-        {/* Category */}
-        <Text style={styles.categoryTag}>{item.category}</Text>
-
-        {/* Title */}
+        {/* Post Title */}
         <Text style={styles.postTitle}>{item.title}</Text>
 
         {/* Description */}
-        <View style={[
-          styles.descriptionBox,
-          item.backgroundColor && { backgroundColor: item.backgroundColor }
-        ]}>
-          <Text style={[
-            styles.postDescription,
-            item.backgroundColor && { color: '#FFF' }
-          ]} numberOfLines={3}>
-            {item.description}
+        <View
+          style={[
+            styles.descriptionBox,
+            item.backgroundColor
+              ? { backgroundColor: item.backgroundColor }
+              : null,
+          ]}
+        >
+          <Text
+            style={[
+              styles.postDescription,
+              item.backgroundColor ? { color: "#FFF" } : null,
+            ]}
+          >
+            {isExpanded || !needsExpand
+              ? item.description
+              : item.description.slice(0, descLimit) + "..."}
           </Text>
+          {needsExpand && (
+            <TouchableOpacity onPress={() => toggleExpand(item._id)}>
+              <Text style={styles.seeMoreText}>
+                {isExpanded ? "See less" : "See more"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Media Images */}
-        {item.mediaUrls && item.mediaUrls.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaScroll}>
-            {item.mediaUrls.map((url, index) => (
+        {/* Media */}
+        {item.mediaUrls?.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.mediaScroll}
+          >
+            {item.mediaUrls.map((url, i) => (
               <Image
-                key={index}
+                key={i}
                 source={{ uri: `http://192.168.100.10:3000${url}` }}
                 style={styles.mediaImage}
+                resizeMode="cover"
               />
             ))}
           </ScrollView>
         )}
 
         {/* Rejection Reason */}
-        {item.status === 'rejected' && item.rejectionReason && (
+        {item.status === "rejected" && item.rejectionReason && (
           <View style={styles.rejectionBox}>
-            <MaterialIcons name="info" size={14} color="#F44336" />
+            <Ionicons name="alert-circle" size={14} color="#E53E3E" />
             <Text style={styles.rejectionText}>{item.rejectionReason}</Text>
           </View>
         )}
 
-        {/* Date */}
-        <Text style={styles.dateText}>
-          {new Date(item.createdAt).toLocaleDateString()}
-        </Text>
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statsLeft}>
+            {item.likes > 0 && (
+              <View style={styles.statItem}>
+                <View style={styles.likeIconSmall}>
+                  <MaterialIcons name="favorite" size={10} color="#FFF" />
+                </View>
+                <Text style={styles.statText}>{item.likes}</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.statsRight}>
+            {item.comments > 0 && (
+              <Text style={styles.statText}>{item.comments} comments</Text>
+            )}
+            {item.comments > 0 && item.shares > 0 && (
+              <Text style={styles.statDivider}>·</Text>
+            )}
+            {item.shares > 0 && (
+              <Text style={styles.statText}>{item.shares} shares</Text>
+            )}
+          </View>
+        </View>
 
-        {/* Action Buttons */}
+        {/* Divider */}
+        <View style={styles.actionDivider} />
+
+        {/* Actions */}
         <View style={styles.actionsRow}>
-
-          {/* Like Button */}
           <TouchableOpacity
-            style={styles.actionButton}
+            style={styles.actionBtn}
             onPress={() => handleLike(item._id)}
-            disabled={actionLoading === item._id + '_like'}
+            disabled={actionLoading === item._id + "_like"}
           >
-            {actionLoading === item._id + '_like' ? (
-              <ActivityIndicator size="small" color="#FF4444" />
+            {actionLoading === item._id + "_like" ? (
+              <ActivityIndicator size="small" color="#6B7FED" />
             ) : (
               <MaterialIcons
-                name={isLiked ? 'favorite' : 'favorite-border'}
-                size={22}
-                color={isLiked ? '#FF4444' : '#999'}
+                name={isLiked ? "favorite" : "favorite-border"}
+                size={20}
+                color={isLiked ? "#E53E3E" : "#666"}
               />
             )}
-            <Text style={[styles.actionText, isLiked && { color: '#FF4444' }]}>
-              {item.likes}
+            <Text style={[styles.actionLabel, isLiked && { color: "#E53E3E" }]}>
+              Like
             </Text>
           </TouchableOpacity>
 
-          {/* Comment Button */}
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleOpenComment(item._id)}
+            style={styles.actionBtn}
+            onPress={() => handleOpenComment(item)}
           >
-            <MaterialIcons name="chat-bubble-outline" size={22} color="#999" />
-            <Text style={styles.actionText}>{item.comments}</Text>
+            <Ionicons name="chatbubble-outline" size={19} color="#666" />
+            <Text style={styles.actionLabel}>Comment</Text>
           </TouchableOpacity>
 
-          {/* Share Button */}
           <TouchableOpacity
-            style={styles.actionButton}
+            style={styles.actionBtn}
             onPress={() => handleShare(item)}
-            disabled={actionLoading === item._id + '_share'}
+            disabled={actionLoading === item._id + "_share"}
           >
-            {actionLoading === item._id + '_share' ? (
+            {actionLoading === item._id + "_share" ? (
               <ActivityIndicator size="small" color="#6B7FED" />
             ) : (
-              <MaterialIcons name="share" size={22} color="#999" />
+              <Ionicons name="share-social-outline" size={20} color="#666" />
             )}
-            <Text style={styles.actionText}>{item.shares}</Text>
+            <Text style={styles.actionLabel}>Share</Text>
           </TouchableOpacity>
-
         </View>
       </View>
     );
   };
 
+  /* ===== PROFILE HEADER ===== */
+  const ProfileHeader = () => (
+    <View style={styles.profileHeaderWrap}>
+      {/* Cover / Banner */}
+      <View style={styles.coverBanner} />
+
+      {/* Avatar + Edit */}
+      <View style={styles.avatarSection}>
+        <View style={styles.avatarWrapper}>
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            onPress={handlePickProfilePhoto}
+          >
+            {userProfile?.profileImage ? (
+              <Image
+                source={{ uri: userProfile.profileImage }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitial}>
+                  {userProfile?.fullName?.charAt(0)?.toUpperCase() || "U"}
+                </Text>
+              </View>
+            )}
+            <View style={styles.cameraIconBadge}>
+              <Ionicons name="camera" size={12} color="#FFF" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={styles.editProfileBtn}
+          onPress={() => setEditModal(true)}
+        >
+          <Ionicons name="pencil" size={14} color="#6B7FED" />
+          <Text style={styles.editProfileBtnText}>Edit Profile</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Profile Info */}
+      <View style={styles.profileInfo}>
+        <Text style={styles.profileName}>
+          {userProfile?.fullName || "Loading..."}
+        </Text>
+        {role === "doctor" && (
+          <View style={styles.doctorBadge}>
+            <FontAwesome5 name="user-md" size={11} color="#6B7FED" />
+            <Text style={styles.doctorBadgeText}>Verified Doctor</Text>
+          </View>
+        )}
+        <Text style={styles.profileBio}>
+          {userProfile?.bio || "No bio yet. Tap Edit Profile to add one."}
+        </Text>
+
+        {/* Meta info row */}
+        <View style={styles.profileMetaRow}>
+          {userProfile?.gender && (
+            <View style={styles.profileMetaItem}>
+              <Ionicons name="person-outline" size={13} color="#888" />
+              <Text style={styles.profileMetaText}>{userProfile.gender}</Text>
+            </View>
+          )}
+          {userProfile?.age && (
+            <View style={styles.profileMetaItem}>
+              <Ionicons name="calendar-outline" size={13} color="#888" />
+              <Text style={styles.profileMetaText}>{userProfile.age} yrs</Text>
+            </View>
+          )}
+          {userProfile?.email && (
+            <View style={styles.profileMetaItem}>
+              <Ionicons name="mail-outline" size={13} color="#888" />
+              <Text style={styles.profileMetaText} numberOfLines={1}>
+                {userProfile.email}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Stats */}
+        <View style={styles.statsCardRow}>
+          <View style={styles.statsCard}>
+            <Text style={styles.statsCardNum}>{posts.length}</Text>
+            <Text style={styles.statsCardLabel}>Posts</Text>
+          </View>
+          <View style={styles.statsCardDivider} />
+          <View style={styles.statsCard}>
+            <Text style={styles.statsCardNum}>
+              {posts.reduce((a, p) => a + p.likes, 0)}
+            </Text>
+            <Text style={styles.statsCardLabel}>Likes</Text>
+          </View>
+          <View style={styles.statsCardDivider} />
+          <View style={styles.statsCard}>
+            <Text style={styles.statsCardNum}>
+              {posts.filter((p) => p.status === "approved").length}
+            </Text>
+            <Text style={styles.statsCardLabel}>Published</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Posts section label */}
+      <View style={styles.postsSectionHeader}>
+        <Text style={styles.postsSectionTitle}>Activity</Text>
+        <Text style={styles.postsSectionSub}>{posts.length} posts</Text>
+      </View>
+    </View>
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <MaterialIcons name="person" size={40} color="#FFF" />
-        <Text style={styles.headerTitle}>My Posts</Text>
-        <Text style={styles.headerSubtitle}>{posts.length} posts</Text>
-      </View>
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#6B7FED" />
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={posts}
+          keyExtractor={(item) => item._id}
+          renderItem={renderPost}
+          ListHeaderComponent={<ProfileHeader />}
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Ionicons name="document-text-outline" size={52} color="#D0D5E8" />
+              <Text style={styles.emptyTitle}>No posts yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Your posts will appear here once created.
+              </Text>
+            </View>
+          }
+          contentContainerStyle={{ paddingBottom: 30 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={["#6B7FED"]}
+              tintColor="#6B7FED"
+            />
+          }
+        />
+      )}
 
-      {/* Content */}
-      <View style={styles.content}>
-        {loading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color="#6B7FED" />
-            <Text style={styles.loadingText}>Loading your posts...</Text>
-          </View>
-        ) : posts.length === 0 ? (
-          <View style={styles.centered}>
-            <MaterialIcons name="post-add" size={60} color="#CCC" />
-            <Text style={styles.emptyTitle}>No Posts Yet</Text>
-            <Text style={styles.emptySubtitle}>Create your first post!</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={posts}
-            keyExtractor={(item) => item._id}
-            renderItem={renderPost}
-            contentContainerStyle={{ padding: 15 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                colors={['#6B7FED']}
-              />
-            }
-          />
-        )}
-      </View>
+      {/* ===== EDIT PROFILE MODAL ===== */}
+      <Modal
+        visible={editModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <TouchableOpacity onPress={() => setEditModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
 
-      {/* Comment Modal */}
+            <Text style={styles.inputLabel}>Full Name</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Your full name"
+              placeholderTextColor="#AAA"
+            />
+
+            <Text style={styles.inputLabel}>Bio</Text>
+            <TextInput
+              style={[styles.modalInput, { minHeight: 90, textAlignVertical: "top" }]}
+              value={editBio}
+              onChangeText={setEditBio}
+              placeholder="Tell something about yourself..."
+              placeholderTextColor="#AAA"
+              multiline
+            />
+
+            <TouchableOpacity
+              style={styles.saveBtn}
+              onPress={handleEditProfile}
+              disabled={editLoading}
+            >
+              {editLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.saveBtnText}>Save Changes</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== COMMENT MODAL ===== */}
       <Modal
         visible={commentModal}
         transparent
@@ -345,37 +749,98 @@ export default function ProfileScreen() {
         onRequestClose={() => setCommentModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Comment</Text>
-              <TouchableOpacity onPress={() => {
-                setCommentModal(false);
-                setCommentText('');
-              }}>
-                <MaterialIcons name="close" size={24} color="#666" />
+          <View style={[styles.modalSheet, { maxHeight: "85%" }]}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>
+                Comments ({selectedPost?.comments || 0})
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setCommentModal(false);
+                  setCommentText("");
+                }}
+              >
+                <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              style={styles.commentInput}
-              placeholder="Write your comment..."
-              value={commentText}
-              onChangeText={setCommentText}
-              multiline
-              autoFocus
-            />
-
-            <TouchableOpacity
-              style={styles.submitCommentButton}
-              onPress={handleSubmitComment}
-              disabled={actionLoading !== null}
+            {/* Comments List */}
+            <ScrollView
+              style={{ flex: 1, marginBottom: 10 }}
+              showsVerticalScrollIndicator={false}
             >
-              {actionLoading !== null ? (
-                <ActivityIndicator color="#FFF" />
+              {commentsLoading ? (
+                <ActivityIndicator
+                  color="#6B7FED"
+                  style={{ marginVertical: 20 }}
+                />
+              ) : selectedPost?.commentsList?.length ? (
+                selectedPost.commentsList.map((c) => (
+                  <View key={c._id} style={styles.commentItem}>
+                    <View style={styles.commentAvatar}>
+                      <Text style={styles.commentAvatarText}>
+                        {(c.userName || "U").charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.commentBubble}>
+                      <Text style={styles.commentUser}>
+                        {c.userName || "User"}
+                      </Text>
+                      <Text style={styles.commentText}>{c.text}</Text>
+                      <Text style={styles.commentTime}>
+                        {formatDate(c.createdAt)}
+                      </Text>
+                    </View>
+                  </View>
+                ))
               ) : (
-                <Text style={styles.submitCommentText}>Post Comment</Text>
+                <View style={styles.noComments}>
+                  <Ionicons
+                    name="chatbubbles-outline"
+                    size={36}
+                    color="#DDD"
+                  />
+                  <Text style={styles.noCommentsText}>
+                    No comments yet. Be first!
+                  </Text>
+                </View>
               )}
-            </TouchableOpacity>
+            </ScrollView>
+
+            {/* Input */}
+            <View style={styles.commentInputRow}>
+              <View style={styles.commentInputAvatar}>
+                <Text style={styles.commentAvatarText}>
+                  {userProfile?.fullName?.charAt(0)?.toUpperCase() || "U"}
+                </Text>
+              </View>
+              <TextInput
+                style={styles.commentTextInput}
+                placeholder="Add a comment..."
+                placeholderTextColor="#AAA"
+                value={commentText}
+                onChangeText={setCommentText}
+                multiline
+              />
+              <TouchableOpacity
+                style={[
+                  styles.commentSendBtn,
+                  !commentText.trim() && { opacity: 0.4 },
+                ]}
+                onPress={handleSubmitComment}
+                disabled={
+                  !commentText.trim() ||
+                  actionLoading === selectedPost?._id + "_comment"
+                }
+              >
+                {actionLoading === selectedPost?._id + "_comment" ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Ionicons name="send" size={16} color="#FFF" />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -383,109 +848,400 @@ export default function ProfileScreen() {
   );
 }
 
+/* ===== STYLES ===== */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#6B7FED' },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 25,
-    alignItems: 'center',
-  },
-  headerTitle: { fontSize: 24, fontWeight: '700', color: '#FFF', marginTop: 10 },
-  headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
-  content: {
+  container: { flex: 1, backgroundColor: "#F0F2F8" },
+  centered: {
     flex: 1,
-    backgroundColor: '#F0F4FF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 100,
   },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 },
-  loadingText: { marginTop: 10, color: '#999', fontSize: 15 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#2C3E50', marginTop: 15 },
-  emptySubtitle: { fontSize: 14, color: '#999', marginTop: 5 },
-  postCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+  loadingText: { marginTop: 12, color: "#6B7FED", fontSize: 14 },
+
+  /* ---- Profile Header ---- */
+  profileHeaderWrap: { backgroundColor: "#F0F2F8" },
+  coverBanner: {
+    height: 110,
+    backgroundColor: "#6B7FED",
+    // Gradient-like via overlay
   },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  avatarSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    paddingHorizontal: 16,
+    marginTop: -36,
+    marginBottom: 4,
+  },
+  avatarWrapper: {},
+  avatarContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 3,
+    borderColor: "#FFF",
+    overflow: "visible",
+    position: "relative",
+  },
+  avatarImage: { width: 82, height: 82, borderRadius: 41 },
+  avatarPlaceholder: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: "#6B7FED",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarInitial: { fontSize: 32, fontWeight: "800", color: "#FFF" },
+  cameraIconBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#333",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#FFF",
+  },
+  editProfileBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#6B7FED",
     borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    gap: 5,
     marginBottom: 8,
   },
-  statusText: { fontSize: 12, fontWeight: '600', marginLeft: 4 },
-  categoryTag: { fontSize: 12, color: '#6B7FED', fontWeight: '600', marginBottom: 6 },
-  postTitle: { fontSize: 16, fontWeight: '700', color: '#2C3E50', marginBottom: 8 },
-  descriptionBox: { borderRadius: 8, padding: 10, backgroundColor: '#F8F8F8', marginBottom: 10 },
-  postDescription: { fontSize: 14, color: '#666', lineHeight: 20 },
-  mediaScroll: { marginBottom: 10 },
-  mediaImage: { width: 120, height: 120, borderRadius: 10, marginRight: 8 },
-  rejectionBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEBEE',
-    padding: 8,
-    borderRadius: 8,
+  editProfileBtnText: {
+    color: "#6B7FED",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  profileInfo: {
+    backgroundColor: "#FFF",
+    marginHorizontal: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+    marginBottom: 8,
+  },
+  profileName: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#1A1D2E",
+    marginBottom: 4,
+  },
+  doctorBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 6,
+  },
+  doctorBadgeText: {
+    fontSize: 12,
+    color: "#6B7FED",
+    fontWeight: "700",
+  },
+  profileBio: {
+    fontSize: 14,
+    color: "#555",
+    lineHeight: 20,
     marginBottom: 10,
   },
-  rejectionText: { fontSize: 12, color: '#F44336', marginLeft: 5, flex: 1 },
-  dateText: { fontSize: 12, color: '#CCC', marginBottom: 10 },
-  actionsRow: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    paddingTop: 12,
+  profileMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 14,
   },
-  actionButton: {
+  profileMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  profileMetaText: { fontSize: 12, color: "#888" },
+  statsCardRow: {
+    flexDirection: "row",
+    backgroundColor: "#F7F8FC",
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+  },
+  statsCard: { flex: 1, alignItems: "center" },
+  statsCardNum: { fontSize: 20, fontWeight: "800", color: "#1A1D2E" },
+  statsCardLabel: { fontSize: 11, color: "#888", marginTop: 2 },
+  statsCardDivider: { width: 1, height: 32, backgroundColor: "#E0E3EF" },
+  postsSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#FFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#EAEDF5",
+    marginBottom: 8,
+  },
+  postsSectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1A1D2E",
+  },
+  postsSectionSub: { fontSize: 12, color: "#888" },
+
+  /* ---- Post Card ---- */
+  postCard: {
+    backgroundColor: "#FFF",
+    marginHorizontal: 0,
+    marginBottom: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  postHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 10,
+  },
+  postAuthorRow: { flexDirection: "row", alignItems: "center", flex: 1 },
+  postAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#6B7FED",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+    overflow: "hidden",
+  },
+  postAvatarImg: { width: 42, height: 42, borderRadius: 21 },
+  postAvatarText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
+  postAuthorName: { fontSize: 14, fontWeight: "700", color: "#1A1D2E" },
+  postMeta: { flexDirection: "row", alignItems: "center", marginTop: 2 },
+  postTime: { fontSize: 11, color: "#999" },
+  postMetaDot: { fontSize: 11, color: "#CCC", marginHorizontal: 5 },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 20,
+    gap: 4,
+  },
+  statusDot: { width: 5, height: 5, borderRadius: 3 },
+  statusPillText: { fontSize: 10, fontWeight: "700" },
+  categoryChip: {
+    backgroundColor: "#EEF0FB",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  categoryChipText: { fontSize: 11, color: "#6B7FED", fontWeight: "600" },
+  postTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1A1D2E",
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  descriptionBox: {
+    borderRadius: 10,
+    padding: 10,
+    backgroundColor: "#F7F8FC",
+    marginBottom: 10,
+  },
+  postDescription: { fontSize: 14, color: "#555", lineHeight: 21 },
+  seeMoreText: {
+    color: "#6B7FED",
+    fontWeight: "600",
+    fontSize: 13,
+    marginTop: 4,
+  },
+  mediaScroll: { marginBottom: 10 },
+  mediaImage: {
+    width: 160,
+    height: 120,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  rejectionBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#FFF5F5",
+    borderLeftWidth: 3,
+    borderLeftColor: "#E53E3E",
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 10,
+    gap: 6,
+  },
+  rejectionText: { fontSize: 12, color: "#E53E3E", flex: 1 },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+    minHeight: 18,
+  },
+  statsLeft: { flexDirection: "row", alignItems: "center" },
+  statsRight: { flexDirection: "row", alignItems: "center", gap: 4 },
+  statItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  likeIconSmall: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#E53E3E",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  statText: { fontSize: 12, color: "#999" },
+  statDivider: { fontSize: 12, color: "#CCC" },
+  actionDivider: { height: 1, backgroundColor: "#F0F2F8", marginBottom: 8 },
+  actionsRow: { flexDirection: "row", justifyContent: "space-around" },
+  actionBtn: {
     flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 5,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 6,
+    gap: 6,
   },
-  actionText: { fontSize: 14, color: '#999', marginLeft: 5, fontWeight: '600' },
+  actionLabel: { fontSize: 13, color: "#666", fontWeight: "600" },
+
+  /* ---- Empty ---- */
+  emptyWrap: {
+    paddingTop: 60,
+    alignItems: "center",
+    paddingHorizontal: 30,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#2C3E50",
+    marginTop: 14,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: "#999",
+    marginTop: 6,
+    textAlign: "center",
+  },
+
+  /* ---- Modals ---- */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
   },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 25,
-    paddingBottom: 40,
+  modalSheet: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 36,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  modalHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#DDD",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: '#2C3E50' },
-  commentInput: {
-    backgroundColor: '#F5F5F5',
+  modalTitle: { fontSize: 18, fontWeight: "700", color: "#1A1D2E" },
+  inputLabel: { fontSize: 13, fontWeight: "600", color: "#555", marginBottom: 6 },
+  modalInput: {
+    backgroundColor: "#F5F7FF",
     borderRadius: 12,
-    padding: 15,
+    padding: 14,
     fontSize: 15,
-    minHeight: 100,
-    textAlignVertical: 'top',
-    marginBottom: 15,
+    color: "#1A1D2E",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E8EAF6",
   },
-  submitCommentButton: {
-    backgroundColor: '#6B7FED',
+  saveBtn: {
+    backgroundColor: "#6B7FED",
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  saveBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+
+  /* ---- Comment Modal ---- */
+  commentItem: {
+    flexDirection: "row",
+    marginBottom: 14,
+    alignItems: "flex-start",
+  },
+  commentAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#6B7FED",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  commentAvatarText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
+  commentBubble: {
+    flex: 1,
+    backgroundColor: "#F5F7FF",
     borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
+    padding: 10,
   },
-  submitCommentText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  commentUser: { fontSize: 12, fontWeight: "700", color: "#1A1D2E", marginBottom: 3 },
+  commentText: { fontSize: 13, color: "#444", lineHeight: 19 },
+  commentTime: { fontSize: 10, color: "#AAA", marginTop: 4 },
+  noComments: { alignItems: "center", paddingVertical: 30 },
+  noCommentsText: { color: "#BBB", marginTop: 8, fontSize: 13 },
+  commentInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#EEE",
+    paddingTop: 12,
+    gap: 8,
+  },
+  commentInputAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#6B7FED",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  commentTextInput: {
+    flex: 1,
+    backgroundColor: "#F5F7FF",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: "#1A1D2E",
+    maxHeight: 80,
+    borderWidth: 1,
+    borderColor: "#E8EAF6",
+  },
+  commentSendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#6B7FED",
+    justifyContent: "center",
+    alignItems: "center",
+  },
 });

@@ -2,12 +2,20 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
-export default function FeedScreen() {
+// Add props type
+type FeedScreenProps = {
+  id: string; // user or doctor id
+  role: 'user' | 'doctor';
+};
+
+export default function FeedScreen({ id, role }: FeedScreenProps) {
   return (
     <View style={styles.container}>
       <MaterialIcons name="person" size={60} color="#6B7FED" />
       <Text style={styles.title}>Post Feed Screen</Text>
-      <Text style={styles.subtitle}>Coming Soon</Text>
+      <Text style={styles.subtitle}>
+        Coming Soon for {role} (ID: {id})
+      </Text>
     </View>
   );
 }
@@ -29,5 +37,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
     marginTop: 8,
+    textAlign: 'center',
   },
 });
