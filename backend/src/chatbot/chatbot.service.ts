@@ -8,7 +8,6 @@ import { SendMessageDto } from './dto/chat.dto';
 
 @Injectable()
 export class ChatbotService implements OnModuleInit {
-  // The '!' tells TypeScript that these will be initialized in onModuleInit
   private apiKey!: string;
   private url!: string;
 
@@ -23,31 +22,28 @@ export class ChatbotService implements OnModuleInit {
       throw new Error('GEMINI_API_KEY is not defined in environment variables');
     }
     this.url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${this.apiKey}`;
-
-    // Gemini API standard structure. We attach the key as a query parameter.
     console.log('✅ Gemini initialized successfully');
   }
 
-  // Send message to chatbot
-  async sendMessage(sendMessageDto: SendMessageDto): Promise<{ userMessage: Chat; botResponse: Chat }> {
+  async sendMessage(sendMessageDto: SendMessageDto): Promise<ChatDocument> {
     try {
-      // 1. Get user's recent chat history for context (last 10 completed messages)
+      // 1. Get recent history for context
       const recentChats = await this.chatModel
-        .find({ 
+        .find({
           userId: new Types.ObjectId(sendMessageDto.userId),
-          response: { $ne: '' } // Only fetch history where a bot response exists
+          response: { $ne: '' },
         })
         .sort({ createdAt: -1 })
         .limit(10)
         .exec();
 
-      // 2. Build conversation history as a single string
+      // 2. Build conversation history string
       const historyText = recentChats
         .reverse()
-        .map(chat => `User: ${chat.message}\nBot: ${chat.response}`)
+        .map((chat) => `User: ${chat.message}\nBot: ${chat.response}`)
         .join('\n\n');
 
-      // 3. System prompt for healthcare context
+      // 3. System prompt
       const systemPrompt = `You are a helpful healthcare assistant for TruHeal-Link, a healthcare application.
 Your role is to:
 - Provide general health tips and wellness advice
@@ -61,104 +57,93 @@ Your role is to:
 
 IMPORTANT: Always clarify that you're not a replacement for professional medical advice.`;
 
-      // Combine prompt
       const fullPrompt = `${systemPrompt}\n\n${historyText}\nUser: ${sendMessageDto.message}\nBot:`;
 
-      // 4. Call Gemini API (Corrected Payload Structure)
+      // 4. Call Gemini API
       const response = await axios.post(
         this.url,
         {
-          contents: [
-            {
-              parts: [{ text: fullPrompt }]
-            }
-          ],
+          contents: [{ parts: [{ text: fullPrompt }] }],
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 500,
             candidateCount: 1,
-          }
+          },
         },
         {
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           timeout: 10000,
         },
       );
 
-      // 5. Parse Gemini Response (Corrected Parsing Structure)
-      const botResponseText = response.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 
-                              'I apologize, but I could not generate a response.';
+      // 5. Parse response
+      const botResponseText =
+        response.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
+        'I apologize, but I could not generate a response.';
 
-      // 6. Save user message
-      const userMessage = new this.chatModel({
+      // 6. Save as ONE combined record (message + response together)
+      const chatRecord = new this.chatModel({
         userId: new Types.ObjectId(sendMessageDto.userId),
         message: sendMessageDto.message,
-        response: '',
-        imageUrl: sendMessageDto.imageUrl,
-        fileUrl: sendMessageDto.fileUrl,
-        metadata: {
-          model: 'user',
-          timestamp: new Date(),
-        },
-      });
-
-      // 7. Save bot response
-      const botResponse = new this.chatModel({
-        userId: new Types.ObjectId(sendMessageDto.userId),
-        message: sendMessageDto.message,
-        response: botResponseText,
+        response: botResponseText,           // ← saved together, no empty record
+        imageUrl: sendMessageDto.imageUrl || null,
+        fileUrl: sendMessageDto.fileUrl || null,
         metadata: {
           model: 'gemini-2.5-flash',
           timestamp: new Date(),
         },
       });
 
-      await Promise.all([userMessage.save(), botResponse.save()]);
+      await chatRecord.save();
 
-      return { userMessage, botResponse };
+      return chatRecord;
     } catch (error: any) {
       console.error('Gemini API Error:', error.response?.data || error.message);
-      throw new BadRequestException('Failed to get response from chatbot. Please try again.');
+      throw new BadRequestException(
+        'Failed to get response from chatbot. Please try again.',
+      );
     }
   }
 
-  // Get chat history for a user
   async getChatHistory(
     userId: string,
     page: number = 1,
     limit: number = 50,
-  ): Promise<{ chats: Chat[]; total: number; page: number; totalPages: number }> {
+  ): Promise<{ chats: ChatDocument[]; total: number; page: number; totalPages: number }> {
     const skip = (page - 1) * limit;
 
     const [chats, total] = await Promise.all([
       this.chatModel
-        .find({ userId: new Types.ObjectId(userId) })
+        .find({
+          userId: new Types.ObjectId(userId),
+          response: { $ne: '' },   // ← only fetch complete records
+        })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .exec(),
-      this.chatModel.countDocuments({ userId: new Types.ObjectId(userId) }),
+      this.chatModel.countDocuments({
+        userId: new Types.ObjectId(userId),
+        response: { $ne: '' },
+      }),
     ]);
 
     return {
-      chats: chats.reverse(), // chronological order
+      chats: chats.reverse(),
       total,
       page,
       totalPages: Math.ceil(total / limit),
     };
   }
 
-  // Clear chat history for a user
   async clearChatHistory(userId: string): Promise<void> {
     await this.chatModel.deleteMany({ userId: new Types.ObjectId(userId) });
   }
 
-  // Get chat statistics
   async getChatStats(userId: string): Promise<any> {
-    const totalChats = await this.chatModel.countDocuments({ userId: new Types.ObjectId(userId) });
-
+    const totalChats = await this.chatModel.countDocuments({
+      userId: new Types.ObjectId(userId),
+    });
     return { totalMessages: totalChats };
   }
 }

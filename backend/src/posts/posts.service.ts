@@ -1,4 +1,3 @@
-
 import {
   Injectable,
   NotFoundException,
@@ -26,7 +25,6 @@ export class PostsService {
         mediaUrls: mediaUrls,
         status: 'pending',
       });
-
       return await post.save();
     } catch (error) {
       throw new BadRequestException('Failed to create post');
@@ -91,7 +89,6 @@ export class PostsService {
       .exec();
 
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
-
     return post;
   }
 
@@ -101,15 +98,12 @@ export class PostsService {
     if (post.userId.toString() !== userId) {
       throw new ForbiddenException('You can only edit your own posts');
     }
-
     if (post.status !== 'pending') {
       throw new BadRequestException('Only pending posts can be edited');
     }
 
     const updatedPost = await this.postModel.findByIdAndUpdate(id, updatePostDto, { new: true }).exec();
-
     if (!updatedPost) throw new NotFoundException(`Post with ID ${id} not found`);
-
     return updatedPost;
   }
 
@@ -119,7 +113,6 @@ export class PostsService {
     if (post.userId.toString() !== userId) {
       throw new ForbiddenException('You can only delete your own posts');
     }
-
     if (post.status !== 'pending') {
       throw new BadRequestException('Only pending posts can be deleted');
     }
@@ -151,24 +144,71 @@ export class PostsService {
       .exec();
 
     if (!updatedPost) throw new NotFoundException(`Post with ID ${id} not found`);
-
     return updatedPost;
   }
 
   async incrementLikes(id: string): Promise<PostDocument> {
-    const post = await this.postModel.findByIdAndUpdate(id, { $inc: { likes: 1 } }, { new: true }).exec();
+    const post = await this.postModel
+      .findByIdAndUpdate(id, { $inc: { likes: 1 } }, { new: true })
+      .exec();
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
     return post;
   }
 
-  async incrementComments(id: string): Promise<PostDocument> {
-    const post = await this.postModel.findByIdAndUpdate(id, { $inc: { comments: 1 } }, { new: true }).exec();
+  // ── FIXED: two-step update to handle missing commentsList on old posts ──
+  async addComment(
+    id: string,
+    userId: string,
+    text: string,
+    userName?: string,
+  ): Promise<PostDocument> {
+    const newComment = {
+      _id: new Types.ObjectId(),
+      userId: new Types.ObjectId(userId),
+      userName: userName && userName.trim() !== '' ? userName : 'User',
+      text,
+      createdAt: new Date(),
+    };
+
+    // Step 1: initialize commentsList if it doesn't exist on this document
+    await this.postModel.updateOne(
+      { _id: new Types.ObjectId(id), commentsList: { $exists: false } },
+      { $set: { commentsList: [] } },
+    ).exec();
+
+    // Step 2: push new comment and increment counter
+    const post = await this.postModel
+      .findByIdAndUpdate(
+        id,
+        {
+          $inc: { comments: 1 },
+          $push: { commentsList: newComment },
+        },
+        { new: true },
+      )
+      .exec();
+
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
     return post;
+  }
+
+  // ── Fetch comments list for a post ──────────────────────────────
+  async getComments(id: string): Promise<any[]> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid post ID');
+    }
+    const post = await this.postModel
+      .findById(id)
+      .select('commentsList')
+      .exec();
+    if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+    return post.commentsList || [];
   }
 
   async incrementShares(id: string): Promise<PostDocument> {
-    const post = await this.postModel.findByIdAndUpdate(id, { $inc: { shares: 1 } }, { new: true }).exec();
+    const post = await this.postModel
+      .findByIdAndUpdate(id, { $inc: { shares: 1 } }, { new: true })
+      .exec();
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
     return post;
   }

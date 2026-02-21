@@ -14,36 +14,26 @@ import { SendMessageDto } from './dto/chat.dto';
 export class ChatbotController {
   constructor(private readonly chatbotService: ChatbotService) {}
 
-  // Send message to chatbot
   @Post('message')
   async sendMessage(@Body() sendMessageDto: SendMessageDto) {
-    const result = await this.chatbotService.sendMessage(sendMessageDto);
-    
-    const userMsg = result.userMessage as any;
-    const botMsg = result.botResponse as any;
+    const chatRecord = await this.chatbotService.sendMessage(sendMessageDto);
+    const c = chatRecord as any;
 
     return {
       success: true,
       message: 'Message sent successfully',
       data: {
-        userMessage: {
-          id: userMsg._id,
-          text: userMsg.message,
-          isUser: true,
-          timestamp: userMsg.createdAt,
-          image: userMsg.imageUrl,
-        },
+        // Frontend reads response.data.data.botResponse
         botResponse: {
-          id: botMsg._id,
-          text: botMsg.response,
+          id: c._id,
+          text: c.response,
           isUser: false,
-          timestamp: botMsg.createdAt,
+          timestamp: c.createdAt,
         },
       },
     };
   }
 
-  // Get chat history
   @Get('history/:userId')
   async getChatHistory(
     @Param('userId') userId: string,
@@ -54,14 +44,15 @@ export class ChatbotController {
 
     return {
       success: true,
+      // Frontend reads response.data.data — array of items with .message and .response
       data: result.chats.map((chat) => {
         const c = chat as any;
         return {
-          id: c._id,
-          text: c.response || c.message,
-          isUser: !c.response,
-          timestamp: c.createdAt,
-          image: c.imageUrl,
+          _id: c._id,
+          message: c.message,       // ← frontend checks item.message for user bubble
+          response: c.response,     // ← frontend checks item.response for bot bubble
+          imageUrl: c.imageUrl,
+          createdAt: c.createdAt,
         };
       }),
       pagination: {
@@ -73,25 +64,18 @@ export class ChatbotController {
     };
   }
 
-  // Clear chat history
   @Delete('history/:userId')
   async clearChatHistory(@Param('userId') userId: string) {
     await this.chatbotService.clearChatHistory(userId);
-
     return {
       success: true,
       message: 'Chat history cleared successfully',
     };
   }
 
-  // Get chat statistics
   @Get('stats/:userId')
   async getChatStats(@Param('userId') userId: string) {
     const stats = await this.chatbotService.getChatStats(userId);
-
-    return {
-      success: true,
-      data: stats,
-    };
+    return { success: true, data: stats };
   }
 }

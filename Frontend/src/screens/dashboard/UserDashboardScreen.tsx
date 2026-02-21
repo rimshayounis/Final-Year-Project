@@ -35,9 +35,7 @@ export default function DashboardScreen({ route }: DashboardScreenProps) {
         return <ChatbotScreen id={id} role={role} />;
 
       case 'CreatePost':
-        return role === 'doctor'
-          ? <CreatePostScreen id={id} role={role} />
-          : <FeedScreen id={id} role={role} />;
+        return  <CreatePostScreen id={id} role={role}  />
 
       case 'Appointment':
         return <AppointmentScreen id={id} role={role} />;

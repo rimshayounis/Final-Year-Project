@@ -1,4 +1,3 @@
-
 import {
   Controller,
   Get,
@@ -10,7 +9,7 @@ import {
   Query,
   UseInterceptors,
   UploadedFiles,
-  BadRequestException, 
+  BadRequestException,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -31,8 +30,7 @@ export class PostsController {
         destination: './uploads/posts',
         filename: (req, file, callback) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          callback(null, `post-${uniqueSuffix}${ext}`);
+          callback(null, `post-${uniqueSuffix}${extname(file.originalname)}`);
         },
       }),
       fileFilter: (req, file, callback) => {
@@ -48,17 +46,12 @@ export class PostsController {
     @Body() createPostDto: CreatePostDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    const mediaUrls = files && files.length > 0
-      ? files.map((file) => `/uploads/posts/${file.filename}`)
+    const mediaUrls = files?.length > 0
+      ? files.map((f) => `/uploads/posts/${f.filename}`)
       : [];
 
     const post = await this.postsService.create(createPostDto, mediaUrls);
-
-    return {
-      success: true,
-      message: 'Post created successfully and is pending approval',
-      data: post,
-    };
+    return { success: true, message: 'Post created successfully and is pending approval', data: post };
   }
 
   @Get('feed')
@@ -68,17 +61,7 @@ export class PostsController {
     @Query('category') category?: string,
   ) {
     const result = await this.postsService.getApprovedPosts(page, limit, category);
-
-    return {
-      success: true,
-      data: result.posts,
-      pagination: {
-        page: result.page,
-        limit: Number(limit),
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    };
+    return { success: true, data: result.posts, pagination: { page: result.page, limit: Number(limit), total: result.total, totalPages: result.totalPages } };
   }
 
   @Get('user/:userId')
@@ -88,17 +71,7 @@ export class PostsController {
     @Query('limit') limit: number = 10,
   ) {
     const result = await this.postsService.getUserPosts(userId, page, limit);
-
-    return {
-      success: true,
-      data: result.posts,
-      pagination: {
-        page: result.page,
-        limit: Number(limit),
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    };
+    return { success: true, data: result.posts, pagination: { page: result.page, limit: Number(limit), total: result.total, totalPages: result.totalPages } };
   }
 
   @Get('pending')
@@ -107,27 +80,31 @@ export class PostsController {
     @Query('limit') limit: number = 10,
   ) {
     const result = await this.postsService.getPendingPosts(page, limit);
+    return { success: true, data: result.posts, pagination: { page: result.page, limit: Number(limit), total: result.total, totalPages: result.totalPages } };
+  }
 
-    return {
-      success: true,
-      data: result.posts,
-      pagination: {
-        page: result.page,
-        limit: Number(limit),
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    };
+  // ⚠️ IMPORTANT: These specific routes MUST come before @Get(':id')
+  @Get('category/:category')
+  async getByCategory(
+    @Param('category') category: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    const result = await this.postsService.getPostsByCategory(category, page, limit);
+    return { success: true, data: result.posts, pagination: { page: result.page, limit: Number(limit), total: result.total, totalPages: result.totalPages } };
+  }
+
+  // ⚠️ MUST be before @Get(':id') ──────────────────────────────────
+  @Get(':id/comments')
+  async getComments(@Param('id') id: string) {
+    const comments = await this.postsService.getComments(id);
+    return { success: true, data: comments };
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const post = await this.postsService.findOne(id);
-
-    return {
-      success: true,
-      data: post,
-    };
+    return { success: true, data: post };
   }
 
   @Patch(':id')
@@ -137,8 +114,7 @@ export class PostsController {
         destination: './uploads/posts',
         filename: (req, file, callback) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          callback(null, `post-${uniqueSuffix}${ext}`);
+          callback(null, `post-${uniqueSuffix}${extname(file.originalname)}`);
         },
       }),
     }),
@@ -148,38 +124,23 @@ export class PostsController {
     @Body() updatePostDto: UpdatePostDto & { userId: string },
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    if (files && files.length > 0) {
-      updatePostDto.mediaUrls = files.map((file) => `/uploads/posts/${file.filename}`);
+    if (files?.length > 0) {
+      updatePostDto.mediaUrls = files.map((f) => `/uploads/posts/${f.filename}`);
     }
-
     const post = await this.postsService.update(id, updatePostDto.userId, updatePostDto);
-
-    return {
-      success: true,
-      message: 'Post updated successfully',
-      data: post,
-    };
+    return { success: true, message: 'Post updated successfully', data: post };
   }
 
   @Delete(':id/:userId')
   async delete(@Param('id') id: string, @Param('userId') userId: string) {
     await this.postsService.delete(id, userId);
-
-    return {
-      success: true,
-      message: 'Post deleted successfully',
-    };
+    return { success: true, message: 'Post deleted successfully' };
   }
 
   @Post(':id/review')
   async reviewPost(@Param('id') id: string, @Body() approvePostDto: ApprovePostDto) {
     const post = await this.postsService.approveOrReject(id, approvePostDto);
-
-    return {
-      success: true,
-      message: `Post ${approvePostDto.action} successfully`,
-      data: post,
-    };
+    return { success: true, message: `Post ${approvePostDto.action} successfully`, data: post };
   }
 
   @Post(':id/like')
@@ -188,35 +149,20 @@ export class PostsController {
     return { success: true, data: post };
   }
 
+  // ── REPLACED: now accepts body and saves real comment ──────────
   @Post(':id/comment')
-  async commentPost(@Param('id') id: string) {
-    const post = await this.postsService.incrementComments(id);
-    return { success: true, data: post };
+  async commentPost(
+    @Param('id') id: string,
+    @Body() body: { userId: string; text: string; userName?: string },
+  ) {
+    const post = await this.postsService.addComment(id, body.userId, body.text, body.userName);
+    const newComment = post.commentsList[post.commentsList.length - 1];
+    return { success: true, data: newComment };
   }
 
   @Post(':id/share')
   async sharePost(@Param('id') id: string) {
     const post = await this.postsService.incrementShares(id);
     return { success: true, data: post };
-  }
-
-  @Get('category/:category')
-  async getByCategory(
-    @Param('category') category: string,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-  ) {
-    const result = await this.postsService.getPostsByCategory(category, page, limit);
-
-    return {
-      success: true,
-      data: result.posts,
-      pagination: {
-        page: result.page,
-        limit: Number(limit),
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    };
   }
 }

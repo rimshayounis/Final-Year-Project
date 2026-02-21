@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -73,19 +72,16 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
-  // Edit Profile Modal
   const [editModal, setEditModal] = useState(false);
   const [editName, setEditName] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
-  // Comment Modal
   const [commentModal, setCommentModal] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [commentText, setCommentText] = useState("");
   const [commentsLoading, setCommentsLoading] = useState(false);
 
-  // Expanded posts
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
 
   /* ===== FETCH PROFILE ===== */
@@ -93,7 +89,9 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     try {
       const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
       const response = await apiClient.get(endpoint);
-      const data = response.data.data || response.data;
+      // Handle both { data: {...} } and direct object responses
+      const data = response.data?.data || response.data;
+      console.log("PROFILE DATA:", JSON.stringify(data));
       setUserProfile(data);
       setEditName(data.fullName || "");
       setEditBio(data.bio || "");
@@ -165,7 +163,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
       aspect: [1, 1],
     });
     if (!result.canceled && result.assets.length > 0) {
-      // Upload profile image
       try {
         const formData = new FormData();
         formData.append("profileImage", {
@@ -200,7 +197,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
         prev.map((p) => (p._id === postId ? { ...p, likes: p.likes + 1 } : p))
       );
       setLikedPosts((prev) => new Set([...prev, postId]));
-      // Update selected post if comment modal open
       if (selectedPost?._id === postId) {
         setSelectedPost((prev) =>
           prev ? { ...prev, likes: prev.likes + 1 } : prev
@@ -214,21 +210,38 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   };
 
   /* ===== OPEN COMMENTS ===== */
+  // ← KEY FIX: always fetch fresh, never skip
   const handleOpenComment = async (post: Post) => {
-    setSelectedPost(post);
+    setSelectedPost({ ...post, commentsList: [] });
     setCommentModal(true);
     setCommentsLoading(true);
+
     try {
       const response = await apiClient.get(`/posts/${post._id}/comments`);
-      const commentsList = response.data.data || response.data || [];
+      console.log("COMMENTS RAW:", JSON.stringify(response.data));
+
+      const raw = Array.isArray(response.data.data)
+        ? response.data.data
+        : Array.isArray(response.data)
+        ? response.data
+        : [];
+
+      const commentsList: Comment[] = raw.map((c: any) => ({
+        _id: c._id?.toString() || Date.now().toString(),
+        userId: c.userId?.toString() || "",
+        userName: c.userName || "User",
+        text: c.text || "",
+        createdAt: c.createdAt || new Date().toISOString(),
+      }));
+
+      console.log("PARSED comments count:", commentsList.length);
+
       setPosts((prev) =>
-        prev.map((p) =>
-          p._id === post._id ? { ...p, commentsList } : p
-        )
+        prev.map((p) => (p._id === post._id ? { ...p, commentsList } : p))
       );
-      setSelectedPost((prev) => (prev ? { ...prev, commentsList } : prev));
+      setSelectedPost({ ...post, commentsList });
     } catch (error) {
-      // Comments may not load, that's ok
+      console.error("Failed to load comments:", error);
     } finally {
       setCommentsLoading(false);
     }
@@ -246,18 +259,23 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     try {
       const response = await apiClient.post(
         `/posts/${selectedPost._id}/comment`,
-        { userId: id, text: commentText }
+        {
+          userId: id,
+          text: commentText,
+          userName: userProfile?.fullName || "User",
+        }
       );
 
-      const newComment: Comment = response.data.data || {
-        _id: Date.now().toString(),
-        userId: id,
-        userName: userProfile?.fullName || "You",
-        text: commentText,
-        createdAt: new Date().toISOString(),
+      const newComment: Comment = {
+        _id: response.data.data?._id?.toString() || Date.now().toString(),
+        userId: response.data.data?.userId?.toString() || id,
+        userName:
+          response.data.data?.userName || userProfile?.fullName || "You",
+        text: response.data.data?.text || commentText,
+        createdAt:
+          response.data.data?.createdAt || new Date().toISOString(),
       };
 
-      // Update posts list count
       setPosts((prev) =>
         prev.map((p) =>
           p._id === selectedPost._id
@@ -270,7 +288,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
         )
       );
 
-      // Update modal post
       setSelectedPost((prev) =>
         prev
           ? {
@@ -301,9 +318,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             ? `http://192.168.100.10:3000${post.mediaUrls[0]}`
             : undefined,
       };
-
       const result = await Share.share(shareContent);
-
       if (result.action === Share.sharedAction) {
         await apiClient.post(`/posts/${post._id}/share`);
         setPosts((prev) =>
@@ -355,7 +370,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   };
 
   /* ===== RENDER POST ===== */
-  const renderPost = ({ item, index }: { item: Post; index: number }) => {
+  const renderPost = ({ item }: { item: Post }) => {
     const isLiked = likedPosts.has(item._id);
     const isExpanded = expandedPosts.has(item._id);
     const descLimit = 120;
@@ -363,7 +378,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
 
     return (
       <View style={styles.postCard}>
-        {/* Post Header */}
         <View style={styles.postHeader}>
           <View style={styles.postAuthorRow}>
             <View style={styles.postAvatar}>
@@ -414,10 +428,8 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           </View>
         </View>
 
-        {/* Post Title */}
         <Text style={styles.postTitle}>{item.title}</Text>
 
-        {/* Description */}
         <View
           style={[
             styles.descriptionBox,
@@ -445,7 +457,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           )}
         </View>
 
-        {/* Media */}
         {item.mediaUrls?.length > 0 && (
           <ScrollView
             horizontal
@@ -463,7 +474,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           </ScrollView>
         )}
 
-        {/* Rejection Reason */}
         {item.status === "rejected" && item.rejectionReason && (
           <View style={styles.rejectionBox}>
             <Ionicons name="alert-circle" size={14} color="#E53E3E" />
@@ -471,7 +481,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           </View>
         )}
 
-        {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.statsLeft}>
             {item.likes > 0 && (
@@ -496,10 +505,8 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           </View>
         </View>
 
-        {/* Divider */}
         <View style={styles.actionDivider} />
 
-        {/* Actions */}
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.actionBtn}
@@ -548,10 +555,8 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   /* ===== PROFILE HEADER ===== */
   const ProfileHeader = () => (
     <View style={styles.profileHeaderWrap}>
-      {/* Cover / Banner */}
       <View style={styles.coverBanner} />
 
-      {/* Avatar + Edit */}
       <View style={styles.avatarSection}>
         <View style={styles.avatarWrapper}>
           <TouchableOpacity
@@ -585,7 +590,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
         </TouchableOpacity>
       </View>
 
-      {/* Profile Info */}
       <View style={styles.profileInfo}>
         <Text style={styles.profileName}>
           {userProfile?.fullName || "Loading..."}
@@ -600,7 +604,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           {userProfile?.bio || "No bio yet. Tap Edit Profile to add one."}
         </Text>
 
-        {/* Meta info row */}
         <View style={styles.profileMetaRow}>
           {userProfile?.gender && (
             <View style={styles.profileMetaItem}>
@@ -624,7 +627,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           )}
         </View>
 
-        {/* Stats */}
         <View style={styles.statsCardRow}>
           <View style={styles.statsCard}>
             <Text style={styles.statsCardNum}>{posts.length}</Text>
@@ -647,7 +649,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
         </View>
       </View>
 
-      {/* Posts section label */}
       <View style={styles.postsSectionHeader}>
         <Text style={styles.postsSectionTitle}>Activity</Text>
         <Text style={styles.postsSectionSub}>{posts.length} posts</Text>
@@ -718,7 +719,10 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
 
             <Text style={styles.inputLabel}>Bio</Text>
             <TextInput
-              style={[styles.modalInput, { minHeight: 90, textAlignVertical: "top" }]}
+              style={[
+                styles.modalInput,
+                { minHeight: 90, textAlignVertical: "top" },
+              ]}
               value={editBio}
               onChangeText={setEditBio}
               placeholder="Tell something about yourself..."
@@ -746,7 +750,10 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
         visible={commentModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setCommentModal(false)}
+        onRequestClose={() => {
+          setCommentModal(false);
+          setCommentText("");
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { maxHeight: "85%" }]}>
@@ -765,7 +772,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
               </TouchableOpacity>
             </View>
 
-            {/* Comments List */}
             <ScrollView
               style={{ flex: 1, marginBottom: 10 }}
               showsVerticalScrollIndicator={false}
@@ -775,7 +781,8 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
                   color="#6B7FED"
                   style={{ marginVertical: 20 }}
                 />
-              ) : selectedPost?.commentsList?.length ? (
+              ) : selectedPost?.commentsList &&
+                selectedPost.commentsList.length > 0 ? (
                 selectedPost.commentsList.map((c) => (
                   <View key={c._id} style={styles.commentItem}>
                     <View style={styles.commentAvatar}>
@@ -796,11 +803,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
                 ))
               ) : (
                 <View style={styles.noComments}>
-                  <Ionicons
-                    name="chatbubbles-outline"
-                    size={36}
-                    color="#DDD"
-                  />
+                  <Ionicons name="chatbubbles-outline" size={36} color="#DDD" />
                   <Text style={styles.noCommentsText}>
                     No comments yet. Be first!
                   </Text>
@@ -808,7 +811,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
               )}
             </ScrollView>
 
-            {/* Input */}
             <View style={styles.commentInputRow}>
               <View style={styles.commentInputAvatar}>
                 <Text style={styles.commentAvatarText}>
@@ -858,14 +860,8 @@ const styles = StyleSheet.create({
     paddingTop: 100,
   },
   loadingText: { marginTop: 12, color: "#6B7FED", fontSize: 14 },
-
-  /* ---- Profile Header ---- */
   profileHeaderWrap: { backgroundColor: "#F0F2F8" },
-  coverBanner: {
-    height: 110,
-    backgroundColor: "#6B7FED",
-    // Gradient-like via overlay
-  },
+  coverBanner: { height: 110, backgroundColor: "#6B7FED" },
   avatarSection: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -918,11 +914,7 @@ const styles = StyleSheet.create({
     gap: 5,
     marginBottom: 8,
   },
-  editProfileBtnText: {
-    color: "#6B7FED",
-    fontSize: 13,
-    fontWeight: "600",
-  },
+  editProfileBtnText: { color: "#6B7FED", fontSize: 13, fontWeight: "600" },
   profileInfo: {
     backgroundColor: "#FFF",
     marginHorizontal: 0,
@@ -943,28 +935,15 @@ const styles = StyleSheet.create({
     gap: 5,
     marginBottom: 6,
   },
-  doctorBadgeText: {
-    fontSize: 12,
-    color: "#6B7FED",
-    fontWeight: "700",
-  },
-  profileBio: {
-    fontSize: 14,
-    color: "#555",
-    lineHeight: 20,
-    marginBottom: 10,
-  },
+  doctorBadgeText: { fontSize: 12, color: "#6B7FED", fontWeight: "700" },
+  profileBio: { fontSize: 14, color: "#555", lineHeight: 20, marginBottom: 10 },
   profileMetaRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
     marginBottom: 14,
   },
-  profileMetaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
+  profileMetaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   profileMetaText: { fontSize: 12, color: "#888" },
   statsCardRow: {
     flexDirection: "row",
@@ -988,14 +967,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#EAEDF5",
     marginBottom: 8,
   },
-  postsSectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1A1D2E",
-  },
+  postsSectionTitle: { fontSize: 16, fontWeight: "700", color: "#1A1D2E" },
   postsSectionSub: { fontSize: 12, color: "#888" },
-
-  /* ---- Post Card ---- */
   postCard: {
     backgroundColor: "#FFF",
     marginHorizontal: 0,
@@ -1064,12 +1037,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   mediaScroll: { marginBottom: 10 },
-  mediaImage: {
-    width: 160,
-    height: 120,
-    borderRadius: 10,
-    marginRight: 8,
-  },
+  mediaImage: { width: 160, height: 120, borderRadius: 10, marginRight: 8 },
   rejectionBox: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1113,13 +1081,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionLabel: { fontSize: 13, color: "#666", fontWeight: "600" },
-
-  /* ---- Empty ---- */
-  emptyWrap: {
-    paddingTop: 60,
-    alignItems: "center",
-    paddingHorizontal: 30,
-  },
+  emptyWrap: { paddingTop: 60, alignItems: "center", paddingHorizontal: 30 },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "700",
@@ -1132,8 +1094,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: "center",
   },
-
-  /* ---- Modals ---- */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -1180,8 +1140,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
-
-  /* ---- Comment Modal ---- */
   commentItem: {
     flexDirection: "row",
     marginBottom: 14,
@@ -1203,7 +1161,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
   },
-  commentUser: { fontSize: 12, fontWeight: "700", color: "#1A1D2E", marginBottom: 3 },
+  commentUser: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#1A1D2E",
+    marginBottom: 3,
+  },
   commentText: { fontSize: 13, color: "#444", lineHeight: 19 },
   commentTime: { fontSize: 10, color: "#AAA", marginTop: 4 },
   noComments: { alignItems: "center", paddingVertical: 30 },

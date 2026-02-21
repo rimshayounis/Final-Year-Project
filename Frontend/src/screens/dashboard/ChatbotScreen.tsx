@@ -70,11 +70,9 @@ export default function ChatbotScreen({ id, role }: ChatbotScreenProps) {
         const response = await chatbotAPI.getChatHistory(userData._id);
 
         // Adjust this path based on your actual API response shape
-        const history =
-          response.data.data?.messages ||
-          response.data.data ||
-          response.data ||
-          [];
+       
+        
+          const history = Array.isArray(response.data.data) ? response.data.data : [];
 
         if (!history || history.length === 0) {
           setMessages([defaultWelcome]);
