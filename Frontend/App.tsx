@@ -13,6 +13,7 @@ import EmergencyContactScreen from './src/screens/users/EmergencyContactScreen';
 import UserDashboardScreen from './src/screens/dashboard/UserDashboardScreen';
 import BookAppointment from './src/screens/dashboard/BookAppointment';
 import UserSession from './src/screens/dashboard/UserSession';
+import DoctorCreateAppointmentScreen from './src/screens/doctors/DoctorCreateAppointmentScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -29,6 +30,7 @@ export type RootStackParamList = {
 };
   BookAppointments: undefined; 
   userSession:undefined;
+  CreateAppointment:undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -55,6 +57,7 @@ export default function App() {
           <Stack.Screen name="Dashboard" component={UserDashboardScreen} />
           <Stack.Screen name='BookAppointments' component={BookAppointment}/>
           <Stack.Screen name='userSession' component={UserSession}/>
+          <Stack.Screen name='CreateAppointment' component={DoctorCreateAppointmentScreen}/>
 
         </Stack.Navigator>
       </NavigationContainer>

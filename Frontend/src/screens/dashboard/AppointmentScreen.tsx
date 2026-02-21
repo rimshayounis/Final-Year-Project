@@ -46,6 +46,10 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
     navigation.navigate('BookAppointments', { userId: id, role });
   };
 
+  const handleCreateAppointment = () => {
+    navigation.navigate('CreateAppointment', { doctorId: id });
+  };
+
   const handleContinueSession = (doctorName: string) => {
     console.log('Starting appointment with', doctorName);
     navigation.navigate('userSession', {
@@ -113,13 +117,24 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
           </View>
         ))}
 
-        {/* BOOK APPOINTMENT BUTTON */}
-        <TouchableOpacity
-          style={styles.bookButton}
-          onPress={handleBookAppointment}
-        >
-          <Text style={styles.bookButtonText}>Book Appointment</Text>
-        </TouchableOpacity>
+        {/* CONDITIONAL BUTTON - Book or Create Appointment */}
+        {role === 'doctor' ? (
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={handleCreateAppointment}
+          >
+            <MaterialIcons name="add-circle-outline" size={24} color="#FFFFFF" />
+            <Text style={styles.createButtonText}>Create Appointment</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.bookButton}
+            onPress={handleBookAppointment}
+          >
+            <MaterialIcons name="calendar-today" size={20} color="#FFFFFF" />
+            <Text style={styles.bookButtonText}>Book Appointment</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );
@@ -167,12 +182,48 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   continueButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  
+  // Book Appointment Button (for users)
   bookButton: {
     backgroundColor: '#6B7FED',
     paddingVertical: 15,
     borderRadius: 30,
     alignItems: 'center',
     marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: '#6B7FED',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  bookButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  bookButtonText: { 
+    color: '#FFFFFF', 
+    fontSize: 16, 
+    fontWeight: '700',
+  },
+
+  // Create Appointment Button (for doctors)
+  createButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 15,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  createButtonText: { 
+    color: '#FFFFFF', 
+    fontSize: 16, 
+    fontWeight: '700',
+  },
 });
