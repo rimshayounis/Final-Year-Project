@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { DoctorsModule } from './doctors/doctor.module';
 import { PostsModule } from './posts/posts.module';
 import {ChatbotModule} from './chatbot/chatbot.module'
+import {AppointmentAvailabilityModule} from './appointment-availability/appointment-availability.module'
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import {ChatbotModule} from './chatbot/chatbot.module'
     DoctorsModule,
     PostsModule, // ✅ Add Posts Module
     ChatbotModule,
+    AppointmentAvailabilityModule,
   ],
 })
 export class AppModule {}
