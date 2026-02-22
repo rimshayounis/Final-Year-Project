@@ -99,6 +99,45 @@ export interface SendMessageData {
   fileUrl?: string;
 }
 
+// ✅ NEW: Appointment Availability Interfaces
+export interface TimeSlot {
+  start: string;
+  end: string;
+}
+
+export interface SpecificDate {
+  date: string;
+  timeSlots: TimeSlot[];
+}
+
+export interface CreateAvailabilityData {
+  doctorId: string;
+  sessionDuration: number;
+  consultationFee: number;
+  specificDates: SpecificDate[];
+}
+
+export interface UpdateAvailabilityData {
+  sessionDuration?: number;
+  consultationFee?: number;
+  specificDates?: SpecificDate[];
+  isActive?: boolean;
+}
+
+export interface AvailableSlot {
+  date: string;
+  dayName: string;
+  slots: string[];
+  fee: number;
+}
+
+export interface AvailableSlotsResponse {
+  doctorId: string;
+  sessionDuration: number;
+  consultationFee: number;
+  availableSlots: AvailableSlot[];
+}
+
 // User API endpoints
 export const userAPI = {
   register: (data: RegisterData) =>
@@ -157,6 +196,42 @@ export const chatbotAPI = {
 
   getStats: (userId: string) =>
     apiClient.get(`/chatbot/stats/${userId}`),
+};
+
+// ✅ NEW: Appointment Availability API endpoints
+export const appointmentAPI = {
+  // Create or update doctor's availability
+  createOrUpdateAvailability: (data: CreateAvailabilityData) =>
+    apiClient.post('/appointment-availability', data),
+
+  // Get doctor's availability settings
+  getDoctorAvailability: (doctorId: string) =>
+    apiClient.get(`/appointment-availability/doctor/${doctorId}`),
+
+  // Get available slots for booking
+  getAvailableSlots: (
+    doctorId: string,
+    startDate?: string,
+    endDate?: string
+  ) => {
+    const params: any = { doctorId };
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    
+    return apiClient.get('/appointment-availability/slots', { params });
+  },
+
+  // Update availability settings
+  updateAvailability: (doctorId: string, data: UpdateAvailabilityData) =>
+    apiClient.put(`/appointment-availability/doctor/${doctorId}`, data),
+
+  // Delete availability settings
+  deleteAvailability: (doctorId: string) =>
+    apiClient.delete(`/appointment-availability/doctor/${doctorId}`),
+
+  // Get all doctors with availability
+  getAllDoctorsWithAvailability: () =>
+    apiClient.get('/appointment-availability/doctors'),
 };
 
 export default apiClient;

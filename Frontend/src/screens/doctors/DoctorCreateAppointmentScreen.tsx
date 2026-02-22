@@ -11,10 +11,14 @@ import {
   StatusBar,
   Platform,
   useColorScheme,
+  ActivityIndicator,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useRoute, useNavigation } from "@react-navigation/native";
+import { appointmentAPI } from '../../services/api'
+import { useEffect } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface TimeSlot {
@@ -93,6 +97,13 @@ export default function DoctorCreateAppointmentScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const t = isDark ? darkTheme : lightTheme;
+    const route = useRoute<any>(); 
+  const navigation = useNavigation<any>(); 
+
+    const doctorId = route.params?.doctorId || "507f1f77bcf86cd799439011";
+
+     const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [workingDays] = useState<WorkingDay[]>(
     DAYS_OF_WEEK.map((day) => ({
@@ -115,6 +126,36 @@ export default function DoctorCreateAppointmentScreen() {
   const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
   const [tempTime, setTempTime] = useState(new Date());
   const [isDateTimePicker, setIsDateTimePicker] = useState(false);
+
+  useEffect(() => {
+    loadExistingAvailability();
+  }, []);
+
+  const loadExistingAvailability = async () => {
+    try {
+      setIsLoading(true);
+      const response = await appointmentAPI.getDoctorAvailability(doctorId);
+
+      if (response.data && response.data.data) {
+        const data = response.data.data;
+        setSessionDuration(data.sessionDuration);
+        setConsultationFee(data.consultationFee.toString());
+
+        if (data.specificDates && data.specificDates.length > 0) {
+          setSelectedDates(
+            data.specificDates.map((sd: any) => ({
+              date: sd.date,
+              timeSlots: sd.timeSlots,
+            }))
+          );
+        }
+      }
+    } catch (error: any) {
+      console.log("No existing availability found. Creating new.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // ── Calendar dates ────────────────────────────────────────────────────────
   const calendarDates = useMemo(() => {
@@ -320,7 +361,7 @@ export default function DoctorCreateAppointmentScreen() {
   };
 
   // ── Submit ────────────────────────────────────────────────────────────────
-  const handleSubmit = () => {
+   const handleSubmit = async () => {
     if (!consultationFee || parseFloat(consultationFee) <= 0) {
       Alert.alert("Error", "Please enter a valid consultation fee");
       return;
@@ -329,10 +370,80 @@ export default function DoctorCreateAppointmentScreen() {
       Alert.alert("Error", "Please select at least one date");
       return;
     }
-    Alert.alert("Success", "Appointment settings saved successfully!");
+
+    try {
+      setIsSaving(true);
+
+      const availabilityData = {
+        doctorId,
+        sessionDuration,
+        consultationFee: parseFloat(consultationFee),
+        specificDates: selectedDates.map((sd) => ({
+          date: sd.date,
+          timeSlots: sd.timeSlots,
+        })),
+      };
+
+      const response = await appointmentAPI.createOrUpdateAvailability(
+        availabilityData
+      );
+
+      if (response.data && response.data.success) {
+        Alert.alert(
+          "Success",
+          "Appointment settings saved successfully!",
+          [
+            {
+              text: "OK",
+              onPress: () => navigation.goBack(),
+            },
+          ]
+        );
+      }
+    } catch (error: any) {
+      console.error("Save error:", error);
+      Alert.alert(
+        "Error",
+        error.response?.data?.message || "Failed to save settings"
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
+
   const remainingDays = MAX_SELECTABLE_DAYS - selectedDates.length;
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: t.screenBg }]}>
+        <StatusBar barStyle={t.statusBar} backgroundColor={t.accent} />
+
+        <View
+          style={[
+            styles.header,
+            { paddingTop: insets.top + 10, backgroundColor: t.accent },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Appointment Settings</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={t.accent} />
+          <Text style={[styles.loadingText, { color: t.textSecondary }]}>
+            Loading your settings...
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -346,7 +457,9 @@ export default function DoctorCreateAppointmentScreen() {
           { paddingTop: insets.top + 10, backgroundColor: t.accent },
         ]}
       >
-        <TouchableOpacity style={styles.backButton}>
+        <TouchableOpacity style={styles.backButton}
+        onPress={() => navigation.goBack()}
+        >
           <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Appointment Settings</Text>
@@ -669,11 +782,25 @@ export default function DoctorCreateAppointmentScreen() {
         </View>
 
         {/* Submit */}
-        <TouchableOpacity
-          style={[styles.submitBtn, { backgroundColor: t.accent }]}
+         <TouchableOpacity
+          style={[
+            styles.submitBtn,
+            { backgroundColor: t.accent },
+            isSaving && { opacity: 0.6 },
+          ]}
           onPress={handleSubmit}
+          disabled={isSaving}
         >
-          <Text style={styles.submitText}>Save Settings</Text>
+          {isSaving ? (
+            <View style={styles.buttonLoading}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <Text style={[styles.submitText, { marginLeft: 10 }]}>
+                Saving...
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.submitText}>Save Settings</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
 
@@ -841,6 +968,23 @@ export default function DoctorCreateAppointmentScreen() {
 
 // ─── Styles (layout only; colors always injected inline from theme) ───────────
 const styles = StyleSheet.create({
+
+   loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 15,
+    fontWeight: "500",
+  },
+  buttonLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   container: { flex: 1 },
   header: {
     paddingBottom: 20,
