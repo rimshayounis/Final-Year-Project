@@ -46,7 +46,6 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
 
     setLoading(true);
     try {
-      // Call appropriate API based on userType
       const response =
         userType === "doctor"
           ? await doctorAPI.login({
@@ -62,7 +61,6 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
 
       console.log("Full Response:", JSON.stringify(response.data, null, 2));
 
-      // Extract user object from response
       let userData;
       if (response.data.success) {
         userData = response.data.user || response.data.doctor;
@@ -75,17 +73,36 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
       if (userData && userData._id) {
         const userName = userData.fullName || userData.name || "User";
 
-        // ✅ Store user in AsyncStorage for later use
         await storeUser(userData);
 
         Alert.alert("Success", `Welcome back, ${userName}!`, [
           {
             text: "OK",
             onPress: () => {
-              navigation.replace("Dashboard", {
-                id: userData._id,
-                role: userType,
-              });
+              // 🔥 DOCTOR VERIFICATION CHECK
+              if (userType === "doctor") {
+                const isVerified = userData.doctorProfile?.isVerified;
+
+                console.log("Doctor Verification:", isVerified);
+
+                if (isVerified === true) {
+                  navigation.replace("Dashboard", {
+                    id: userData._id,
+                    role: "doctor",
+                  });
+                } else {
+                  navigation.replace("DoctorUnverified", {
+                    doctorId: userData._id,
+                    doctorName: userData.fullName,
+                  });
+                }
+              } else {
+                // Normal user
+                navigation.replace("Dashboard", {
+                  id: userData._id,
+                  role: "user",
+                });
+              }
             },
           },
         ]);

@@ -130,23 +130,27 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
         } as any);
       });
 
-      const response = await doctorAPI.register(body);
+   const response = await doctorAPI.register(body);
 
-      if (response.data.success) {
-        Alert.alert(
-          'Registration Successful',
-          'Your account is pending verification by admin.',
-          [
-            {
-              text: 'OK',
-              onPress: () =>
-                navigation.replace('DoctorUnverified', {
-                  doctorId: response.data.doctor._id,
-                }),
-            },
-          ]
-        );
-      }
+if (response.data.success) {
+  const doctorId = response.data.doctor._id; // adjust according to your API response
+  const doctorName = formData.fullName;
+
+  Alert.alert(
+    'Registration Successful',
+    'Your account is pending verification by admin.',
+    [
+      {
+        text: 'OK',
+        onPress: () =>
+          navigation.replace('DoctorUnverified', {
+            doctorId,
+            doctorName,
+          }),
+      },
+    ]
+  );
+}
     } catch (error: any) {
       console.error('Doctor registration error:', error);
       Alert.alert(

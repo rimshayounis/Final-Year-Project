@@ -5,9 +5,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../../App';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -21,12 +21,12 @@ export default function DoctorPendingScreen({
   navigation, 
   route 
 }: DoctorDashboardScreenProps) {
-  const { doctorId } = route.params;
+  const { doctorId,doctorName } = route.params;
 
   return (
-    <SafeAreaView style={styles.container}>
+  <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>Welcome, Doctor</Text>
+        <Text style={styles.greeting}>Welcome, {doctorName}</Text>
         <Text style={styles.appName}>TruHeal-Link</Text>
         <View style={styles.statusBadge}>
           <MaterialIcons name="verified" size={16} color="#FFD700" />
@@ -69,17 +69,7 @@ export default function DoctorPendingScreen({
             <Text style={styles.featureText}>Schedule & manage appointments</Text>
           </View>
 
-          <View style={styles.featureCard}>
-            <MaterialIcons name="analytics" size={40} color="#6B7FED" />
-            <Text style={styles.featureTitle}>Statistics</Text>
-            <Text style={styles.featureText}>View patient analytics</Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <MaterialIcons name="medical-information" size={40} color="#6B7FED" />
-            <Text style={styles.featureTitle}>Medical Records</Text>
-            <Text style={styles.featureText}>Access patient records</Text>
-          </View>
+         
         </View>
 
         <View style={styles.documentsCard}>
