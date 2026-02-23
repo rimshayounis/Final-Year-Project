@@ -21,7 +21,7 @@ export type RootStackParamList = {
   Login: { userType: 'user' | 'doctor' };
   CreateAccount: { userType: 'user' | 'doctor' };
   CreateDoctorAccount: undefined;
-  DoctorUnverified: { doctorId: string };
+  DoctorUnverified: { doctorId: string; doctorName: string };
   HealthProfile: { userId: string };
   EmergencyContact: { userId: string };
  Dashboard: {
