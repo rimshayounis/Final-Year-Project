@@ -14,6 +14,7 @@ import {
   Modal,
   TextInput,
   Dimensions,
+  StatusBar,
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -74,8 +75,10 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
 
   const [editModal, setEditModal] = useState(false);
   const [editName, setEditName] = useState("");
-  const [editBio, setEditBio] = useState("");
   const [editLoading, setEditLoading] = useState(false);
+
+  const [bioEditModal, setBioEditModal] = useState(false);
+  const [bioText, setBioText] = useState("");
 
   const [commentModal, setCommentModal] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -84,23 +87,19 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
 
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
 
-  /* ===== FETCH PROFILE ===== */
   const fetchProfile = async () => {
     try {
       const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
       const response = await apiClient.get(endpoint);
-      // Handle both { data: {...} } and direct object responses
       const data = response.data?.data || response.data;
-      console.log("PROFILE DATA:", JSON.stringify(data));
       setUserProfile(data);
       setEditName(data.fullName || "");
-      setEditBio(data.bio || "");
+      setBioText(data.bio || "");
     } catch (error) {
       console.error("Failed to load profile:", error);
     }
   };
 
-  /* ===== FETCH POSTS ===== */
   const fetchUserPosts = async () => {
     try {
       const response = await apiClient.get(`/posts/user/${id}`);
@@ -118,7 +117,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
       setLoading(true);
       fetchProfile();
       fetchUserPosts();
-    }, [id])
+    }, [id]),
   );
 
   const handleRefresh = () => {
@@ -127,8 +126,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     fetchUserPosts();
   };
 
-  /* ===== EDIT PROFILE ===== */
-  const handleEditProfile = async () => {
+  const handleEditName = async () => {
     if (!editName.trim()) {
       Alert.alert("Error", "Name cannot be empty");
       return;
@@ -136,20 +134,32 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     setEditLoading(true);
     try {
       const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
-      await apiClient.put(endpoint, { fullName: editName, bio: editBio });
-      setUserProfile((prev) =>
-        prev ? { ...prev, fullName: editName, bio: editBio } : prev
-      );
+      await apiClient.put(endpoint, { fullName: editName });
+      setUserProfile((prev) => (prev ? { ...prev, fullName: editName } : prev));
       setEditModal(false);
-      Alert.alert("Success", "Profile updated!");
-    } catch (error) {
-      Alert.alert("Error", "Failed to update profile");
+      Alert.alert("Success", "Name updated!");
+    } catch {
+      Alert.alert("Error", "Failed to update name");
     } finally {
       setEditLoading(false);
     }
   };
 
-  /* ===== PICK PROFILE PHOTO ===== */
+  const handleSaveBio = async () => {
+    setEditLoading(true);
+    try {
+      const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
+      await apiClient.put(endpoint, { bio: bioText });
+      setUserProfile((prev) => (prev ? { ...prev, bio: bioText } : prev));
+      setBioEditModal(false);
+      Alert.alert("Success", "Bio updated!");
+    } catch {
+      Alert.alert("Error", "Failed to update bio");
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const handlePickProfilePhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -175,15 +185,14 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           headers: { "Content-Type": "multipart/form-data" },
         });
         setUserProfile((prev) =>
-          prev ? { ...prev, profileImage: result.assets[0].uri } : prev
+          prev ? { ...prev, profileImage: result.assets[0].uri } : prev,
         );
-      } catch (error) {
+      } catch {
         Alert.alert("Error", "Failed to update profile photo");
       }
     }
   };
 
-  /* ===== LIKE ===== */
   const handleLike = async (postId: string) => {
     if (actionLoading === postId + "_like") return;
     if (likedPosts.has(postId)) {
@@ -194,38 +203,27 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     try {
       await apiClient.post(`/posts/${postId}/like`);
       setPosts((prev) =>
-        prev.map((p) => (p._id === postId ? { ...p, likes: p.likes + 1 } : p))
+        prev.map((p) => (p._id === postId ? { ...p, likes: p.likes + 1 } : p)),
       );
       setLikedPosts((prev) => new Set([...prev, postId]));
-      if (selectedPost?._id === postId) {
-        setSelectedPost((prev) =>
-          prev ? { ...prev, likes: prev.likes + 1 } : prev
-        );
-      }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to like post");
     } finally {
       setActionLoading(null);
     }
   };
 
-  /* ===== OPEN COMMENTS ===== */
-  // ← KEY FIX: always fetch fresh, never skip
   const handleOpenComment = async (post: Post) => {
     setSelectedPost({ ...post, commentsList: [] });
     setCommentModal(true);
     setCommentsLoading(true);
-
     try {
       const response = await apiClient.get(`/posts/${post._id}/comments`);
-      console.log("COMMENTS RAW:", JSON.stringify(response.data));
-
       const raw = Array.isArray(response.data.data)
         ? response.data.data
         : Array.isArray(response.data)
-        ? response.data
-        : [];
-
+          ? response.data
+          : [];
       const commentsList: Comment[] = raw.map((c: any) => ({
         _id: c._id?.toString() || Date.now().toString(),
         userId: c.userId?.toString() || "",
@@ -233,28 +231,16 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
         text: c.text || "",
         createdAt: c.createdAt || new Date().toISOString(),
       }));
-
-      console.log("PARSED comments count:", commentsList.length);
-
-      setPosts((prev) =>
-        prev.map((p) => (p._id === post._id ? { ...p, commentsList } : p))
-      );
       setSelectedPost({ ...post, commentsList });
-    } catch (error) {
-      console.error("Failed to load comments:", error);
+    } catch {
+      console.error("Failed to load comments");
     } finally {
       setCommentsLoading(false);
     }
   };
 
-  /* ===== SUBMIT COMMENT ===== */
   const handleSubmitComment = async () => {
-    if (!commentText.trim()) {
-      Alert.alert("Error", "Please write a comment");
-      return;
-    }
-    if (!selectedPost) return;
-
+    if (!commentText.trim() || !selectedPost) return;
     setActionLoading(selectedPost._id + "_comment");
     try {
       const response = await apiClient.post(
@@ -263,31 +249,15 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           userId: id,
           text: commentText,
           userName: userProfile?.fullName || "User",
-        }
+        },
       );
-
       const newComment: Comment = {
         _id: response.data.data?._id?.toString() || Date.now().toString(),
-        userId: response.data.data?.userId?.toString() || id,
-        userName:
-          response.data.data?.userName || userProfile?.fullName || "You",
-        text: response.data.data?.text || commentText,
-        createdAt:
-          response.data.data?.createdAt || new Date().toISOString(),
+        userId: id,
+        userName: userProfile?.fullName || "You",
+        text: commentText,
+        createdAt: new Date().toISOString(),
       };
-
-      setPosts((prev) =>
-        prev.map((p) =>
-          p._id === selectedPost._id
-            ? {
-                ...p,
-                comments: p.comments + 1,
-                commentsList: [...(p.commentsList || []), newComment],
-              }
-            : p
-        )
-      );
-
       setSelectedPost((prev) =>
         prev
           ? {
@@ -295,40 +265,36 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
               comments: prev.comments + 1,
               commentsList: [...(prev.commentsList || []), newComment],
             }
-          : prev
+          : prev,
       );
-
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === selectedPost._id ? { ...p, comments: p.comments + 1 } : p,
+        ),
+      );
       setCommentText("");
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to add comment");
     } finally {
       setActionLoading(null);
     }
   };
 
-  /* ===== SHARE ===== */
   const handleShare = async (post: Post) => {
     setActionLoading(post._id + "_share");
     try {
-      const shareContent = {
+      await Share.share({
         title: post.title,
-        message: `📋 ${post.title}\n\n${post.description}\n\n🏷️ Category: ${post.category}\n\n🔗 Shared via TruHeal-Link`,
-        url:
-          post.mediaUrls?.length > 0
-            ? `http://192.168.100.10:3000${post.mediaUrls[0]}`
-            : undefined,
-      };
-      const result = await Share.share(shareContent);
-      if (result.action === Share.sharedAction) {
-        await apiClient.post(`/posts/${post._id}/share`);
-        setPosts((prev) =>
-          prev.map((p) =>
-            p._id === post._id ? { ...p, shares: p.shares + 1 } : p
-          )
-        );
-      }
-    } catch (error) {
-      Alert.alert("Error", "Failed to share post");
+        message: `📋 ${post.title}\n\n${post.description}`,
+      });
+      await apiClient.post(`/posts/${post._id}/share`);
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === post._id ? { ...p, shares: p.shares + 1 } : p,
+        ),
+      );
+    } catch {
+      Alert.alert("Error", "Failed to share");
     } finally {
       setActionLoading(null);
     }
@@ -342,26 +308,14 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "approved": return "#00B374";
-      case "rejected": return "#E53E3E";
-      default: return "#F6A623";
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "approved": return "Published";
-      case "rejected": return "Rejected";
-      default: return "Under Review";
-    }
-  };
+  const getStatusColor = (s: string) =>
+    s === "approved" ? "#00B374" : s === "rejected" ? "#E53E3E" : "#F6A623";
+  const getStatusLabel = (s: string) =>
+    s === "approved" ? "Published" : s === "rejected" ? "Rejected" : "Pending";
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    const now = new Date();
-    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+    const diff = Math.floor((Date.now() - date.getTime()) / 1000);
     if (diff < 60) return "Just now";
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
@@ -369,7 +323,141 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  /* ===== RENDER POST ===== */
+  const publishedCount = posts.filter((p) => p.status === "approved").length;
+  const pendingCount = posts.filter((p) => p.status === "pending").length;
+
+  /* ── Profile Header ── */
+  const ProfileHeader = () => (
+    <View>
+      {/* Blue Top Nav */}
+      <View style={[styles.topNav, { paddingTop: insets.top + 10 }]}>
+        <Text style={styles.topNavTitle}>
+         Profile
+        </Text>
+        <TouchableOpacity>
+          <Ionicons name="settings-outline" size={24} color="#FFF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* White Profile Card */}
+      <View style={styles.profileCard}>
+        {/* Row: Avatar LEFT | Name+Stats RIGHT */}
+        <View style={styles.profileTopRow}>
+          {/* Avatar */}
+          <TouchableOpacity
+            onPress={handlePickProfilePhoto}
+            style={styles.avatarTouchable}
+          >
+            {userProfile?.profileImage ? (
+              <Image
+                source={{ uri: userProfile.profileImage }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitial}>
+                  {userProfile?.fullName?.charAt(0)?.toUpperCase() || "U"}
+                </Text>
+              </View>
+            )}
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={11} color="#FFF" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Name + Stats */}
+          <View style={styles.nameStatsCol}>
+            {/* Name with pencil */}
+            <View style={styles.nameRow}>
+              <Text style={styles.profileName} numberOfLines={1}>
+                {userProfile?.fullName || "—"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setEditModal(true)}
+                style={styles.pencilBtn}
+              >
+                <Ionicons name="pencil" size={13} color="#6B7FED" />
+              </TouchableOpacity>
+            </View>
+
+            {role === "doctor" && (
+              <View style={styles.doctorBadge}>
+                <FontAwesome5 name="user-md" size={10} color="#6B7FED" />
+                <Text style={styles.doctorBadgeText}>Verified Doctor</Text>
+              </View>
+            )}
+
+            {/* Instagram-style stats */}
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNum}>{posts.length}</Text>
+                <Text style={styles.statLabel}>Posts</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statNum}>{pendingCount}</Text>
+                <Text style={styles.statLabel}>Pending</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statNum}>{publishedCount}</Text>
+                <Text style={styles.statLabel}>Published</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Bio Section — below the row */}
+        <View style={styles.bioSection}>
+          <View style={styles.bioHeaderRow}>
+            <Text style={styles.bioSectionLabel}>About yourself</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setBioText(userProfile?.bio || "");
+                setBioEditModal(true);
+              }}
+              style={styles.pencilBtn}
+            >
+              <Ionicons name="pencil" size={13} color="#6B7FED" />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.bioText}>
+            {userProfile?.bio || "No bio yet. Tap the pencil to add one."}
+          </Text>
+          <View style={styles.metaRow}>
+            {userProfile?.email && (
+              <View style={styles.metaItem}>
+                <Ionicons name="mail-outline" size={12} color="#999" />
+                <Text style={styles.metaText} numberOfLines={1}>
+                  {userProfile.email}
+                </Text>
+              </View>
+            )}
+            {userProfile?.gender && (
+              <View style={styles.metaItem}>
+                <Ionicons name="person-outline" size={12} color="#999" />
+                <Text style={styles.metaText}>{userProfile.gender}</Text>
+              </View>
+            )}
+            {userProfile?.age && (
+              <View style={styles.metaItem}>
+                <Ionicons name="calendar-outline" size={12} color="#999" />
+                <Text style={styles.metaText}>{userProfile.age} yrs</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+
+      {/* Activity Row */}
+      <View style={styles.activityHeader}>
+        <Text style={styles.activityTitle}>Activity</Text>
+        <Text style={styles.activityCount}>{posts.length} posts</Text>
+      </View>
+    </View>
+  );
+
+  /* ── Post Card ── */
   const renderPost = ({ item }: { item: Post }) => {
     const isLiked = likedPosts.has(item._id);
     const isExpanded = expandedPosts.has(item._id);
@@ -397,7 +485,9 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
                 {userProfile?.fullName || "You"}
               </Text>
               <View style={styles.postMeta}>
-                <Text style={styles.postTime}>{formatDate(item.createdAt)}</Text>
+                <Text style={styles.postTime}>
+                  {formatDate(item.createdAt)}
+                </Text>
                 <Text style={styles.postMetaDot}>·</Text>
                 <View
                   style={[
@@ -466,7 +556,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             {item.mediaUrls.map((url, i) => (
               <Image
                 key={i}
-                source={{ uri: `http://192.168.100.10:3000${url}` }}
+                source={{ uri: `http://192.168.0.107:3000${url}` }}
                 style={styles.mediaImage}
                 resizeMode="cover"
               />
@@ -481,26 +571,26 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           </View>
         )}
 
-        <View style={styles.statsRow}>
+        <View style={styles.statsCountRow}>
           <View style={styles.statsLeft}>
             {item.likes > 0 && (
-              <View style={styles.statItem}>
+              <View style={styles.statCountItem}>
                 <View style={styles.likeIconSmall}>
                   <MaterialIcons name="favorite" size={10} color="#FFF" />
                 </View>
-                <Text style={styles.statText}>{item.likes}</Text>
+                <Text style={styles.statCountText}>{item.likes}</Text>
               </View>
             )}
           </View>
           <View style={styles.statsRight}>
             {item.comments > 0 && (
-              <Text style={styles.statText}>{item.comments} comments</Text>
+              <Text style={styles.statCountText}>{item.comments} comments</Text>
             )}
             {item.comments > 0 && item.shares > 0 && (
-              <Text style={styles.statDivider}>·</Text>
+              <Text style={styles.statCountDivider}>·</Text>
             )}
             {item.shares > 0 && (
-              <Text style={styles.statText}>{item.shares} shares</Text>
+              <Text style={styles.statCountText}>{item.shares} shares</Text>
             )}
           </View>
         </View>
@@ -526,7 +616,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
               Like
             </Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.actionBtn}
             onPress={() => handleOpenComment(item)}
@@ -534,7 +623,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             <Ionicons name="chatbubble-outline" size={19} color="#666" />
             <Text style={styles.actionLabel}>Comment</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.actionBtn}
             onPress={() => handleShare(item)}
@@ -552,146 +640,47 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     );
   };
 
-  /* ===== PROFILE HEADER ===== */
-  const ProfileHeader = () => (
-    <View style={styles.profileHeaderWrap}>
-      <View style={styles.coverBanner} />
-
-      <View style={styles.avatarSection}>
-        <View style={styles.avatarWrapper}>
-          <TouchableOpacity
-            style={styles.avatarContainer}
-            onPress={handlePickProfilePhoto}
-          >
-            {userProfile?.profileImage ? (
-              <Image
-                source={{ uri: userProfile.profileImage }}
-                style={styles.avatarImage}
-              />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitial}>
-                  {userProfile?.fullName?.charAt(0)?.toUpperCase() || "U"}
-                </Text>
-              </View>
-            )}
-            <View style={styles.cameraIconBadge}>
-              <Ionicons name="camera" size={12} color="#FFF" />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={styles.editProfileBtn}
-          onPress={() => setEditModal(true)}
-        >
-          <Ionicons name="pencil" size={14} color="#6B7FED" />
-          <Text style={styles.editProfileBtnText}>Edit Profile</Text>
-        </TouchableOpacity>
+  if (loading) {
+    return (
+      <View style={[styles.centered, { paddingTop: insets.top }]}>
+        <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
+        <ActivityIndicator size="large" color="#6B7FED" />
+        <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
-
-      <View style={styles.profileInfo}>
-        <Text style={styles.profileName}>
-          {userProfile?.fullName || "Loading..."}
-        </Text>
-        {role === "doctor" && (
-          <View style={styles.doctorBadge}>
-            <FontAwesome5 name="user-md" size={11} color="#6B7FED" />
-            <Text style={styles.doctorBadgeText}>Verified Doctor</Text>
-          </View>
-        )}
-        <Text style={styles.profileBio}>
-          {userProfile?.bio || "No bio yet. Tap Edit Profile to add one."}
-        </Text>
-
-        <View style={styles.profileMetaRow}>
-          {userProfile?.gender && (
-            <View style={styles.profileMetaItem}>
-              <Ionicons name="person-outline" size={13} color="#888" />
-              <Text style={styles.profileMetaText}>{userProfile.gender}</Text>
-            </View>
-          )}
-          {userProfile?.age && (
-            <View style={styles.profileMetaItem}>
-              <Ionicons name="calendar-outline" size={13} color="#888" />
-              <Text style={styles.profileMetaText}>{userProfile.age} yrs</Text>
-            </View>
-          )}
-          {userProfile?.email && (
-            <View style={styles.profileMetaItem}>
-              <Ionicons name="mail-outline" size={13} color="#888" />
-              <Text style={styles.profileMetaText} numberOfLines={1}>
-                {userProfile.email}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.statsCardRow}>
-          <View style={styles.statsCard}>
-            <Text style={styles.statsCardNum}>{posts.length}</Text>
-            <Text style={styles.statsCardLabel}>Posts</Text>
-          </View>
-          <View style={styles.statsCardDivider} />
-          <View style={styles.statsCard}>
-            <Text style={styles.statsCardNum}>
-              {posts.reduce((a, p) => a + p.likes, 0)}
-            </Text>
-            <Text style={styles.statsCardLabel}>Likes</Text>
-          </View>
-          <View style={styles.statsCardDivider} />
-          <View style={styles.statsCard}>
-            <Text style={styles.statsCardNum}>
-              {posts.filter((p) => p.status === "approved").length}
-            </Text>
-            <Text style={styles.statsCardLabel}>Published</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.postsSectionHeader}>
-        <Text style={styles.postsSectionTitle}>Activity</Text>
-        <Text style={styles.postsSectionSub}>{posts.length} posts</Text>
-      </View>
-    </View>
-  );
+    );
+  }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#6B7FED" />
-          <Text style={styles.loadingText}>Loading profile...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(item) => item._id}
-          renderItem={renderPost}
-          ListHeaderComponent={<ProfileHeader />}
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <Ionicons name="document-text-outline" size={52} color="#D0D5E8" />
-              <Text style={styles.emptyTitle}>No posts yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Your posts will appear here once created.
-              </Text>
-            </View>
-          }
-          contentContainerStyle={{ paddingBottom: 30 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={["#6B7FED"]}
-              tintColor="#6B7FED"
-            />
-          }
-        />
-      )}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
 
-      {/* ===== EDIT PROFILE MODAL ===== */}
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item._id}
+        renderItem={renderPost}
+        ListHeaderComponent={<ProfileHeader />}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            <Ionicons name="document-text-outline" size={52} color="#D0D5E8" />
+            <Text style={styles.emptyTitle}>No posts yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Your posts will appear here once created.
+            </Text>
+          </View>
+        }
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={["#6B7FED"]}
+            tintColor="#6B7FED"
+          />
+        }
+      />
+
+      {/* Edit Name Modal */}
       <Modal
         visible={editModal}
         transparent
@@ -702,12 +691,11 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <Text style={styles.modalTitle}>Edit Name</Text>
               <TouchableOpacity onPress={() => setEditModal(false)}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
-
             <Text style={styles.inputLabel}>Full Name</Text>
             <TextInput
               style={styles.modalInput}
@@ -716,23 +704,9 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
               placeholder="Your full name"
               placeholderTextColor="#AAA"
             />
-
-            <Text style={styles.inputLabel}>Bio</Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                { minHeight: 90, textAlignVertical: "top" },
-              ]}
-              value={editBio}
-              onChangeText={setEditBio}
-              placeholder="Tell something about yourself..."
-              placeholderTextColor="#AAA"
-              multiline
-            />
-
             <TouchableOpacity
               style={styles.saveBtn}
-              onPress={handleEditProfile}
+              onPress={handleEditName}
               disabled={editLoading}
             >
               {editLoading ? (
@@ -745,7 +719,50 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
         </View>
       </Modal>
 
-      {/* ===== COMMENT MODAL ===== */}
+      {/* Edit Bio Modal */}
+      <Modal
+        visible={bioEditModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBioEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Edit Bio</Text>
+              <TouchableOpacity onPress={() => setBioEditModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.inputLabel}>About yourself</Text>
+            <TextInput
+              style={[
+                styles.modalInput,
+                { minHeight: 110, textAlignVertical: "top" },
+              ]}
+              value={bioText}
+              onChangeText={setBioText}
+              placeholder="Tell something about yourself..."
+              placeholderTextColor="#AAA"
+              multiline
+            />
+            <TouchableOpacity
+              style={styles.saveBtn}
+              onPress={handleSaveBio}
+              disabled={editLoading}
+            >
+              {editLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.saveBtnText}>Save Bio</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Comment Modal */}
       <Modal
         visible={commentModal}
         transparent
@@ -771,7 +788,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
-
             <ScrollView
               style={{ flex: 1, marginBottom: 10 }}
               showsVerticalScrollIndicator={false}
@@ -810,7 +826,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
                 </View>
               )}
             </ScrollView>
-
             <View style={styles.commentInputRow}>
               <View style={styles.commentInputAvatar}>
                 <Text style={styles.commentAvatarText}>
@@ -850,37 +865,55 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   );
 }
 
-/* ===== STYLES ===== */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F0F2F8" },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingTop: 100,
+    backgroundColor: "#F0F2F8",
   },
   loadingText: { marginTop: 12, color: "#6B7FED", fontSize: 14 },
-  profileHeaderWrap: { backgroundColor: "#F0F2F8" },
-  coverBanner: { height: 110, backgroundColor: "#6B7FED" },
-  avatarSection: {
+
+  // Top Nav
+  topNav: {
+    backgroundColor: "#6B7FED",
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+  },
+  topNavTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#FFF",
+    letterSpacing: -0.3,
+  },
+
+  // Profile Card
+  profileCard: {
+    backgroundColor: "#FFF",
     paddingHorizontal: 16,
-    marginTop: -36,
-    marginBottom: 4,
+    paddingTop: 18,
+    paddingBottom: 20,
+    marginBottom: 8,
   },
-  avatarWrapper: {},
-  avatarContainer: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderWidth: 3,
-    borderColor: "#FFF",
-    overflow: "visible",
-    position: "relative",
+  profileTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 18,
   },
-  avatarImage: { width: 82, height: 82, borderRadius: 41 },
+
+  // Avatar
+  avatarTouchable: { position: "relative", marginRight: 18 },
+  avatarImage: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    borderWidth: 2.5,
+    borderColor: "#6B7FED",
+  },
   avatarPlaceholder: {
     width: 82,
     height: 82,
@@ -888,9 +921,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#6B7FED",
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 2.5,
+    borderColor: "#6B7FED",
   },
-  avatarInitial: { fontSize: 32, fontWeight: "800", color: "#FFF" },
-  cameraIconBadge: {
+  avatarInitial: { fontSize: 30, fontWeight: "800", color: "#FFF" },
+  cameraBadge: {
     position: "absolute",
     bottom: 2,
     right: 0,
@@ -903,60 +938,55 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#FFF",
   },
-  editProfileBtn: {
+
+  // Name + Stats col
+  nameStatsCol: { flex: 1, justifyContent: "center" },
+  nameRow: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#6B7FED",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    gap: 5,
-    marginBottom: 8,
-  },
-  editProfileBtnText: { color: "#6B7FED", fontSize: 13, fontWeight: "600" },
-  profileInfo: {
-    backgroundColor: "#FFF",
-    marginHorizontal: 0,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
-    marginBottom: 8,
-  },
-  profileName: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#1A1D2E",
     marginBottom: 4,
+    gap: 8,
+  },
+  profileName: { fontSize: 17, fontWeight: "800", color: "#1A1D2E", flex: 1 },
+  pencilBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#EEF0FB",
+    justifyContent: "center",
+    alignItems: "center",
   },
   doctorBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
+    marginBottom: 8,
+  },
+  doctorBadgeText: { fontSize: 11, color: "#6B7FED", fontWeight: "700" },
+
+  // Stats
+  statsRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+  statItem: { flex: 1, alignItems: "center" },
+  statNum: { fontSize: 17, fontWeight: "800", color: "#1A1D2E" },
+  statLabel: { fontSize: 11, color: "#888", marginTop: 1 },
+  statDivider: { width: 1, height: 26, backgroundColor: "#E8EAF6" },
+
+  // Bio
+  bioSection: { borderTopWidth: 1, borderTopColor: "#F0F2F8", paddingTop: 14 },
+  bioHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 6,
   },
-  doctorBadgeText: { fontSize: 12, color: "#6B7FED", fontWeight: "700" },
-  profileBio: { fontSize: 14, color: "#555", lineHeight: 20, marginBottom: 10 },
-  profileMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 14,
-  },
-  profileMetaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  profileMetaText: { fontSize: 12, color: "#888" },
-  statsCardRow: {
-    flexDirection: "row",
-    backgroundColor: "#F7F8FC",
-    borderRadius: 14,
-    padding: 14,
-    alignItems: "center",
-  },
-  statsCard: { flex: 1, alignItems: "center" },
-  statsCardNum: { fontSize: 20, fontWeight: "800", color: "#1A1D2E" },
-  statsCardLabel: { fontSize: 11, color: "#888", marginTop: 2 },
-  statsCardDivider: { width: 1, height: 32, backgroundColor: "#E0E3EF" },
-  postsSectionHeader: {
+  bioSectionLabel: { fontSize: 13, fontWeight: "700", color: "#555" },
+  bioText: { fontSize: 14, color: "#444", lineHeight: 21, marginBottom: 10 },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  metaText: { fontSize: 12, color: "#888" },
+
+  // Activity header
+  activityHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -967,11 +997,12 @@ const styles = StyleSheet.create({
     borderBottomColor: "#EAEDF5",
     marginBottom: 8,
   },
-  postsSectionTitle: { fontSize: 16, fontWeight: "700", color: "#1A1D2E" },
-  postsSectionSub: { fontSize: 12, color: "#888" },
+  activityTitle: { fontSize: 15, fontWeight: "700", color: "#1A1D2E" },
+  activityCount: { fontSize: 12, color: "#888" },
+
+  // Post Card
   postCard: {
     backgroundColor: "#FFF",
-    marginHorizontal: 0,
     marginBottom: 8,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -1050,7 +1081,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   rejectionText: { fontSize: 12, color: "#E53E3E", flex: 1 },
-  statsRow: {
+  statsCountRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -1059,7 +1090,7 @@ const styles = StyleSheet.create({
   },
   statsLeft: { flexDirection: "row", alignItems: "center" },
   statsRight: { flexDirection: "row", alignItems: "center", gap: 4 },
-  statItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  statCountItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   likeIconSmall: {
     width: 16,
     height: 16,
@@ -1068,8 +1099,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  statText: { fontSize: 12, color: "#999" },
-  statDivider: { fontSize: 12, color: "#CCC" },
+  statCountText: { fontSize: 12, color: "#999" },
+  statCountDivider: { fontSize: 12, color: "#CCC" },
   actionDivider: { height: 1, backgroundColor: "#F0F2F8", marginBottom: 8 },
   actionsRow: { flexDirection: "row", justifyContent: "space-around" },
   actionBtn: {
@@ -1081,6 +1112,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionLabel: { fontSize: 13, color: "#666", fontWeight: "600" },
+
+  // Empty
   emptyWrap: { paddingTop: 60, alignItems: "center", paddingHorizontal: 30 },
   emptyTitle: {
     fontSize: 18,
@@ -1094,6 +1127,8 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: "center",
   },
+
+  // Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -1121,7 +1156,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: { fontSize: 18, fontWeight: "700", color: "#1A1D2E" },
-  inputLabel: { fontSize: 13, fontWeight: "600", color: "#555", marginBottom: 6 },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#555",
+    marginBottom: 6,
+  },
   modalInput: {
     backgroundColor: "#F5F7FF",
     borderRadius: 12,
@@ -1140,6 +1180,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+
+  // Comments
   commentItem: {
     flexDirection: "row",
     marginBottom: 14,
