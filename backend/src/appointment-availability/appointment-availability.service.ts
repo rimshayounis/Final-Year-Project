@@ -210,7 +210,8 @@ export class AppointmentAvailabilityService {
   async getAllDoctorsWithAvailability(): Promise<AppointmentAvailability[]> {
     return await this.availabilityModel
       .find({ isActive: true })
-      .populate('doctorId', 'fullName specialization profileImage email')
+      // .populate('doctorId', 'fullName specialization profileImage email')
+      .populate('doctorId', 'fullName email profileImage doctorProfile')
       .exec();
   }
 }
