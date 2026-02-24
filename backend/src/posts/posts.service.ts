@@ -95,12 +95,12 @@ export class PostsService {
   async update(id: string, userId: string, updatePostDto: UpdatePostDto): Promise<PostDocument> {
     const post = await this.findOne(id);
 
-    if (post.userId.toString() !== userId) {
+   const postUserId = (post.userId as any)?._id?.toString() ?? post.userId.toString();
+    if (postUserId !== userId) {
       throw new ForbiddenException('You can only edit your own posts');
     }
-    if (post.status !== 'pending') {
-      throw new BadRequestException('Only pending posts can be edited');
-    }
+    
+    
 
     const updatedPost = await this.postModel.findByIdAndUpdate(id, updatePostDto, { new: true }).exec();
     if (!updatedPost) throw new NotFoundException(`Post with ID ${id} not found`);
@@ -110,12 +110,11 @@ export class PostsService {
   async delete(id: string, userId: string): Promise<void> {
     const post = await this.findOne(id);
 
-    if (post.userId.toString() !== userId) {
+    const postUserId = (post.userId as any)?._id?.toString() ?? post.userId.toString();
+    if (postUserId !== userId) {
       throw new ForbiddenException('You can only delete your own posts');
     }
-    if (post.status !== 'pending') {
-      throw new BadRequestException('Only pending posts can be deleted');
-    }
+   
 
     await this.postModel.findByIdAndUpdate(id, { isActive: false }).exec();
   }
@@ -212,6 +211,13 @@ export class PostsService {
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
     return post;
   }
+  async decrementLikes(id: string): Promise<PostDocument> {
+  const post = await this.postModel
+    .findByIdAndUpdate(id, { $inc: { likes: -1 } }, { new: true })
+    .exec();
+  if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+  return post;
+}
 
   async getPostsByCategory(
     category: string,

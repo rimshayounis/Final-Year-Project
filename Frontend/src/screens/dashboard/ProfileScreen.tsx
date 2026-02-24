@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,14 +15,19 @@ import {
   TextInput,
   Dimensions,
   StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import apiClient from "../../services/api";
+import apiClient, { API_URL } from "../../services/api";
 
 const { width } = Dimensions.get("window");
+const COLORED_POST_SIZE = width - 32;
 
 interface Comment {
   _id: string;
@@ -40,6 +45,7 @@ interface Post {
   mediaUrls: string[];
   backgroundColor: string | null;
   status: "pending" | "approved" | "rejected";
+  isActive?: boolean; // true = public, false = private
   likes: number;
   comments: number;
   shares: number;
@@ -64,6 +70,74 @@ type ProfileScreenProps = {
   role?: "user" | "doctor";
 };
 
+/* ── Keyboard-aware bottom sheet modal ── */
+function BottomSheetModal({
+  visible,
+  onClose,
+  title,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={bsStyles.overlay} />
+        </TouchableWithoutFeedback>
+        <View style={bsStyles.sheet}>
+          <View style={bsStyles.handle} />
+          <View style={bsStyles.headerRow}>
+            <Text style={bsStyles.title}>{title}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
+          {children}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const bsStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  sheet: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 36,
+  },
+  handle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#DDD",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  title: { fontSize: 18, fontWeight: "700", color: "#1A1D2E" },
+});
+
 export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -73,38 +147,55 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
+  // Name edit
   const [editModal, setEditModal] = useState(false);
   const [editName, setEditName] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
-  const [bioEditModal, setBioEditModal] = useState(false);
+  // Bio edit
+  const [bioModal, setBioModal] = useState(false);
   const [bioText, setBioText] = useState("");
 
+  // Comments
   const [commentModal, setCommentModal] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [commentText, setCommentText] = useState("");
   const [commentsLoading, setCommentsLoading] = useState(false);
 
+  // Three-dot menu
+  const [menuPost, setMenuPost] = useState<Post | null>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  // Edit post
+  const [editPostModal, setEditPostModal] = useState(false);
+  const [editPostTitle, setEditPostTitle] = useState("");
+  const [editPostDesc, setEditPostDesc] = useState("");
+  const [editPostLoading, setEditPostLoading] = useState(false);
+
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
 
+  /* ── Fetch profile ── */
   const fetchProfile = async () => {
     try {
       const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
-      const response = await apiClient.get(endpoint);
-      const data = response.data?.data || response.data;
+      const res = await apiClient.get(endpoint);
+      // Unwrap any nesting: { doctor:{} } | { user:{} } | { data:{} } | direct
+      const raw = res.data;
+      const data = raw?.doctor ?? raw?.user ?? raw?.data ?? raw;
+      console.log("Profile name:", data?.fullName);
       setUserProfile(data);
-      setEditName(data.fullName || "");
-      setBioText(data.bio || "");
-    } catch (error) {
-      console.error("Failed to load profile:", error);
+      setEditName(data?.fullName ?? "");
+      setBioText(data?.bio ?? "");
+    } catch (e) {
+      console.error("fetchProfile error:", e);
     }
   };
 
   const fetchUserPosts = async () => {
     try {
-      const response = await apiClient.get(`/posts/user/${id}`);
-      setPosts(response.data.data || []);
-    } catch (error: any) {
+      const res = await apiClient.get(`/posts/user/${id}`);
+      setPosts(res.data.data || []);
+    } catch {
       Alert.alert("Error", "Failed to load posts");
     } finally {
       setLoading(false);
@@ -126,18 +217,18 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     fetchUserPosts();
   };
 
-  const handleEditName = async () => {
+  /* ── Save name ── */
+  const handleSaveName = async () => {
     if (!editName.trim()) {
       Alert.alert("Error", "Name cannot be empty");
       return;
     }
     setEditLoading(true);
     try {
-      const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
-      await apiClient.put(endpoint, { fullName: editName });
-      setUserProfile((prev) => (prev ? { ...prev, fullName: editName } : prev));
+      const ep = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
+      await apiClient.put(ep, { fullName: editName.trim() });
+      setUserProfile((p) => (p ? { ...p, fullName: editName.trim() } : p));
       setEditModal(false);
-      Alert.alert("Success", "Name updated!");
     } catch {
       Alert.alert("Error", "Failed to update name");
     } finally {
@@ -145,14 +236,14 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     }
   };
 
+  /* ── Save bio ── */
   const handleSaveBio = async () => {
     setEditLoading(true);
     try {
-      const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
-      await apiClient.put(endpoint, { bio: bioText });
-      setUserProfile((prev) => (prev ? { ...prev, bio: bioText } : prev));
-      setBioEditModal(false);
-      Alert.alert("Success", "Bio updated!");
+      const ep = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
+      await apiClient.put(ep, { bio: bioText });
+      setUserProfile((p) => (p ? { ...p, bio: bioText } : p));
+      setBioModal(false);
     } catch {
       Alert.alert("Error", "Failed to update bio");
     } finally {
@@ -160,7 +251,8 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     }
   };
 
-  const handlePickProfilePhoto = async () => {
+  /* ── Pick photo ── */
+  const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Permission Needed", "Allow gallery access");
@@ -180,49 +272,69 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           name: "profile.jpg",
           type: "image/jpeg",
         } as any);
-        const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
-        await apiClient.put(endpoint, formData, {
+        const ep = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
+        await apiClient.put(ep, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-        setUserProfile((prev) =>
-          prev ? { ...prev, profileImage: result.assets[0].uri } : prev,
+        setUserProfile((p) =>
+          p ? { ...p, profileImage: result.assets[0].uri } : p,
         );
       } catch {
-        Alert.alert("Error", "Failed to update profile photo");
+        Alert.alert("Error", "Failed to update photo");
       }
     }
   };
 
+  /* ── Like toggle ── */
   const handleLike = async (postId: string) => {
     if (actionLoading === postId + "_like") return;
-    if (likedPosts.has(postId)) {
-      Alert.alert("", "You already liked this post!");
-      return;
-    }
+    const isCurrentlyLiked = likedPosts.has(postId);
     setActionLoading(postId + "_like");
     try {
-      await apiClient.post(`/posts/${postId}/like`);
-      setPosts((prev) =>
-        prev.map((p) => (p._id === postId ? { ...p, likes: p.likes + 1 } : p)),
-      );
-      setLikedPosts((prev) => new Set([...prev, postId]));
+      if (isCurrentlyLiked) {
+        // Unlike
+        await apiClient.post(`/posts/${postId}/unlike`);
+        setPosts((prev) =>
+          prev.map((p) =>
+            p._id === postId ? { ...p, likes: Math.max(0, p.likes - 1) } : p,
+          ),
+        );
+        setLikedPosts((prev) => {
+          const next = new Set(prev);
+          next.delete(postId);
+          return next;
+        });
+      } else {
+        // Like
+        await apiClient.post(`/posts/${postId}/like`);
+        setPosts((prev) =>
+          prev.map((p) =>
+            p._id === postId ? { ...p, likes: p.likes + 1 } : p,
+          ),
+        );
+        setLikedPosts((prev) => new Set([...prev, postId]));
+      }
     } catch {
-      Alert.alert("Error", "Failed to like post");
+      Alert.alert(
+        "Error",
+        isCurrentlyLiked ? "Failed to unlike" : "Failed to like post",
+      );
     } finally {
       setActionLoading(null);
     }
   };
 
+  /* ── Comments ── */
   const handleOpenComment = async (post: Post) => {
     setSelectedPost({ ...post, commentsList: [] });
     setCommentModal(true);
     setCommentsLoading(true);
     try {
-      const response = await apiClient.get(`/posts/${post._id}/comments`);
-      const raw = Array.isArray(response.data.data)
-        ? response.data.data
-        : Array.isArray(response.data)
-          ? response.data
+      const res = await apiClient.get(`/posts/${post._id}/comments`);
+      const raw = Array.isArray(res.data.data)
+        ? res.data.data
+        : Array.isArray(res.data)
+          ? res.data
           : [];
       const commentsList: Comment[] = raw.map((c: any) => ({
         _id: c._id?.toString() || Date.now().toString(),
@@ -243,29 +355,26 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     if (!commentText.trim() || !selectedPost) return;
     setActionLoading(selectedPost._id + "_comment");
     try {
-      const response = await apiClient.post(
-        `/posts/${selectedPost._id}/comment`,
-        {
-          userId: id,
-          text: commentText,
-          userName: userProfile?.fullName || "User",
-        },
-      );
+      const res = await apiClient.post(`/posts/${selectedPost._id}/comment`, {
+        userId: id,
+        text: commentText,
+        userName: userProfile?.fullName || "User",
+      });
       const newComment: Comment = {
-        _id: response.data.data?._id?.toString() || Date.now().toString(),
+        _id: res.data.data?._id?.toString() || Date.now().toString(),
         userId: id,
         userName: userProfile?.fullName || "You",
         text: commentText,
         createdAt: new Date().toISOString(),
       };
-      setSelectedPost((prev) =>
-        prev
+      setSelectedPost((p) =>
+        p
           ? {
-              ...prev,
-              comments: prev.comments + 1,
-              commentsList: [...(prev.commentsList || []), newComment],
+              ...p,
+              comments: p.comments + 1,
+              commentsList: [...(p.commentsList || []), newComment],
             }
-          : prev,
+          : p,
       );
       setPosts((prev) =>
         prev.map((p) =>
@@ -280,6 +389,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     }
   };
 
+  /* ── Share ── */
   const handleShare = async (post: Post) => {
     setActionLoading(post._id + "_share");
     try {
@@ -300,6 +410,99 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     }
   };
 
+  /* ── Three-dot menu actions ── */
+  const handleToggleVisibility = async (post: Post) => {
+    setMenuVisible(false);
+    // isActive=true means public (visible to all), isActive=false means private (only owner sees it)
+    const makePrivate = post.isActive !== false; // currently public → make private
+    try {
+      await apiClient.patch(`/posts/${post._id}`, {
+        userId: id,
+        isActive: !makePrivate,
+      });
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === post._id ? { ...p, isActive: !makePrivate } : p,
+        ),
+      );
+      Alert.alert(
+        "Updated",
+        makePrivate ? "Post is now private" : "Post is now public",
+      );
+    } catch (e: any) {
+      Alert.alert(
+        "Error",
+        e?.response?.data?.message || "Failed to update visibility",
+      );
+    }
+  };
+
+  const handleOpenEditPost = (post: Post) => {
+    setMenuVisible(false);
+    if (post.status !== "pending") {
+      Alert.alert("Cannot Edit", "Only pending posts can be edited.");
+      return;
+    }
+    setEditPostTitle(post.title);
+    setEditPostDesc(post.description);
+    setEditPostModal(true);
+  };
+
+  const handleSavePost = async () => {
+    if (!menuPost) return;
+    setEditPostLoading(true);
+    try {
+      // Backend: PATCH /posts/:id — requires userId in body, only pending posts
+      await apiClient.patch(`/posts/${menuPost._id}`, {
+        userId: id,
+        title: editPostTitle,
+        description: editPostDesc,
+      });
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === menuPost._id
+            ? { ...p, title: editPostTitle, description: editPostDesc }
+            : p,
+        ),
+      );
+      setEditPostModal(false);
+      Alert.alert("Success", "Post updated!");
+    } catch (e: any) {
+      Alert.alert(
+        "Error",
+        e?.response?.data?.message || "Failed to update post",
+      );
+    } finally {
+      setEditPostLoading(false);
+    }
+  };
+
+  const handleDeletePost = (post: Post) => {
+    setMenuVisible(false);
+    if (post.status !== "pending") {
+      Alert.alert("Cannot Delete", "Only pending posts can be deleted.");
+      return;
+    }
+    Alert.alert("Delete Post", "Are you sure you want to delete this post?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await apiClient.delete(`/posts/${post._id}/${id}`);
+            setPosts((prev) => prev.filter((p) => p._id !== post._id));
+          } catch (e: any) {
+            Alert.alert(
+              "Error",
+              e?.response?.data?.message || "Failed to delete post",
+            );
+          }
+        },
+      },
+    ]);
+  };
+
   const toggleExpand = (postId: string) => {
     setExpandedPosts((prev) => {
       const next = new Set(prev);
@@ -308,31 +511,35 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     });
   };
 
-  const getStatusColor = (s: string) =>
+  const statusColor = (s: string) =>
     s === "approved" ? "#00B374" : s === "rejected" ? "#E53E3E" : "#F6A623";
-  const getStatusLabel = (s: string) =>
+  const statusLabel = (s: string) =>
     s === "approved" ? "Published" : s === "rejected" ? "Rejected" : "Pending";
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+  const formatDate = (d: string) => {
+    const diff = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
     if (diff < 60) return "Just now";
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return new Date(d).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
   };
 
   const publishedCount = posts.filter((p) => p.status === "approved").length;
   const pendingCount = posts.filter((p) => p.status === "pending").length;
 
-  /* ── Profile Header ── */
+  /* ══════════════════════════════════
+     Profile Header
+  ══════════════════════════════════ */
   const ProfileHeader = () => (
     <View>
       {/* Blue Top Nav */}
       <View style={[styles.topNav, { paddingTop: insets.top + 10 }]}>
         <Text style={styles.topNavTitle}>
-         Profile
+          {userProfile?.fullName || "Profile"}
         </Text>
         <TouchableOpacity>
           <Ionicons name="settings-outline" size={24} color="#FFF" />
@@ -341,11 +548,11 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
 
       {/* White Profile Card */}
       <View style={styles.profileCard}>
-        {/* Row: Avatar LEFT | Name+Stats RIGHT */}
+        {/* Row: Avatar | Name+Stats */}
         <View style={styles.profileTopRow}>
           {/* Avatar */}
           <TouchableOpacity
-            onPress={handlePickProfilePhoto}
+            onPress={handlePickPhoto}
             style={styles.avatarTouchable}
           >
             {userProfile?.profileImage ? (
@@ -356,7 +563,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarInitial}>
-                  {userProfile?.fullName?.charAt(0)?.toUpperCase() || "U"}
+                  {userProfile?.fullName?.charAt(0)?.toUpperCase() ?? "?"}
                 </Text>
               </View>
             )}
@@ -367,13 +574,15 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
 
           {/* Name + Stats */}
           <View style={styles.nameStatsCol}>
-            {/* Name with pencil */}
             <View style={styles.nameRow}>
               <Text style={styles.profileName} numberOfLines={1}>
-                {userProfile?.fullName || "—"}
+                {userProfile?.fullName ?? "—"}
               </Text>
               <TouchableOpacity
-                onPress={() => setEditModal(true)}
+                onPress={() => {
+                  setEditName(userProfile?.fullName ?? "");
+                  setEditModal(true);
+                }}
                 style={styles.pencilBtn}
               >
                 <Ionicons name="pencil" size={13} color="#6B7FED" />
@@ -387,7 +596,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
               </View>
             )}
 
-            {/* Instagram-style stats */}
+            {/* Stats */}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statNum}>{posts.length}</Text>
@@ -407,14 +616,14 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           </View>
         </View>
 
-        {/* Bio Section — below the row */}
+        {/* Bio */}
         <View style={styles.bioSection}>
           <View style={styles.bioHeaderRow}>
             <Text style={styles.bioSectionLabel}>About yourself</Text>
             <TouchableOpacity
               onPress={() => {
-                setBioText(userProfile?.bio || "");
-                setBioEditModal(true);
+                setBioText(userProfile?.bio ?? "");
+                setBioModal(true);
               }}
               style={styles.pencilBtn}
             >
@@ -425,31 +634,31 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             {userProfile?.bio || "No bio yet. Tap the pencil to add one."}
           </Text>
           <View style={styles.metaRow}>
-            {userProfile?.email && (
+            {userProfile?.email ? (
               <View style={styles.metaItem}>
                 <Ionicons name="mail-outline" size={12} color="#999" />
                 <Text style={styles.metaText} numberOfLines={1}>
                   {userProfile.email}
                 </Text>
               </View>
-            )}
-            {userProfile?.gender && (
+            ) : null}
+            {userProfile?.gender ? (
               <View style={styles.metaItem}>
                 <Ionicons name="person-outline" size={12} color="#999" />
                 <Text style={styles.metaText}>{userProfile.gender}</Text>
               </View>
-            )}
-            {userProfile?.age && (
+            ) : null}
+            {userProfile?.age ? (
               <View style={styles.metaItem}>
                 <Ionicons name="calendar-outline" size={12} color="#999" />
                 <Text style={styles.metaText}>{userProfile.age} yrs</Text>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
       </View>
 
-      {/* Activity Row */}
+      {/* Activity header */}
       <View style={styles.activityHeader}>
         <Text style={styles.activityTitle}>Activity</Text>
         <Text style={styles.activityCount}>{posts.length} posts</Text>
@@ -457,141 +666,184 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     </View>
   );
 
-  /* ── Post Card ── */
+  /* ══════════════════════════════════
+     Post Card
+  ══════════════════════════════════ */
   const renderPost = ({ item }: { item: Post }) => {
     const isLiked = likedPosts.has(item._id);
     const isExpanded = expandedPosts.has(item._id);
+    const hasColor = !!item.backgroundColor;
     const descLimit = 120;
-    const needsExpand = item.description.length > descLimit;
+    const needsExpand = item.description.length > descLimit && !hasColor;
+    const baseUrl = API_URL.replace("/api", "");
+
+    const avatarEl = userProfile?.profileImage ? (
+      <Image
+        source={{ uri: userProfile.profileImage }}
+        style={styles.postAvatarImg}
+      />
+    ) : (
+      <Text style={styles.postAvatarText}>
+        {userProfile?.fullName?.charAt(0)?.toUpperCase() ?? "U"}
+      </Text>
+    );
+
+    const likeEl =
+      actionLoading === item._id + "_like" ? (
+        <ActivityIndicator size="small" color="#6B7FED" />
+      ) : (
+        <MaterialIcons
+          name={isLiked ? "favorite" : "favorite-border"}
+          size={20}
+          color={isLiked ? "#E53E3E" : "#666"}
+        />
+      );
+
+    const shareEl =
+      actionLoading === item._id + "_share" ? (
+        <ActivityIndicator size="small" color="#6B7FED" />
+      ) : (
+        <Ionicons name="share-social-outline" size={20} color="#666" />
+      );
 
     return (
       <View style={styles.postCard}>
         <View style={styles.postHeader}>
           <View style={styles.postAuthorRow}>
-            <View style={styles.postAvatar}>
-              {userProfile?.profileImage ? (
-                <Image
-                  source={{ uri: userProfile.profileImage }}
-                  style={styles.postAvatarImg}
-                />
-              ) : (
-                <Text style={styles.postAvatarText}>
-                  {userProfile?.fullName?.charAt(0)?.toUpperCase() || "U"}
-                </Text>
-              )}
-            </View>
+            <View style={styles.postAvatar}>{avatarEl}</View>
             <View style={{ flex: 1 }}>
               <Text style={styles.postAuthorName}>
-                {userProfile?.fullName || "You"}
+                {userProfile?.fullName ?? "You"}
               </Text>
               <View style={styles.postMeta}>
                 <Text style={styles.postTime}>
                   {formatDate(item.createdAt)}
                 </Text>
-                <Text style={styles.postMetaDot}>·</Text>
+                <Text style={styles.postMetaDot}>{" · "}</Text>
                 <View
                   style={[
                     styles.statusPill,
-                    { backgroundColor: getStatusColor(item.status) + "18" },
+                    { backgroundColor: statusColor(item.status) + "18" },
                   ]}
                 >
                   <View
                     style={[
                       styles.statusDot,
-                      { backgroundColor: getStatusColor(item.status) },
+                      { backgroundColor: statusColor(item.status) },
                     ]}
                   />
                   <Text
                     style={[
                       styles.statusPillText,
-                      { color: getStatusColor(item.status) },
+                      { color: statusColor(item.status) },
                     ]}
                   >
-                    {getStatusLabel(item.status)}
+                    {statusLabel(item.status)}
                   </Text>
                 </View>
+                {item.isActive === false ? (
+                  <Ionicons
+                    name="lock-closed"
+                    size={11}
+                    color="#999"
+                    style={{ marginLeft: 6 }}
+                  />
+                ) : null}
               </View>
             </View>
           </View>
-          <View style={styles.categoryChip}>
-            <Text style={styles.categoryChipText}>{item.category}</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.dotsBtn}
+            onPress={() => {
+              setMenuPost(item);
+              setMenuVisible(true);
+            }}
+          >
+            <MaterialIcons name="more-vert" size={22} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.categoryChip}>
+          <Text style={styles.categoryChipText}>{item.category}</Text>
         </View>
 
         <Text style={styles.postTitle}>{item.title}</Text>
 
-        <View
-          style={[
-            styles.descriptionBox,
-            item.backgroundColor
-              ? { backgroundColor: item.backgroundColor }
-              : null,
-          ]}
-        >
-          <Text
+        {hasColor ? (
+          <View
             style={[
-              styles.postDescription,
-              item.backgroundColor ? { color: "#FFF" } : null,
+              styles.coloredPost,
+              { backgroundColor: item.backgroundColor as string },
             ]}
           >
-            {isExpanded || !needsExpand
-              ? item.description
-              : item.description.slice(0, descLimit) + "..."}
-          </Text>
-          {needsExpand && (
-            <TouchableOpacity onPress={() => toggleExpand(item._id)}>
-              <Text style={styles.seeMoreText}>
-                {isExpanded ? "See less" : "See more"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {item.mediaUrls?.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.mediaScroll}
-          >
-            {item.mediaUrls.map((url, i) => (
-              <Image
-                key={i}
-                source={{ uri: `http://192.168.0.107:3000${url}` }}
-                style={styles.mediaImage}
-                resizeMode="cover"
-              />
-            ))}
-          </ScrollView>
+            <Text style={styles.coloredPostDesc}>{item.description}</Text>
+          </View>
+        ) : (
+          <View style={styles.descriptionBox}>
+            <Text style={styles.postDescription}>
+              {isExpanded || !needsExpand
+                ? item.description
+                : item.description.slice(0, descLimit) + "..."}
+            </Text>
+            {needsExpand ? (
+              <TouchableOpacity onPress={() => toggleExpand(item._id)}>
+                <Text style={styles.seeMoreText}>
+                  {isExpanded ? "See less" : "See more"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         )}
 
-        {item.status === "rejected" && item.rejectionReason && (
+        {item.mediaUrls?.length > 0 ? (
+          <View style={styles.mediaContainer}>
+            {item.mediaUrls.map((url, i) => {
+              const imgUri = url.startsWith("http") ? url : baseUrl + url;
+              return (
+                <Image
+                  key={String(i)}
+                  source={{ uri: imgUri }}
+                  style={styles.mediaImage}
+                  resizeMode="cover"
+                  onError={() => console.log("Image load failed:", imgUri)}
+                />
+              );
+            })}
+          </View>
+        ) : null}
+
+        {item.status === "rejected" && item.rejectionReason ? (
           <View style={styles.rejectionBox}>
             <Ionicons name="alert-circle" size={14} color="#E53E3E" />
             <Text style={styles.rejectionText}>{item.rejectionReason}</Text>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.statsCountRow}>
           <View style={styles.statsLeft}>
-            {item.likes > 0 && (
+            {item.likes > 0 ? (
               <View style={styles.statCountItem}>
                 <View style={styles.likeIconSmall}>
                   <MaterialIcons name="favorite" size={10} color="#FFF" />
                 </View>
-                <Text style={styles.statCountText}>{item.likes}</Text>
+                <Text style={styles.statCountText}>{String(item.likes)}</Text>
               </View>
-            )}
+            ) : null}
           </View>
           <View style={styles.statsRight}>
-            {item.comments > 0 && (
-              <Text style={styles.statCountText}>{item.comments} comments</Text>
-            )}
-            {item.comments > 0 && item.shares > 0 && (
-              <Text style={styles.statCountDivider}>·</Text>
-            )}
-            {item.shares > 0 && (
-              <Text style={styles.statCountText}>{item.shares} shares</Text>
-            )}
+            {item.comments > 0 ? (
+              <Text style={styles.statCountText}>
+                {String(item.comments) + " comments"}
+              </Text>
+            ) : null}
+            {item.comments > 0 && item.shares > 0 ? (
+              <Text style={styles.statCountDivider}>{" · "}</Text>
+            ) : null}
+            {item.shares > 0 ? (
+              <Text style={styles.statCountText}>
+                {String(item.shares) + " shares"}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -603,17 +855,11 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             onPress={() => handleLike(item._id)}
             disabled={actionLoading === item._id + "_like"}
           >
-            {actionLoading === item._id + "_like" ? (
-              <ActivityIndicator size="small" color="#6B7FED" />
-            ) : (
-              <MaterialIcons
-                name={isLiked ? "favorite" : "favorite-border"}
-                size={20}
-                color={isLiked ? "#E53E3E" : "#666"}
-              />
-            )}
-            <Text style={[styles.actionLabel, isLiked && { color: "#E53E3E" }]}>
-              Like
+            {likeEl}
+            <Text
+              style={[styles.actionLabel, isLiked ? { color: "#E53E3E" } : {}]}
+            >
+              {"Like"}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -621,19 +867,15 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             onPress={() => handleOpenComment(item)}
           >
             <Ionicons name="chatbubble-outline" size={19} color="#666" />
-            <Text style={styles.actionLabel}>Comment</Text>
+            <Text style={styles.actionLabel}>{"Comment"}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionBtn}
             onPress={() => handleShare(item)}
             disabled={actionLoading === item._id + "_share"}
           >
-            {actionLoading === item._id + "_share" ? (
-              <ActivityIndicator size="small" color="#6B7FED" />
-            ) : (
-              <Ionicons name="share-social-outline" size={20} color="#666" />
-            )}
-            <Text style={styles.actionLabel}>Share</Text>
+            {shareEl}
+            <Text style={styles.actionLabel}>{"Share"}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -653,7 +895,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
-
       <FlatList
         data={posts}
         keyExtractor={(item) => item._id}
@@ -679,90 +920,156 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           />
         }
       />
-
-      {/* Edit Name Modal */}
-      <Modal
+      {/* ══ Edit Name Modal ══ */}
+      <BottomSheetModal
         visible={editModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditModal(false)}
+        onClose={() => setEditModal(false)}
+        title="Edit Name"
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Edit Name</Text>
-              <TouchableOpacity onPress={() => setEditModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.inputLabel}>Full Name</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Your full name"
-              placeholderTextColor="#AAA"
-            />
-            <TouchableOpacity
-              style={styles.saveBtn}
-              onPress={handleEditName}
-              disabled={editLoading}
-            >
-              {editLoading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.saveBtnText}>Save Changes</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Edit Bio Modal */}
+        <Text style={styles.inputLabel}>Full Name</Text>
+        <TextInput
+          style={styles.modalInput}
+          value={editName}
+          onChangeText={setEditName}
+          placeholder="Your full name"
+          placeholderTextColor="#AAA"
+          autoFocus
+        />
+        <TouchableOpacity
+          style={styles.saveBtn}
+          onPress={handleSaveName}
+          disabled={editLoading}
+        >
+          {editLoading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.saveBtnText}>Save</Text>
+          )}
+        </TouchableOpacity>
+      </BottomSheetModal>
+      {/* ══ Edit Bio Modal ══ */}
+      <BottomSheetModal
+        visible={bioModal}
+        onClose={() => setBioModal(false)}
+        title="About Yourself"
+      >
+        <Text style={styles.inputLabel}>Bio</Text>
+        <TextInput
+          style={[
+            styles.modalInput,
+            { minHeight: 110, textAlignVertical: "top" },
+          ]}
+          value={bioText}
+          onChangeText={setBioText}
+          placeholder="Tell something about yourself..."
+          placeholderTextColor="#AAA"
+          multiline
+          autoFocus
+        />
+        <TouchableOpacity
+          style={styles.saveBtn}
+          onPress={handleSaveBio}
+          disabled={editLoading}
+        >
+          {editLoading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.saveBtnText}>Save Bio</Text>
+          )}
+        </TouchableOpacity>
+      </BottomSheetModal>
+      {/* ══ Three-dot Menu ══ */}
       <Modal
-        visible={bioEditModal}
+        visible={menuVisible}
         transparent
-        animationType="slide"
-        onRequestClose={() => setBioEditModal(false)}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Edit Bio</Text>
-              <TouchableOpacity onPress={() => setBioEditModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.inputLabel}>About yourself</Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                { minHeight: 110, textAlignVertical: "top" },
-              ]}
-              value={bioText}
-              onChangeText={setBioText}
-              placeholder="Tell something about yourself..."
-              placeholderTextColor="#AAA"
-              multiline
+        <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
+          <View style={styles.menuOverlay} />
+        </TouchableWithoutFeedback>
+        <View style={styles.menuSheet}>
+          <View style={styles.menuHandle} />
+          <Text style={styles.menuTitle} numberOfLines={1}>
+            {menuPost?.title}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => menuPost && handleToggleVisibility(menuPost)}
+          >
+            <Ionicons
+              name={
+                menuPost?.isActive === false
+                  ? "earth-outline"
+                  : "lock-closed-outline"
+              }
+              size={20}
+              color="#333"
             />
-            <TouchableOpacity
-              style={styles.saveBtn}
-              onPress={handleSaveBio}
-              disabled={editLoading}
-            >
-              {editLoading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.saveBtnText}>Save Bio</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+            <Text style={styles.menuItemText}>
+              {menuPost?.isActive === false ? "Make Public" : "Make Private"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => menuPost && handleOpenEditPost(menuPost)}
+          >
+            <Ionicons name="pencil-outline" size={20} color="#333" />
+            <Text style={styles.menuItemText}>Edit Post</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.menuItem, styles.menuItemDanger]}
+            onPress={() => menuPost && handleDeletePost(menuPost)}
+          >
+            <Ionicons name="trash-outline" size={20} color="#E53E3E" />
+            <Text style={[styles.menuItemText, { color: "#E53E3E" }]}>
+              Delete Post
+            </Text>
+          </TouchableOpacity>
         </View>
       </Modal>
-
-      {/* Comment Modal */}
+      {/* ══ Edit Post Modal ══ */}
+      <BottomSheetModal
+        visible={editPostModal}
+        onClose={() => setEditPostModal(false)}
+        title="Edit Post"
+      >
+        <Text style={styles.inputLabel}>Title</Text>
+        <TextInput
+          style={styles.modalInput}
+          value={editPostTitle}
+          onChangeText={setEditPostTitle}
+          placeholder="Post title"
+          placeholderTextColor="#AAA"
+        />
+        <Text style={styles.inputLabel}>Description</Text>
+        <TextInput
+          style={[
+            styles.modalInput,
+            { minHeight: 100, textAlignVertical: "top" },
+          ]}
+          value={editPostDesc}
+          onChangeText={setEditPostDesc}
+          placeholder="Post description"
+          placeholderTextColor="#AAA"
+          multiline
+        />
+        <TouchableOpacity
+          style={styles.saveBtn}
+          onPress={handleSavePost}
+          disabled={editPostLoading}
+        >
+          {editPostLoading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.saveBtnText}>Save Changes</Text>
+          )}
+        </TouchableOpacity>
+      </BottomSheetModal>
+      {/* ══ Comment Modal — slide-up sheet ══ */}
       <Modal
         visible={commentModal}
         transparent
@@ -772,31 +1079,56 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           setCommentText("");
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { maxHeight: "85%" }]}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>
-                Comments ({selectedPost?.comments || 0})
-              </Text>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          {/* Dim backdrop — tap to close */}
+          <TouchableWithoutFeedback
+            onPress={() => {
+              setCommentModal(false);
+              setCommentText("");
+            }}
+          >
+            <View style={styles.commentBackdrop} />
+          </TouchableWithoutFeedback>
+
+          {/* Sheet */}
+          <View style={styles.commentSheet}>
+            {/* Drag handle */}
+            <View style={styles.commentSheetHandle} />
+
+            {/* Header */}
+            <View style={styles.commentSheetHeader}>
+              <Text
+                style={styles.commentSheetTitle}
+              >{`Comments${selectedPost?.comments ? " (" + selectedPost.comments + ")" : ""}`}</Text>
               <TouchableOpacity
                 onPress={() => {
                   setCommentModal(false);
                   setCommentText("");
                 }}
               >
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={22} color="#555" />
               </TouchableOpacity>
             </View>
+
+            <View style={styles.commentDivider} />
+
+            {/* Scrollable list */}
             <ScrollView
-              style={{ flex: 1, marginBottom: 10 }}
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.commentListContent}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
               {commentsLoading ? (
-                <ActivityIndicator
-                  color="#6B7FED"
-                  style={{ marginVertical: 20 }}
-                />
+                <View style={styles.commentLoadingWrap}>
+                  <ActivityIndicator color="#6B7FED" size="large" />
+                  <Text style={styles.commentLoadingText}>
+                    Loading comments...
+                  </Text>
+                </View>
               ) : selectedPost?.commentsList &&
                 selectedPost.commentsList.length > 0 ? (
                 selectedPost.commentsList.map((c) => (
@@ -807,60 +1139,72 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
                       </Text>
                     </View>
                     <View style={styles.commentBubble}>
-                      <Text style={styles.commentUser}>
-                        {c.userName || "User"}
-                      </Text>
+                      <View style={styles.commentBubbleHeader}>
+                        <Text style={styles.commentUser}>
+                          {c.userName || "User"}
+                        </Text>
+                        <Text style={styles.commentTime}>
+                          {formatDate(c.createdAt)}
+                        </Text>
+                      </View>
                       <Text style={styles.commentText}>{c.text}</Text>
-                      <Text style={styles.commentTime}>
-                        {formatDate(c.createdAt)}
-                      </Text>
                     </View>
                   </View>
                 ))
               ) : (
                 <View style={styles.noComments}>
-                  <Ionicons name="chatbubbles-outline" size={36} color="#DDD" />
+                  <Ionicons
+                    name="chatbubbles-outline"
+                    size={48}
+                    color="#E0E3EF"
+                  />
+                  <Text style={styles.noCommentsTitle}>No comments yet</Text>
                   <Text style={styles.noCommentsText}>
-                    No comments yet. Be first!
+                    Be the first to share your thoughts!
                   </Text>
                 </View>
               )}
             </ScrollView>
-            <View style={styles.commentInputRow}>
+
+            {/* Sticky input */}
+            <View style={styles.commentInputWrap}>
               <View style={styles.commentInputAvatar}>
                 <Text style={styles.commentAvatarText}>
                   {userProfile?.fullName?.charAt(0)?.toUpperCase() || "U"}
                 </Text>
               </View>
-              <TextInput
-                style={styles.commentTextInput}
-                placeholder="Add a comment..."
-                placeholderTextColor="#AAA"
-                value={commentText}
-                onChangeText={setCommentText}
-                multiline
-              />
-              <TouchableOpacity
-                style={[
-                  styles.commentSendBtn,
-                  !commentText.trim() && { opacity: 0.4 },
-                ]}
-                onPress={handleSubmitComment}
-                disabled={
-                  !commentText.trim() ||
-                  actionLoading === selectedPost?._id + "_comment"
-                }
-              >
-                {actionLoading === selectedPost?._id + "_comment" ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Ionicons name="send" size={16} color="#FFF" />
-                )}
-              </TouchableOpacity>
+              <View style={styles.commentInputBox}>
+                <TextInput
+                  style={styles.commentTextInput}
+                  placeholder="Add a comment..."
+                  placeholderTextColor="#AAA"
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  multiline
+                  maxLength={500}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.commentSendBtn,
+                    !commentText.trim() && { opacity: 0.35 },
+                  ]}
+                  onPress={handleSubmitComment}
+                  disabled={
+                    !commentText.trim() ||
+                    actionLoading === selectedPost?._id + "_comment"
+                  }
+                >
+                  {actionLoading === selectedPost?._id + "_comment" ? (
+                    <ActivityIndicator size="small" color="#6B7FED" />
+                  ) : (
+                    <Ionicons name="send" size={18} color="#6B7FED" />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </KeyboardAvoidingView>
+      </Modal>{" "}
     </View>
   );
 }
@@ -921,8 +1265,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#6B7FED",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2.5,
-    borderColor: "#6B7FED",
   },
   avatarInitial: { fontSize: 30, fontWeight: "800", color: "#FFF" },
   cameraBadge: {
@@ -939,7 +1281,7 @@ const styles = StyleSheet.create({
     borderColor: "#FFF",
   },
 
-  // Name + Stats col
+  // Name + Stats
   nameStatsCol: { flex: 1, justifyContent: "center" },
   nameRow: {
     flexDirection: "row",
@@ -963,8 +1305,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   doctorBadgeText: { fontSize: 11, color: "#6B7FED", fontWeight: "700" },
-
-  // Stats
   statsRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
   statItem: { flex: 1, alignItems: "center" },
   statNum: { fontSize: 17, fontWeight: "800", color: "#1A1D2E" },
@@ -1029,24 +1369,32 @@ const styles = StyleSheet.create({
   postAuthorName: { fontSize: 14, fontWeight: "700", color: "#1A1D2E" },
   postMeta: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   postTime: { fontSize: 11, color: "#999" },
-  postMetaDot: { fontSize: 11, color: "#CCC", marginHorizontal: 5 },
+  postMetaDot: { fontSize: 11, color: "#CCC", marginHorizontal: 4 },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 20,
-    gap: 4,
+    gap: 3,
   },
   statusDot: { width: 5, height: 5, borderRadius: 3 },
   statusPillText: { fontSize: 10, fontWeight: "700" },
+  dotsBtn: { padding: 4, marginLeft: 4 },
+  lockRow: { flexDirection: "row", alignItems: "center" },
+
+  // Category chip
   categoryChip: {
+    alignSelf: "flex-start",
     backgroundColor: "#EEF0FB",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    marginBottom: 8,
   },
   categoryChipText: { fontSize: 11, color: "#6B7FED", fontWeight: "600" },
+
+  // Post content
   postTitle: {
     fontSize: 15,
     fontWeight: "700",
@@ -1067,8 +1415,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
   },
-  mediaScroll: { marginBottom: 10 },
-  mediaImage: { width: 160, height: 120, borderRadius: 10, marginRight: 8 },
+
+  // Colored post — square with centered text
+  coloredPost: {
+    width: COLORED_POST_SIZE,
+    height: COLORED_POST_SIZE * 0.75,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+    padding: 24,
+  },
+  coloredPostTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#FFF",
+    textAlign: "center",
+    marginBottom: 10,
+    textShadowColor: "rgba(0,0,0,0.2)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  }, // kept for safety
+  coloredPostDesc: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFF",
+    textAlign: "center",
+    lineHeight: 26,
+    textShadowColor: "rgba(0,0,0,0.15)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+
+  mediaContainer: { marginBottom: 10, borderRadius: 12, overflow: "hidden" },
+  mediaImage: { width: "100%", height: 220, borderRadius: 12, marginBottom: 6 },
   rejectionBox: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1081,6 +1461,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   rejectionText: { fontSize: 12, color: "#E53E3E", flex: 1 },
+
   statsCountRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1128,34 +1509,42 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Modals
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
+  // Three-dot menu
+  menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  menuSheet: {
     backgroundColor: "#FFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 36,
   },
-  modalHandle: {
+  menuHandle: {
     width: 38,
     height: 4,
     borderRadius: 2,
     backgroundColor: "#DDD",
     alignSelf: "center",
+    marginBottom: 12,
+  },
+  menuTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#888",
     marginBottom: 16,
+    textAlign: "center",
   },
-  modalHeaderRow: {
+  menuItem: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    gap: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F2F8",
   },
-  modalTitle: { fontSize: 18, fontWeight: "700", color: "#1A1D2E" },
+  menuItemDanger: { borderBottomWidth: 0 },
+  menuItemText: { fontSize: 15, fontWeight: "600", color: "#1A1D2E" },
+
+  // Modals
   inputLabel: {
     fontSize: 13,
     fontWeight: "600",
@@ -1216,8 +1605,6 @@ const styles = StyleSheet.create({
   commentInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#EEE",
     paddingTop: 12,
     gap: 8,
   },
@@ -1231,21 +1618,126 @@ const styles = StyleSheet.create({
   },
   commentTextInput: {
     flex: 1,
-    backgroundColor: "#F5F7FF",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
     fontSize: 14,
     color: "#1A1D2E",
     maxHeight: 80,
-    borderWidth: 1,
-    borderColor: "#E8EAF6",
+    paddingVertical: 4,
   },
-  commentSendBtn: {
+
+  // Comment sheet styles
+  commentBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  commentSheet: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: "65%",
+    paddingBottom: 16,
+  },
+  commentSheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#DDD",
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  commentSheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  commentSheetTitle: { fontSize: 16, fontWeight: "800", color: "#1A1D2E" },
+
+  commentModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F2F8",
+    backgroundColor: "#FFF",
+  },
+  commentModalBack: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  commentModalTitle: { fontSize: 17, fontWeight: "800", color: "#1A1D2E" },
+  commentPostPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    backgroundColor: "#FFF",
+  },
+  commentPostAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: "#6B7FED",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  commentPostAuthor: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1A1D2E",
+    marginBottom: 2,
+  },
+  commentPostSnippet: { fontSize: 12, color: "#888", lineHeight: 17 },
+  commentDivider: { height: 1, backgroundColor: "#F0F2F8" },
+  commentListContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  commentLoadingWrap: { alignItems: "center", paddingTop: 60, gap: 12 },
+  commentLoadingText: { fontSize: 14, color: "#888" },
+  commentBubbleHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  noCommentsTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#555",
+    marginTop: 16,
+  },
+  commentInputWrap: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F2F8",
+    backgroundColor: "#FFF",
+    gap: 10,
+  },
+  commentInputBox: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    backgroundColor: "#F5F7FF",
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "#E8EAF6",
+    gap: 8,
+  },
+  commentSendBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },

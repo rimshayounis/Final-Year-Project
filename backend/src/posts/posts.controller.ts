@@ -165,4 +165,10 @@ export class PostsController {
     const post = await this.postsService.incrementShares(id);
     return { success: true, data: post };
   }
+  @Post(':id/unlike')
+async unlikePost(@Param('id') id: string) {
+  const post = await this.postsService.decrementLikes(id);
+  return { success: true, data: post };
 }
+}
+
