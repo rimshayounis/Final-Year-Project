@@ -8,6 +8,7 @@ import { DoctorsModule } from './doctors/doctor.module';
 import { PostsModule } from './posts/posts.module';
 import {ChatbotModule} from './chatbot/chatbot.module'
 import {AppointmentAvailabilityModule} from './appointment-availability/appointment-availability.module'
+import {BookedAppointmentModule} from './booked-appointment/booked-appointment.module' 
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import {AppointmentAvailabilityModule} from './appointment-availability/appointm
     PostsModule, // ✅ Add Posts Module
     ChatbotModule,
     AppointmentAvailabilityModule,
+    BookedAppointmentModule,
   ],
 })
 export class AppModule {}

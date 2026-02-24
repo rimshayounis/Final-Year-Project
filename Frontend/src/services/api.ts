@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export const API_URL = 'http://192.168.137.1:3000/api';
+export const API_URL = 'http://192.168.0.107:3000/api';
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -37,6 +37,58 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// ── Booked Appointment ──
+export interface BookAppointmentData {
+  userId: string;
+  doctorId: string;
+  date: string;        // YYYY-MM-DD
+  time: string;        // HH:MM
+  sessionDuration: number;
+  consultationFee: number;
+  healthConcern: string;
+}
+
+export interface UpdateAppointmentStatusData {
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  cancelReason?: string;
+}
+
+export const bookedAppointmentAPI = {
+  // Book a new appointment
+  book: (data: BookAppointmentData) =>
+    apiClient.post('/booked-appointments', data),
+
+  // Get all appointments for a user
+  getUserAppointments: (userId: string) =>
+    apiClient.get(`/booked-appointments/user/${userId}`),
+
+  // Get upcoming appointments for a user
+  getUserUpcoming: (userId: string) =>
+    apiClient.get(`/booked-appointments/user/${userId}/upcoming`),
+
+  // Get all appointments for a doctor
+  getDoctorAppointments: (doctorId: string) =>
+    apiClient.get(`/booked-appointments/doctor/${doctorId}`),
+
+  // Get upcoming appointments for a doctor
+  getDoctorUpcoming: (doctorId: string) =>
+    apiClient.get(`/booked-appointments/doctor/${doctorId}/upcoming`),
+
+  // Get single appointment
+  getById: (appointmentId: string) =>
+    apiClient.get(`/booked-appointments/${appointmentId}`),
+
+  // Update status (confirm / complete)
+  updateStatus: (appointmentId: string, data: UpdateAppointmentStatusData) =>
+    apiClient.patch(`/booked-appointments/${appointmentId}/status`, data),
+
+  // Cancel appointment
+  cancel: (appointmentId: string, cancelReason?: string) =>
+    apiClient.delete(`/booked-appointments/${appointmentId}/cancel`, {
+      data: { cancelReason },
+    }),
+};
 
 export interface CreatePostData {
   userId: string;
