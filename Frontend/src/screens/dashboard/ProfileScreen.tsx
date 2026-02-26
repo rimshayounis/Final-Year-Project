@@ -479,10 +479,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
 
   const handleDeletePost = (post: Post) => {
     setMenuVisible(false);
-    if (post.status !== "pending") {
-      Alert.alert("Cannot Delete", "Only pending posts can be deleted.");
-      return;
-    }
     Alert.alert("Delete Post", "Are you sure you want to delete this post?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -536,16 +532,6 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   ══════════════════════════════════ */
   const ProfileHeader = () => (
     <View>
-      {/* Blue Top Nav */}
-      <View style={[styles.topNav, { paddingTop: insets.top + 10 }]}>
-        <Text style={styles.topNavTitle}>
-          {userProfile?.fullName || "Profile"}
-        </Text>
-        <TouchableOpacity>
-          <Ionicons name="settings-outline" size={24} color="#FFF" />
-        </TouchableOpacity>
-      </View>
-
       {/* White Profile Card */}
       <View style={styles.profileCard}>
         {/* Row: Avatar | Name+Stats */}
@@ -576,7 +562,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           <View style={styles.nameStatsCol}>
             <View style={styles.nameRow}>
               <Text style={styles.profileName} numberOfLines={1}>
-                {userProfile?.fullName ?? "—"}
+                {userProfile?.fullName?.toUpperCase() ?? "—"}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -713,34 +699,38 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             <View style={styles.postAvatar}>{avatarEl}</View>
             <View style={{ flex: 1 }}>
               <Text style={styles.postAuthorName}>
-                {userProfile?.fullName ?? "You"}
+                {userProfile?.fullName?.toUpperCase() ?? "YOU"}
               </Text>
               <View style={styles.postMeta}>
                 <Text style={styles.postTime}>
                   {formatDate(item.createdAt)}
                 </Text>
-                <Text style={styles.postMetaDot}>{" · "}</Text>
-                <View
-                  style={[
-                    styles.statusPill,
-                    { backgroundColor: statusColor(item.status) + "18" },
-                  ]}
-                >
+                {role !== "doctor" ? (
+                  <Text style={styles.postMetaDot}>{" · "}</Text>
+                ) : null}
+                {role !== "doctor" ? (
                   <View
                     style={[
-                      styles.statusDot,
-                      { backgroundColor: statusColor(item.status) },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.statusPillText,
-                      { color: statusColor(item.status) },
+                      styles.statusPill,
+                      { backgroundColor: statusColor(item.status) + "18" },
                     ]}
                   >
-                    {statusLabel(item.status)}
-                  </Text>
-                </View>
+                    <View
+                      style={[
+                        styles.statusDot,
+                        { backgroundColor: statusColor(item.status) },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.statusPillText,
+                        { color: statusColor(item.status) },
+                      ]}
+                    >
+                      {statusLabel(item.status)}
+                    </Text>
+                  </View>
+                ) : null}
                 {item.isActive === false ? (
                   <Ionicons
                     name="lock-closed"
@@ -769,7 +759,14 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
 
         <Text style={styles.postTitle}>{item.title}</Text>
 
-        {hasColor ? (
+        {/* Description logic:
+            - has image            → plain text, no background at all
+            - no image + has color → colored background box, centered text
+            - no image + no color  → light gray background box with see more
+        */}
+        {item.mediaUrls?.length > 0 ? (
+          <Text style={styles.plainDescription}>{item.description}</Text>
+        ) : hasColor ? (
           <View
             style={[
               styles.coloredPost,
@@ -895,6 +892,17 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
+
+      {/* ── Sticky Top Nav ── */}
+      <View style={[styles.topNav, { paddingTop: insets.top + 10 }]}>
+        <Text style={styles.topNavTitle}>
+          {userProfile?.fullName?.toUpperCase() || "PROFILE"}
+        </Text>
+        <TouchableOpacity>
+          <Ionicons name="settings-outline" size={24} color="#FFF" />
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={posts}
         keyExtractor={(item) => item._id}
@@ -920,6 +928,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           />
         }
       />
+
       {/* ══ Edit Name Modal ══ */}
       <BottomSheetModal
         visible={editModal}
@@ -947,6 +956,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           )}
         </TouchableOpacity>
       </BottomSheetModal>
+
       {/* ══ Edit Bio Modal ══ */}
       <BottomSheetModal
         visible={bioModal}
@@ -978,6 +988,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           )}
         </TouchableOpacity>
       </BottomSheetModal>
+
       {/* ══ Three-dot Menu ══ */}
       <Modal
         visible={menuVisible}
@@ -1031,6 +1042,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           </TouchableOpacity>
         </View>
       </Modal>
+
       {/* ══ Edit Post Modal ══ */}
       <BottomSheetModal
         visible={editPostModal}
@@ -1069,6 +1081,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           )}
         </TouchableOpacity>
       </BottomSheetModal>
+
       {/* ══ Comment Modal — slide-up sheet ══ */}
       <Modal
         visible={commentModal}
@@ -1204,7 +1217,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             </View>
           </View>
         </KeyboardAvoidingView>
-      </Modal>{" "}
+      </Modal>
     </View>
   );
 }
@@ -1406,6 +1419,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     backgroundColor: "#F7F8FC",
+    marginBottom: 10,
+  },
+  plainDescription: {
+    fontSize: 14,
+    color: "#555",
+    lineHeight: 21,
     marginBottom: 10,
   },
   postDescription: { fontSize: 14, color: "#555", lineHeight: 21 },

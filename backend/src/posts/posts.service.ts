@@ -92,33 +92,37 @@ export class PostsService {
     return post;
   }
 
-  async update(id: string, userId: string, updatePostDto: UpdatePostDto): Promise<PostDocument> {
-    const post = await this.findOne(id);
-
-   const postUserId = (post.userId as any)?._id?.toString() ?? post.userId.toString();
-    if (postUserId !== userId) {
-      throw new ForbiddenException('You can only edit your own posts');
-    }
-    
-    
-
-    const updatedPost = await this.postModel.findByIdAndUpdate(id, updatePostDto, { new: true }).exec();
-    if (!updatedPost) throw new NotFoundException(`Post with ID ${id} not found`);
-    return updatedPost;
+async update(id: string, userId: string, updatePostDto: UpdatePostDto): Promise<PostDocument> {
+  if (!Types.ObjectId.isValid(id)) {
+    throw new BadRequestException('Invalid post ID');
   }
 
-  async delete(id: string, userId: string): Promise<void> {
-    const post = await this.findOne(id);
+  const post = await this.postModel.findById(id).exec(); // no populate = raw ObjectId
+  if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
 
-    const postUserId = (post.userId as any)?._id?.toString() ?? post.userId.toString();
-    if (postUserId !== userId) {
-      throw new ForbiddenException('You can only delete your own posts');
-    }
-   
-
-    await this.postModel.findByIdAndUpdate(id, { isActive: false }).exec();
+  if (!post.userId || post.userId.toString() !== userId) {
+    throw new ForbiddenException('You can only edit your own posts');
   }
 
+  const updatedPost = await this.postModel.findByIdAndUpdate(id, updatePostDto, { new: true }).exec();
+  if (!updatedPost) throw new NotFoundException(`Post with ID ${id} not found`);
+  return updatedPost;
+}
+
+async delete(id: string, userId: string): Promise<void> {
+  if (!Types.ObjectId.isValid(id)) {
+    throw new BadRequestException('Invalid post ID');
+  }
+
+  const post = await this.postModel.findById(id).exec(); // no populate = raw ObjectId
+  if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+
+  if (!post.userId || post.userId.toString() !== userId) {
+    throw new ForbiddenException('You can only delete your own posts');
+  }
+
+  await this.postModel.findByIdAndUpdate(id, { isActive: false }).exec();
+}
   async approveOrReject(id: string, approvePostDto: ApprovePostDto): Promise<PostDocument> {
     const post = await this.findOne(id);
 
