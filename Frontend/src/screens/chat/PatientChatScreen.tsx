@@ -1,14 +1,8 @@
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  PatientChatScreen.tsx
-//  src/screens/chat/PatientChatScreen.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, Image, KeyboardAvoidingView, Platform,
-  StatusBar, Animated, Alert, ActivityIndicator, AppState,
+  StatusBar, Animated, Alert, ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +17,7 @@ import VoiceRecorder from '../../components/VoiceRecorder';
 
 interface Message {
   _id: string; senderId: string; receiverId: string; conversationId: string;
-  text?: string; fileUrl?: string; fileType?: 'image' | 'document' | 'voice';
+  text?: string; fileUrl?: string; fileType?: 'image' | 'video' | 'document' | 'voice';
   fileName?: string; duration?: number; createdAt: string; read: boolean; isTemp?: boolean;
 }
 interface RouteParams {
@@ -41,6 +35,22 @@ const getMyUserId = async (): Promise<string | null> => {
     if (!str) return null;
     return JSON.parse(str)?._id ?? null;
   } catch { return null; }
+};
+
+const getMimeType = (fileName: string, fileType: string): string => {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (fileType === 'image') {
+    if (ext === 'png')  return 'image/png';
+    if (ext === 'gif')  return 'image/gif';
+    if (ext === 'webp') return 'image/webp';
+    return 'image/jpeg';
+  }
+  if (fileType === 'video') {
+    if (ext === 'mov') return 'video/quicktime';
+    return 'video/mp4';
+  }
+  if (fileType === 'voice') return 'audio/m4a';
+  return 'application/octet-stream';
 };
 
 export default function PatientChatScreen({ route }: Props) {
@@ -66,7 +76,6 @@ export default function PatientChatScreen({ route }: Props) {
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
 
-  // ── Init ONCE ──────────────────────────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -81,9 +90,8 @@ export default function PatientChatScreen({ route }: Props) {
       socketRef.current?.disconnect();
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
     };
-  }, []); // ✅ empty array — runs ONCE only
+  }, []);
 
-  // ── Load history ───────────────────────────────────────────────────────────
   const loadHistory = useCallback(async () => {
     if (!conversationId) { setIsLoading(false); return; }
     try {
@@ -101,7 +109,6 @@ export default function PatientChatScreen({ route }: Props) {
     }
   }, [conversationId]);
 
-  // ── Socket ─────────────────────────────────────────────────────────────────
   const connectSocket = (patId: string) => {
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
@@ -122,7 +129,6 @@ export default function PatientChatScreen({ route }: Props) {
       console.log('❌ Patient socket error:', err.message);
     });
 
-    // ✅ On reconnect — reload history to get missed messages
     socket.on('reconnect', () => {
       console.log('🔄 Patient socket reconnected');
       socket.emit('join_conversation', { conversationId });
@@ -133,14 +139,19 @@ export default function PatientChatScreen({ route }: Props) {
       setMessages(prev => {
         const withoutTemp = prev.filter(m => {
           if (!m.isTemp) return true;
-          return !(m.senderId === msg.senderId && m.text === msg.text && m.fileType === msg.fileType);
+          return !(
+            String(m.senderId)    === String(msg.senderId) &&
+            String(m.text  ?? '') === String(msg.text  ?? '') &&
+            (m.fileType    ?? '') === (msg.fileType     ?? '')
+          );
         });
         if (withoutTemp.some(m => m._id === msg._id)) return withoutTemp;
         return [...withoutTemp, msg];
       });
       scrollToBottom();
-      if (msg.senderId === doctorId)
+      if (String(msg.senderId) === String(doctorId)) {
         socket.emit('mark_read', { messageId: msg._id, conversationId });
+      }
     });
 
     socket.on('user_typing',      ({ userId }: any) => { if (userId === doctorId) setIsDoctorTyping(true); });
@@ -199,9 +210,20 @@ export default function PatientChatScreen({ route }: Props) {
 
   const pickImage = async () => {
     setAttachMenuOpen(false); attachAnim.setValue(0);
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
-    if (!result.canceled && result.assets[0])
-      await uploadAndEmit(result.assets[0].uri, 'image', result.assets[0].fileName || `photo_${Date.now()}.jpg`);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'] as any,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset    = result.assets[0];
+      const isVideo  = asset.type === 'video' ||
+                       (asset.uri ?? '').endsWith('.mp4') ||
+                       (asset.uri ?? '').endsWith('.mov');
+      const fileType = isVideo ? 'video' : 'image';
+      const ext      = (asset.uri ?? '').split('.').pop() || (isVideo ? 'mp4' : 'jpg');
+      const fileName = asset.fileName || `${fileType}_${Date.now()}.${ext}`;
+      await uploadAndEmit(asset.uri, fileType as any, fileName);
+    }
   };
 
   const pickDocument = async () => {
@@ -209,39 +231,91 @@ export default function PatientChatScreen({ route }: Props) {
     const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
     if (result.assets?.[0]) await uploadAndEmit(result.assets[0].uri, 'document', result.assets[0].name);
   };
+const uploadAndEmit = async (
+  uri: string,
+  type: 'image' | 'video' | 'document' | 'voice',
+  name: string,
+  durationSec?: number,
+) => {
+  const myId = patientIdRef.current;
+  if (!myId) return;
+  setUploading(true);
+  try {
+    const getMimeType = (fileName: string, fileType: string): string => {
+      const ext = fileName.split('.').pop()?.toLowerCase();
+      if (fileType === 'image') {
+        if (ext === 'png')  return 'image/png';
+        if (ext === 'gif')  return 'image/gif';
+        if (ext === 'webp') return 'image/webp';
+        return 'image/jpeg';
+      }
+      if (fileType === 'video') {
+        if (ext === 'mov') return 'video/quicktime';
+        return 'video/mp4';
+      }
+      if (fileType === 'voice') return 'audio/m4a';
+      return 'application/octet-stream';
+    };
 
-  const uploadAndEmit = async (uri: string, type: 'image' | 'document' | 'voice', name: string, durationSec?: number) => {
-    const myId = patientIdRef.current;
-    if (!myId) return;
-    setUploading(true);
-    try {
-      const form = new FormData();
-      form.append('file', { uri, name, type: 'application/octet-stream' } as any);
-      form.append('conversationId', conversationId);
-      form.append('receiverId', doctorId);
-      form.append('fileType', type);
-      if (durationSec !== undefined) form.append('duration', String(durationSec));
-      const res = await chatAPI.uploadFile(form);
-      if (res.data.fileUrl) {
-        socketRef.current?.emit('send_message', {
-          conversationId, senderId: myId, receiverId: doctorId,
-          fileUrl: res.data.fileUrl, fileType: type, fileName: name, duration: durationSec,
-        });
-      } else Alert.alert('Upload failed', res.data.message || 'Try again.');
-    } catch { Alert.alert('Upload failed', 'Could not send file.'); }
-    finally { setUploading(false); }
-  };
+    const mimeType = getMimeType(name, type);
+    console.log('[Upload] sending:', { uri, name, type, mimeType });
+
+    // ✅ Pass fileInfo directly — uses fetch under the hood
+    const res = await chatAPI.uploadFile(new FormData(), type, {
+      uri,
+      name,
+      mimeType,
+      conversationId,
+      receiverId: doctorId,
+      duration:   durationSec !== undefined ? String(durationSec) : '0',
+    });
+
+    console.log('[Upload] response:', res.data);
+
+    if (res.data?.fileUrl) {
+      socketRef.current?.emit('send_message', {
+        conversationId,
+        senderId:   myId,
+        receiverId: doctorId,
+        fileUrl:    res.data.fileUrl,
+        fileType:   type,
+        fileName:   name,
+        duration:   durationSec,
+      });
+    } else {
+      Alert.alert('Upload failed', res.data?.message || 'Try again.');
+    }
+  } catch (err: any) {
+    console.error('[Upload] error:', err?.message || err);
+    Alert.alert('Upload failed', err?.message || 'Could not send file.');
+  } finally {
+    setUploading(false);
+  }
+};
 
   const handleVoiceSend   = (audioUri: string, dur: number) => { setShowVoiceRecorder(false); uploadAndEmit(audioUri, 'voice', `voice_${Date.now()}.m4a`, dur); };
   const handleVoiceCancel = () => setShowVoiceRecorder(false);
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.senderId === patientIdRef.current;
+
     const content = () => {
       if (item.fileType === 'voice' && item.fileUrl)
         return <VoicePlayer audioUri={item.fileUrl} duration={item.duration ?? 0} isUserMessage={isMe} />;
+
       if (item.fileType === 'image' && item.fileUrl)
         return <Image source={{ uri: item.fileUrl }} style={styles.msgImage} resizeMode="cover" />;
+
+      if (item.fileType === 'video' && item.fileUrl)
+        return (
+          <TouchableOpacity onPress={() => Alert.alert('Video', item.fileUrl!)} style={styles.videoWrap}>
+            <View style={styles.videoPlaceholder}>
+              <MaterialIcons name="play-circle-filled" size={48} color="#fff" />
+              <Text style={styles.videoLabel} numberOfLines={1}>{item.fileName || 'Video'}</Text>
+            </View>
+          </TouchableOpacity>
+        );
+
       if (item.fileType === 'document')
         return (
           <View style={styles.docRow}>
@@ -251,12 +325,17 @@ export default function PatientChatScreen({ route }: Props) {
             </Text>
           </View>
         );
+
       return <Text style={[styles.msgText, { color: isMe ? '#fff' : '#2C3E50' }]}>{item.text}</Text>;
     };
+
     return (
       <View style={[styles.msgRow, isMe ? styles.rowRight : styles.rowLeft]}>
         {!isMe && (
-          <Image source={doctorAvatar ? { uri: doctorAvatar } : { uri: 'https://i.pravatar.cc/150?img=12' }} style={styles.msgAvatar} />
+          <Image
+            source={doctorAvatar ? { uri: doctorAvatar } : { uri: 'https://i.pravatar.cc/150?img=12' }}
+            style={styles.msgAvatar}
+          />
         )}
         <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem, item.isTemp && { opacity: 0.7 }]}>
           {content()}
@@ -285,7 +364,10 @@ export default function PatientChatScreen({ route }: Props) {
           <MaterialIcons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.avatarWrap}>
-          <Image source={doctorAvatar ? { uri: doctorAvatar } : { uri: 'https://i.pravatar.cc/150?img=12' }} style={styles.headerAvatar} />
+          <Image
+            source={doctorAvatar ? { uri: doctorAvatar } : { uri: 'https://i.pravatar.cc/150?img=12' }}
+            style={styles.headerAvatar}
+          />
           {isDoctorOnline && <View style={styles.onlineDot} />}
         </View>
         <View style={styles.headerTextWrap}>
@@ -327,7 +409,10 @@ export default function PatientChatScreen({ route }: Props) {
         )}
         {isDoctorTyping && (
           <View style={styles.typingRow}>
-            <Image source={doctorAvatar ? { uri: doctorAvatar } : { uri: 'https://i.pravatar.cc/150?img=12' }} style={styles.msgAvatar} />
+            <Image
+              source={doctorAvatar ? { uri: doctorAvatar } : { uri: 'https://i.pravatar.cc/150?img=12' }}
+              style={styles.msgAvatar}
+            />
             <View style={styles.typingBubble}>
               {[dot1, dot2, dot3].map((d, i) => (
                 <Animated.View key={i} style={[styles.typingDot, { transform: [{ translateY: d }] }]} />
@@ -341,7 +426,7 @@ export default function PatientChatScreen({ route }: Props) {
               <View style={[styles.attachIconWrap, { backgroundColor: '#E8F0FE' }]}>
                 <MaterialIcons name="image" size={24} color="#6B7FED" />
               </View>
-              <Text style={styles.attachLabel}>Photo</Text>
+              <Text style={styles.attachLabel}>Photo/Video</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.attachItem} onPress={pickDocument}>
               <View style={[styles.attachIconWrap, { backgroundColor: '#FFF3E0' }]}>
@@ -368,7 +453,10 @@ export default function PatientChatScreen({ route }: Props) {
                 <Ionicons name="send" size={18} color="#fff" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity onPress={() => { setAttachMenuOpen(false); attachAnim.setValue(0); setShowVoiceRecorder(true); }} style={styles.sendBtn}>
+              <TouchableOpacity
+                onPress={() => { setAttachMenuOpen(false); attachAnim.setValue(0); setShowVoiceRecorder(true); }}
+                style={styles.sendBtn}
+              >
                 <MaterialIcons name="mic" size={20} color="#fff" />
               </TouchableOpacity>
             )}
@@ -382,45 +470,48 @@ export default function PatientChatScreen({ route }: Props) {
 const PURPLE = '#6B7FED';
 const WHITE  = '#FFFFFF';
 const styles = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: '#F5F5F5' },
-  header:         { backgroundColor: PURPLE, paddingBottom: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', elevation: 4, shadowColor: PURPLE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8 },
-  backBtn:        { marginRight: 8, padding: 2 },
-  avatarWrap:     { position: 'relative' },
-  headerAvatar:   { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: WHITE },
-  onlineDot:      { position: 'absolute', bottom: 0, right: 0, width: 11, height: 11, borderRadius: 6, backgroundColor: '#4ADE80', borderWidth: 2, borderColor: PURPLE },
-  headerTextWrap: { flex: 1, marginLeft: 10 },
-  headerName:     { color: WHITE, fontSize: 16, fontWeight: '700' },
-  headerStatus:   { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 1 },
-  headerIconBtn:  { padding: 4 },
-  loadingWrap:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText:    { marginTop: 12, fontSize: 14, color: '#888' },
-  emptyWrap:      { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  emptyText:      { marginTop: 12, fontSize: 14, color: '#AAA', textAlign: 'center', lineHeight: 22 },
-  uploadingBar:   { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 6, backgroundColor: '#F0F4FF' },
-  uploadingText:  { fontSize: 12, color: '#6B7FED', fontWeight: '600' },
-  msgList:        { padding: 16, paddingBottom: 8, flexGrow: 1 },
-  msgRow:         { flexDirection: 'row', marginBottom: 12, alignItems: 'flex-end' },
-  rowRight:       { justifyContent: 'flex-end' },
-  rowLeft:        { justifyContent: 'flex-start' },
-  msgAvatar:      { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
-  bubble:         { maxWidth: '74%', borderRadius: 18, paddingHorizontal: 13, paddingTop: 10, paddingBottom: 6 },
-  bubbleMe:       { backgroundColor: PURPLE, borderBottomRightRadius: 4, shadowColor: PURPLE, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 6, elevation: 3 },
-  bubbleThem:     { backgroundColor: WHITE, borderBottomLeftRadius: 4, borderWidth: 1.5, borderColor: '#E8ECFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
-  msgText:        { fontSize: 14.5, lineHeight: 21 },
-  msgImage:       { width: 200, height: 150, borderRadius: 12, marginBottom: 4 },
-  docRow:         { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  docName:        { fontSize: 13, fontWeight: '500', flexShrink: 1 },
-  metaRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 },
-  metaTime:       { fontSize: 10.5 },
-  typingRow:      { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingBottom: 6 },
-  typingBubble:   { flexDirection: 'row', alignItems: 'center', backgroundColor: WHITE, borderRadius: 16, borderBottomLeftRadius: 4, borderWidth: 1.5, borderColor: '#E8ECFF', paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
-  typingDot:      { width: 7, height: 7, borderRadius: 4, backgroundColor: '#B0B3C6' },
-  attachMenu:     { position: 'absolute', bottom: 68, left: 16, backgroundColor: WHITE, borderRadius: 16, padding: 14, flexDirection: 'row', gap: 16, borderWidth: 1, borderColor: '#E8ECFF', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 8 },
-  attachItem:     { alignItems: 'center', gap: 6 },
-  attachIconWrap: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  attachLabel:    { fontSize: 11, color: '#555', fontWeight: '600' },
-  inputBar:       { flexDirection: 'row', alignItems: 'flex-end', backgroundColor: WHITE, paddingHorizontal: 10, paddingVertical: 8, marginHorizontal: 12, marginBottom: Platform.OS === 'ios' ? 26 : 10, borderRadius: 28, borderWidth: 1.5, borderColor: '#E8ECFF', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 3 },
-  inputIconBtn:   { padding: 6, marginRight: 2 },
-  textInput:      { flex: 1, fontSize: 14.5, color: '#2C3E50', maxHeight: 100, paddingTop: 4, paddingBottom: 4 },
-  sendBtn:        { width: 36, height: 36, borderRadius: 18, backgroundColor: PURPLE, alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
+  container:        { flex: 1, backgroundColor: '#F5F5F5' },
+  header:           { backgroundColor: PURPLE, paddingBottom: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', elevation: 4, shadowColor: PURPLE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8 },
+  backBtn:          { marginRight: 8, padding: 2 },
+  avatarWrap:       { position: 'relative' },
+  headerAvatar:     { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: WHITE },
+  onlineDot:        { position: 'absolute', bottom: 0, right: 0, width: 11, height: 11, borderRadius: 6, backgroundColor: '#4ADE80', borderWidth: 2, borderColor: PURPLE },
+  headerTextWrap:   { flex: 1, marginLeft: 10 },
+  headerName:       { color: WHITE, fontSize: 16, fontWeight: '700' },
+  headerStatus:     { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 1 },
+  headerIconBtn:    { padding: 4 },
+  loadingWrap:      { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText:      { marginTop: 12, fontSize: 14, color: '#888' },
+  emptyWrap:        { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
+  emptyText:        { marginTop: 12, fontSize: 14, color: '#AAA', textAlign: 'center', lineHeight: 22 },
+  uploadingBar:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 6, backgroundColor: '#F0F4FF' },
+  uploadingText:    { fontSize: 12, color: '#6B7FED', fontWeight: '600' },
+  msgList:          { padding: 16, paddingBottom: 8, flexGrow: 1 },
+  msgRow:           { flexDirection: 'row', marginBottom: 12, alignItems: 'flex-end' },
+  rowRight:         { justifyContent: 'flex-end' },
+  rowLeft:          { justifyContent: 'flex-start' },
+  msgAvatar:        { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
+  bubble:           { maxWidth: '74%', borderRadius: 18, paddingHorizontal: 13, paddingTop: 10, paddingBottom: 6 },
+  bubbleMe:         { backgroundColor: PURPLE, borderBottomRightRadius: 4, shadowColor: PURPLE, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 6, elevation: 3 },
+  bubbleThem:       { backgroundColor: WHITE, borderBottomLeftRadius: 4, borderWidth: 1.5, borderColor: '#E8ECFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  msgText:          { fontSize: 14.5, lineHeight: 21 },
+  msgImage:         { width: 200, height: 150, borderRadius: 12, marginBottom: 4 },
+  videoWrap:        { borderRadius: 10, overflow: 'hidden', marginBottom: 4 },
+  videoPlaceholder: { width: 200, height: 150, backgroundColor: '#1a1a2e', borderRadius: 10, justifyContent: 'center', alignItems: 'center', gap: 8 },
+  videoLabel:       { color: '#fff', fontSize: 11, maxWidth: 180, textAlign: 'center' },
+  docRow:           { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  docName:          { fontSize: 13, fontWeight: '500', flexShrink: 1 },
+  metaRow:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 },
+  metaTime:         { fontSize: 10.5 },
+  typingRow:        { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingBottom: 6 },
+  typingBubble:     { flexDirection: 'row', alignItems: 'center', backgroundColor: WHITE, borderRadius: 16, borderBottomLeftRadius: 4, borderWidth: 1.5, borderColor: '#E8ECFF', paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
+  typingDot:        { width: 7, height: 7, borderRadius: 4, backgroundColor: '#B0B3C6' },
+  attachMenu:       { position: 'absolute', bottom: 68, left: 16, backgroundColor: WHITE, borderRadius: 16, padding: 14, flexDirection: 'row', gap: 16, borderWidth: 1, borderColor: '#E8ECFF', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 8 },
+  attachItem:       { alignItems: 'center', gap: 6 },
+  attachIconWrap:   { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  attachLabel:      { fontSize: 11, color: '#555', fontWeight: '600' },
+  inputBar:         { flexDirection: 'row', alignItems: 'flex-end', backgroundColor: WHITE, paddingHorizontal: 10, paddingVertical: 8, marginHorizontal: 12, marginBottom: Platform.OS === 'ios' ? 26 : 10, borderRadius: 28, borderWidth: 1.5, borderColor: '#E8ECFF', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 3 },
+  inputIconBtn:     { padding: 6, marginRight: 2 },
+  textInput:        { flex: 1, fontSize: 14.5, color: '#2C3E50', maxHeight: 100, paddingTop: 4, paddingBottom: 4 },
+  sendBtn:          { width: 36, height: 36, borderRadius: 18, backgroundColor: PURPLE, alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
 });

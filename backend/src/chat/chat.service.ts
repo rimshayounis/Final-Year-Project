@@ -1,8 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  src/chat/chat.service.ts
-// ─────────────────────────────────────────────────────────────────────────────
-
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message, MessageDocument } from './schemas/message.schema';
@@ -14,7 +10,7 @@ interface SaveMessageDto {
   receiverId: string;
   text?: string;
   fileUrl?: string;
-  fileType?: 'image' | 'document' | 'voice';
+  fileType?: 'image' | 'video' | 'document' | 'voice';
   fileName?: string;
   duration?: number;
 }
@@ -29,7 +25,6 @@ export class ChatService {
     private readonly conversationModel: Model<ConversationDocument>,
   ) {}
 
-  // ── Save a single message ──────────────────────────────────────────────────
   async saveMessage(dto: SaveMessageDto): Promise<MessageDocument> {
     const msg = new this.messageModel({
       conversationId: new Types.ObjectId(dto.conversationId),
@@ -45,7 +40,6 @@ export class ChatService {
 
     const saved = await msg.save();
 
-    // Update the conversation's preview
     await this.conversationModel.findByIdAndUpdate(dto.conversationId, {
       lastMessage:   dto.text || dto.fileType || 'File',
       lastMessageAt: new Date(),
@@ -55,42 +49,43 @@ export class ChatService {
     return saved;
   }
 
-  // ── Paginated history ──────────────────────────────────────────────────────
-  async getHistory(
-    conversationId: string,
-    page  = 1,
-    limit = 50,
-  ) {
-    const skip  = (page - 1) * limit;
-    const total = await this.messageModel.countDocuments({ conversationId });
+  async getHistory(conversationId: string, page = 1, limit = 50) {
+    const skip      = (page - 1) * limit;
+    const convObjId = new Types.ObjectId(conversationId);
+
+    const total = await this.messageModel
+      .countDocuments({ conversationId: convObjId });
 
     const messages = await this.messageModel
-      .find({ conversationId })
-      .sort({ createdAt: -1 })   // newest first; frontend reverses
+      .find({ conversationId: convObjId })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean()
       .exec();
 
+    const serialized = messages.map(m => ({
+      ...m,
+      _id:            m._id.toString(),
+      conversationId: m.conversationId.toString(),
+      senderId:       m.senderId.toString(),
+      receiverId:     m.receiverId.toString(),
+    }));
+
     return {
-      success:     true,
-      messages,
+      success:    true,
+      messages:   serialized,
       total,
       page,
-      totalPages:  Math.ceil(total / limit),
+      totalPages: Math.ceil(total / limit),
     };
   }
 
-  // ── Mark one message as read ───────────────────────────────────────────────
   async markAsRead(messageId: string): Promise<void> {
     await this.messageModel.findByIdAndUpdate(messageId, { read: true });
   }
 
-  // ── Get or create conversation between two users ───────────────────────────
-  async getOrCreateConversation(
-    userAId: string,
-    userBId: string,
-  ): Promise<ConversationDocument> {
+  async getOrCreateConversation(userAId: string, userBId: string): Promise<ConversationDocument> {
     const a = new Types.ObjectId(userAId);
     const b = new Types.ObjectId(userBId);
 
@@ -110,7 +105,6 @@ export class ChatService {
     return conv;
   }
 
-  // ── All conversations for a user (sorted by last message) ─────────────────
   async getUserConversations(userId: string) {
     return this.conversationModel
       .find({ participants: new Types.ObjectId(userId) })

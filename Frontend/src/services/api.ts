@@ -1,16 +1,12 @@
 import axios from 'axios'
 
 export const API_URL = 'http://192.168.100.47:3000/api';
-
-// ── Base socket URL (no /api suffix) ──────────────────────────────────────────
 export const SOCKET_URL = 'http://192.168.100.47:3000';
 
 const apiClient = axios.create({
   baseURL: API_URL,
   timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
 apiClient.interceptors.request.use(
@@ -18,16 +14,12 @@ apiClient.interceptors.request.use(
     console.log('API Request:', config.method?.toUpperCase(), config.url);
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// In your response error interceptor, ignore 404s silently
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Only log non-404 errors to reduce noise
     if (error.response?.status !== 404) {
       console.error('API Error:', error.response?.data);
       console.error('Status Code:', error.response?.status);
@@ -36,7 +28,6 @@ apiClient.interceptors.response.use(
   }
 );
 
-// ── Booked Appointment ────────────────────────────────────────────────────────
 export interface BookAppointmentData {
   userId: string;
   doctorId: string;
@@ -80,7 +71,6 @@ export const bookedAppointmentAPI = {
     }),
 };
 
-// ── Post ──────────────────────────────────────────────────────────────────────
 export interface CreatePostData {
   userId: string;
   title: string;
@@ -98,7 +88,6 @@ export const postAPI = {
     }),
 };
 
-// ── Auth / User ───────────────────────────────────────────────────────────────
 export interface RegisterData {
   fullName: string;
   age: number;
@@ -143,7 +132,6 @@ export interface SendMessageData {
   fileUrl?: string;
 }
 
-// ── Appointment Availability Interfaces ───────────────────────────────────────
 export interface TimeSlot {
   start: string;
   end: string;
@@ -182,7 +170,6 @@ export interface AvailableSlotsResponse {
   availableSlots: AvailableSlot[];
 }
 
-// ── User API ──────────────────────────────────────────────────────────────────
 export const userAPI = {
   register: (data: RegisterData) =>
     apiClient.post('/users/register', data),
@@ -206,7 +193,6 @@ export const userAPI = {
     apiClient.delete(`/users/${userId}`),
 };
 
-// ── Doctor API ────────────────────────────────────────────────────────────────
 export const doctorAPI = {
   register: (data: FormData) =>
     axios.post(`${API_URL}/doctors/register`, data, {
@@ -227,7 +213,6 @@ export const doctorAPI = {
     apiClient.get(`/doctors/${doctorId}/verification-status`),
 };
 
-// ── Chatbot API ───────────────────────────────────────────────────────────────
 export const chatbotAPI = {
   sendMessage: (data: SendMessageData) =>
     apiClient.post('/chatbot/message', data),
@@ -242,7 +227,6 @@ export const chatbotAPI = {
     apiClient.get(`/chatbot/stats/${userId}`),
 };
 
-// ── Appointment Availability API ──────────────────────────────────────────────
 export const appointmentAPI = {
   createOrUpdateAvailability: (data: CreateAvailabilityData) =>
     apiClient.post('/appointment-availability', data),
@@ -267,26 +251,80 @@ export const appointmentAPI = {
     apiClient.get('/appointment-availability/doctors'),
 };
 
-// ── Chat API ──────────────────────────────────────────────────────────────────
+// ✅ Use fetch instead of axios for file uploads
+// axios has known issues with multipart/form-data in React Native / Expo Go
+const uploadWithFetch = async (
+  url: string,
+  uri: string,
+  name: string,
+  mimeType: string,
+  fields: Record<string, string>,
+): Promise<{ data: any }> => {
+  console.log('[fetch upload] url:', url);
+  console.log('[fetch upload] file:', { uri, name, mimeType });
+
+  const form = new FormData();
+
+  // ✅ Append file with correct structure for React Native
+  form.append('file', {
+    uri,
+    name,
+    type: mimeType,
+  } as any);
+
+  // ✅ Append extra fields
+  Object.entries(fields).forEach(([key, value]) => {
+    form.append(key, value);
+  });
+
+  const response = await fetch(url, {
+    method: 'POST',
+    body: form,
+    // ✅ Do NOT set Content-Type — fetch sets it automatically with boundary
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.error('[fetch upload] server error:', response.status, text);
+    throw new Error(`Server error ${response.status}: ${text}`);
+  }
+
+  const data = await response.json();
+  console.log('[fetch upload] success:', data);
+  return { data };
+};
+
 export const chatAPI = {
-  // Get message history for a conversation
   getHistory: (conversationId: string, page = 1, limit = 50) =>
     apiClient.get(`/chat/history/${conversationId}?page=${page}&limit=${limit}`),
 
-  // ✅ FIXED: userId param add kiya — no JWT needed
   getConversations: (userId: string) =>
     apiClient.get(`/chat/conversations/${userId}`),
 
-  // Get or create a conversation between doctor and patient
   getOrCreateConversation: (doctorId: string, patientId: string) =>
     apiClient.post('/chat/conversation', { doctorId, patientId }),
 
-  // Upload a file (image / document / voice)
-  uploadFile: (formData: FormData) =>
-    axios.post(`${API_URL}/chat/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 60000,
-    }),
+  // ✅ Now uses fetch — fixes Network Error with multipart in Expo Go
+  uploadFile: (
+    formData: FormData,
+    fileType: string,
+    // extra params extracted from formData for fetch
+    fileInfo?: { uri: string; name: string; mimeType: string; conversationId: string; receiverId: string; duration?: string },
+  ) => {
+    if (fileInfo) {
+      const url = `${API_URL}/chat/upload?fileType=${fileType}`;
+      return uploadWithFetch(url, fileInfo.uri, fileInfo.name, fileInfo.mimeType, {
+        conversationId: fileInfo.conversationId,
+        receiverId:     fileInfo.receiverId,
+        duration:       fileInfo.duration ?? '0',
+      });
+    }
+    // fallback to axios if no fileInfo
+    return axios.post(`${API_URL}/chat/upload?fileType=${fileType}`, formData, {
+      headers: { 'Accept': 'application/json' },
+      timeout: 120000,
+    });
+  },
 };
 
 export default apiClient;

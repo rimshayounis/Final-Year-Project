@@ -1,15 +1,6 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  src/chat/chat.gateway.ts
-// ─────────────────────────────────────────────────────────────────────────────
-
 import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
-  MessageBody,
-  ConnectedSocket,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
+  WebSocketGateway, WebSocketServer, SubscribeMessage,
+  MessageBody, ConnectedSocket, OnGatewayConnection, OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
@@ -20,42 +11,30 @@ interface SendMessagePayload {
   receiverId: string;
   text?: string;
   fileUrl?: string;
-  fileType?: string;
+  fileType?: 'image' | 'video' | 'document' | 'voice';
   fileName?: string;
   duration?: number;
 }
 
 @WebSocketGateway({
-  // ✅ Allow all origins — fixes mobile connection drop
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-    credentials: false,
-  },
-  // ✅ Allow both polling AND websocket — mobile needs polling fallback
+  cors: { origin: '*', methods: ['GET', 'POST'], credentials: false },
   transports: ['websocket', 'polling'],
-  // ✅ Increase ping timeout so mobile doesn't disconnect
   pingTimeout: 60000,
   pingInterval: 25000,
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
-  @WebSocketServer()
-  server: Server;
-
+  @WebSocketServer() server: Server;
   private onlineUsers = new Map<string, string>();
 
   constructor(private readonly chatService: ChatService) {}
 
   handleConnection(client: Socket) {
     const userId = client.handshake.query.userId as string;
-    if (!userId) {
-      client.disconnect(true);
-      return;
-    }
+    if (!userId) { client.disconnect(true); return; }
     client.data.userId = userId;
     this.onlineUsers.set(userId, client.id);
     this.server.emit('user_online', { userId });
-    console.log(`[ChatGateway] ✅ connected  userId=${userId}  socket=${client.id}`);
+    console.log(`[ChatGateway] ✅ connected userId=${userId} socket=${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
@@ -63,7 +42,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (userId) {
       this.onlineUsers.delete(userId);
       this.server.emit('user_offline', { userId });
-      console.log(`[ChatGateway] ❌ disconnected  userId=${userId}`);
+      console.log(`[ChatGateway] ❌ disconnected userId=${userId}`);
     }
   }
 
@@ -92,8 +71,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       duration:       data.duration ?? 0,
     });
 
-    this.server.to(data.conversationId).emit('receive_message', saved);
-    return saved;
+    const payload = {
+      _id:            saved._id.toString(),
+      conversationId: saved.conversationId.toString(),
+      senderId:       saved.senderId.toString(),
+      receiverId:     saved.receiverId.toString(),
+      text:           saved.text     ?? undefined,
+      fileUrl:        saved.fileUrl  ?? undefined,
+      fileType:       saved.fileType ?? undefined,
+      fileName:       saved.fileName ?? undefined,
+      duration:       saved.duration ?? 0,
+      createdAt:      (saved as any).createdAt,
+      read:           saved.read,
+    };
+
+    this.server.to(data.conversationId).emit('receive_message', payload);
+    return payload;
   }
 
   @SubscribeMessage('typing')
