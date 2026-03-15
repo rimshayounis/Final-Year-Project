@@ -251,6 +251,14 @@ export class PostsService {
     return post.commentsList || [];
   }
 
+  async countApprovedByDoctor(doctorId: string): Promise<number> {
+    if (!Types.ObjectId.isValid(doctorId)) return 0;
+    return this.postModel.countDocuments({
+      approvedBy: new Types.ObjectId(doctorId),
+      status: 'approved',
+    }).exec();
+  }
+
   async incrementShares(id: string): Promise<PostDocument> {
     const post = await this.postModel
       .findByIdAndUpdate(id, { $inc: { shares: 1 } }, { new: true })

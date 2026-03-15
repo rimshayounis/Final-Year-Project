@@ -39,6 +39,12 @@ interface PostAuthor {
   email?: string;
   profileImage?: string;
 }
+interface DoctorInfo {
+  _id: string;
+  fullName: string;
+  profileImage?: string;
+  specialization?: string;
+}
 interface Post {
   _id: string;
   title: string;
@@ -54,10 +60,14 @@ interface Post {
   rejectionReason?: string;
   commentsList?: Comment[];
   userId?: PostAuthor | string;
-  approvedBy?: string | null;
+  approvedBy?: string | { _id: string; fullName: string } | null;
   approvedAt?: string | null;
 }
-type FeedScreenProps = { id: string; role: "user" | "doctor" };
+type FeedScreenProps = {
+  id: string;
+  role: "user" | "doctor";
+  onNavigateToDoctorProfile?: (doctorId: string) => void;
+};
 
 /* ── Reject Modal ── */
 function RejectModal({
@@ -183,7 +193,11 @@ const rm = StyleSheet.create({
 });
 
 /* ── Main Screen ── */
-export default function FeedScreen({ id, role }: FeedScreenProps) {
+export default function FeedScreen({
+  id,
+  role,
+  onNavigateToDoctorProfile,
+}: FeedScreenProps) {
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -207,6 +221,12 @@ export default function FeedScreen({ id, role }: FeedScreenProps) {
   );
   const [doctorIds, setDoctorIds] = useState<Set<string>>(new Set());
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({});
+  // Verified-by doctor info cache: doctorId → DoctorInfo
+  const [doctorInfoCache, setDoctorInfoCache] = useState<
+    Record<string, DoctorInfo>
+  >({});
+  // Which post has the verified-by dropdown open
+  const [verifiedDropdown, setVerifiedDropdown] = useState<string | null>(null);
 
   const categories = [
     "All",
@@ -222,6 +242,40 @@ export default function FeedScreen({ id, role }: FeedScreenProps) {
     { key: "pending", label: "Pending", color: "#F6A623" },
     { key: "approved", label: "Approved", color: "#00B374" },
   ];
+
+  /* ── Fetch doctor info for verified-by ── */
+  const fetchDoctorInfo = async (
+    doctorId: string,
+  ): Promise<DoctorInfo | null> => {
+    if (doctorInfoCache[doctorId]) return doctorInfoCache[doctorId];
+    try {
+      const r = await apiClient.get(`/doctors/${doctorId}`);
+      const d = r.data?.doctor ?? r.data?.data ?? r.data;
+      if (!d?.fullName) return null;
+      // Fetch profile image
+      let profileImage: string | undefined;
+      try {
+        const pr = await apiClient.get(`/profiles/doctor/${doctorId}`);
+        const imgPath = pr.data?.data?.profileImage;
+        if (imgPath) {
+          const base = API_URL.replace("/api", "");
+          profileImage = imgPath.startsWith("http") ? imgPath : base + imgPath;
+        }
+      } catch {
+        /* no image */
+      }
+      const info: DoctorInfo = {
+        _id: doctorId,
+        fullName: d.fullName,
+        profileImage,
+        specialization: d.doctorProfile?.specialization,
+      };
+      setDoctorInfoCache((prev) => ({ ...prev, [doctorId]: info }));
+      return info;
+    } catch {
+      return null;
+    }
+  };
 
   const fetchPosts = async () => {
     try {
@@ -257,7 +311,6 @@ export default function FeedScreen({ id, role }: FeedScreenProps) {
         list = (await apiClient.get(url)).data.data || [];
       }
 
-      // Resolve author info
       const uniqueIds = [
         ...new Set(
           list
@@ -330,7 +383,7 @@ export default function FeedScreen({ id, role }: FeedScreenProps) {
               });
 
       setPosts(filtered);
-    } catch (e: any) {
+    } catch {
       Alert.alert("Error", "Failed to load feed");
     } finally {
       setLoading(false);
@@ -556,6 +609,92 @@ export default function FeedScreen({ id, role }: FeedScreenProps) {
     });
   };
 
+  /* ── Get approvedBy doctor ID ── */
+  const getApprovedById = (post: Post): string | null => {
+    if (!post.approvedBy) return null;
+    if (typeof post.approvedBy === "string") return post.approvedBy;
+    if (typeof post.approvedBy === "object")
+      return (post.approvedBy as any)?._id ?? null;
+    return null;
+  };
+
+  /* ── Verified By Button + Dropdown ── */
+  const VerifiedBySection = ({ post }: { post: Post }) => {
+    const doctorId = getApprovedById(post);
+    if (!doctorId || post.status !== "approved") return null;
+
+    const isOpen = verifiedDropdown === post._id;
+    const info = doctorInfoCache[doctorId];
+    const base = API_URL.replace("/api", "");
+
+    const handlePress = async () => {
+      if (isOpen) {
+        setVerifiedDropdown(null);
+        return;
+      }
+      setVerifiedDropdown(post._id);
+      if (!info) await fetchDoctorInfo(doctorId);
+    };
+
+    return (
+      <View style={s.verifiedWrap}>
+        <TouchableOpacity style={s.verifiedBtn} onPress={handlePress}>
+          <Ionicons name="shield-checkmark" size={13} color="#00B374" />
+          <Text style={s.verifiedBtnText}>{"Verified by a Doctor"}</Text>
+          <Ionicons
+            name={isOpen ? "chevron-up" : "chevron-down"}
+            size={13}
+            color="#00B374"
+          />
+        </TouchableOpacity>
+
+        {isOpen ? (
+          <View style={s.verifiedDropdown}>
+            {info ? (
+              <TouchableOpacity
+                style={s.verifiedDoctorRow}
+                onPress={() => {
+                  setVerifiedDropdown(null);
+                  if (onNavigateToDoctorProfile)
+                    onNavigateToDoctorProfile(doctorId);
+                }}
+              >
+                <View style={s.verifiedAvatar}>
+                  {info.profileImage ? (
+                    <Image
+                      source={{ uri: info.profileImage }}
+                      style={s.verifiedAvatarImg}
+                    />
+                  ) : (
+                    <Text style={s.verifiedAvatarText}>
+                      {info.fullName.charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.verifiedDoctorName}>
+                    {"Dr. " + info.fullName}
+                  </Text>
+                  {info.specialization ? (
+                    <Text style={s.verifiedDoctorSpec}>
+                      {info.specialization}
+                    </Text>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#888" />
+              </TouchableOpacity>
+            ) : (
+              <View style={s.verifiedLoading}>
+                <ActivityIndicator size="small" color="#6B7FED" />
+                <Text style={s.verifiedLoadingText}>{"Loading..."}</Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
   /* ── Post Card ── */
   const renderPost = ({ item }: { item: Post }) => {
     const isLiked = likedPosts.has(item._id);
@@ -688,6 +827,9 @@ export default function FeedScreen({ id, role }: FeedScreenProps) {
           </View>
         ) : null}
 
+        {/* Verified by doctor */}
+        <VerifiedBySection post={item} />
+
         <View style={s.statsRow}>
           <View style={s.statsLeft}>
             {item.likes > 0 ? (
@@ -759,7 +901,6 @@ export default function FeedScreen({ id, role }: FeedScreenProps) {
   /* ── List Header ── */
   const ListHeader = () => (
     <View style={s.filterWrap}>
-      {/* Segmented: All | Users | Professionals */}
       <View style={s.segment}>
         {[
           { k: "All", l: "All" },
@@ -782,8 +923,6 @@ export default function FeedScreen({ id, role }: FeedScreenProps) {
           </TouchableOpacity>
         ))}
       </View>
-
-      {/* Status pills — doctor only, hidden for professionals */}
       {role === "doctor" && selectedAuthorType !== "professionals" ? (
         <View style={s.statusRow}>
           {STATUS_TABS.map(({ key, label, color }) => (
@@ -810,8 +949,6 @@ export default function FeedScreen({ id, role }: FeedScreenProps) {
           ))}
         </View>
       ) : null}
-
-      {/* Category chips */}
       {role !== "doctor" || selectedStatus !== "pending" ? (
         <ScrollView
           horizontal
@@ -1067,8 +1204,6 @@ const s = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
-
-  // Filter
   filterWrap: {
     backgroundColor: "#FFF",
     marginBottom: 8,
@@ -1127,8 +1262,6 @@ const s = StyleSheet.create({
   catFilterActive: { backgroundColor: "#6B7FED", borderColor: "#6B7FED" },
   catFilterText: { fontSize: 12, fontWeight: "600", color: "#888" },
   catFilterTextActive: { color: "#FFF" },
-
-  // Post card
   postCard: {
     backgroundColor: "#FFF",
     marginBottom: 8,
@@ -1258,6 +1391,57 @@ const s = StyleSheet.create({
   },
   mediaContainer: { marginBottom: 10, borderRadius: 12, overflow: "hidden" },
   mediaImage: { width: "100%", height: 220, borderRadius: 12, marginBottom: 6 },
+
+  // Verified by section
+  verifiedWrap: { marginBottom: 10 },
+  verifiedBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    backgroundColor: "#F0FFF8",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#B2EED6",
+  },
+  verifiedBtnText: { fontSize: 11, fontWeight: "700", color: "#00B374" },
+  verifiedDropdown: {
+    marginTop: 8,
+    backgroundColor: "#F8FFFC",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#C8F0DF",
+    overflow: "hidden",
+  },
+  verifiedDoctorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    gap: 12,
+  },
+  verifiedAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#6B7FED",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  verifiedAvatarImg: { width: 44, height: 44, borderRadius: 22 },
+  verifiedAvatarText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
+  verifiedDoctorName: { fontSize: 14, fontWeight: "700", color: "#1A1D2E" },
+  verifiedDoctorSpec: { fontSize: 12, color: "#00B374", marginTop: 2 },
+  verifiedLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    gap: 10,
+  },
+  verifiedLoadingText: { fontSize: 13, color: "#888" },
+
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1288,8 +1472,6 @@ const s = StyleSheet.create({
     gap: 6,
   },
   actionLabel: { fontSize: 13, color: "#666", fontWeight: "600" },
-
-  // Comment modal
   cmBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
   cmSheet: {
     backgroundColor: "#FFF",
