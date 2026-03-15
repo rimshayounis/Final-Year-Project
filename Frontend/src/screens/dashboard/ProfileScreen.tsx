@@ -63,11 +63,22 @@ interface UserProfile {
   profileImage?: string;
   bio?: string;
   userType?: string;
+  specialization?: string;
 }
 
 type ProfileScreenProps = {
   id: string;
   role?: "user" | "doctor";
+  onBack?: () => void;
+  onBookAppointment?: (doctor: {
+    _id: string;
+    fullName: string;
+    specialization: string;
+    email: string;
+    profileImage?: string;
+  }) => void;
+  onCreateAppointment?: () => void;
+  onOpenSettings?: () => void;
 };
 
 /* ── Keyboard-aware bottom sheet modal ── */
@@ -138,7 +149,7 @@ const bsStyles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "700", color: "#1A1D2E" },
 });
 
-export default function ProfileScreen({ id, role }: ProfileScreenProps) {
+export default function ProfileScreen({ id, role, onBack, onBookAppointment, onCreateAppointment, onOpenSettings }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,6 +157,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [approvedByDoctorCount, setApprovedByDoctorCount] = useState<number>(0);
 
   // Name edit
   const [editModal, setEditModal] = useState(false);
@@ -200,7 +212,12 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
         // No profile doc yet — fine, will be created on first save
       }
 
-      const merged = { ...data, bio, profileImage };
+      const merged = {
+        ...data,
+        bio,
+        profileImage,
+        specialization: data.doctorProfile?.specialization ?? data.specialization,
+      };
       setUserProfile(merged);
       setEditName(merged?.fullName ?? "");
       setBioText(merged?.bio ?? "");
@@ -221,11 +238,22 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     }
   };
 
+  const fetchApprovedByCount = async () => {
+    try {
+      const res = await apiClient.get(`/posts/approved-by/${id}/count`);
+      const count = res.data?.data?.count;
+      setApprovedByDoctorCount(typeof count === "number" ? count : 0);
+    } catch (e: any) {
+      console.error("fetchApprovedByCount error:", e?.response?.status, e?.response?.data ?? e?.message);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
       fetchProfile();
       fetchUserPosts();
+      if (role === "doctor") fetchApprovedByCount();
     }, [id]),
   );
 
@@ -233,6 +261,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     setRefreshing(true);
     fetchProfile();
     fetchUserPosts();
+    if (role === "doctor") fetchApprovedByCount();
   };
 
   /* ── Save name ── */
@@ -294,7 +323,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
         const res = await apiClient.put(
           `/profiles/${ownerType}/${id}/image`,
           formData,
-          { headers: { "Content-Type": "multipart/form-data" } },
+          { headers: { "Content-Type": undefined } },
         );
         const savedPath = res.data?.data?.profileImage;
         const baseUrl = API_URL.replace("/api", "");
@@ -549,6 +578,13 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     });
   };
 
+  /* ── Display name: first letter capital only; doctors get "Dr." prefix ── */
+  const displayName = (name?: string, fallback = "—") => {
+    if (!name) return fallback;
+    const capitalized = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+    return role === "doctor" ? `Dr. ${capitalized}` : capitalized;
+  };
+
   const publishedCount = posts.filter((p) => p.status === "approved").length;
   const pendingCount = posts.filter((p) => p.status === "pending").length;
 
@@ -587,7 +623,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           <View style={styles.nameStatsCol}>
             <View style={styles.nameRow}>
               <Text style={styles.profileName} numberOfLines={1}>
-                {userProfile?.fullName?.toUpperCase() ?? "—"}
+                {displayName(userProfile?.fullName)}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -614,15 +650,24 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
                 <Text style={styles.statLabel}>Posts</Text>
               </View>
               <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statNum}>{pendingCount}</Text>
-                <Text style={styles.statLabel}>Pending</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statNum}>{publishedCount}</Text>
-                <Text style={styles.statLabel}>Published</Text>
-              </View>
+              {role === "doctor" ? (
+                <View style={styles.statItem}>
+                  <Text style={styles.statNum}>{approvedByDoctorCount}</Text>
+                  <Text style={styles.statLabel}>Approved</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNum}>{pendingCount}</Text>
+                    <Text style={styles.statLabel}>Pending</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNum}>{publishedCount}</Text>
+                    <Text style={styles.statLabel}>Published</Text>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </View>
@@ -667,6 +712,36 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             ) : null}
           </View>
         </View>
+
+        {/* Book Appointment — only shown to users viewing a doctor profile */}
+        {onBookAppointment ? (
+          <TouchableOpacity
+            style={styles.bookBtn}
+            onPress={() =>
+              onBookAppointment({
+                _id: id,
+                fullName: userProfile?.fullName ?? "",
+                specialization: userProfile?.specialization ?? "",
+                email: userProfile?.email ?? "",
+                profileImage: userProfile?.profileImage,
+              })
+            }
+          >
+            <Ionicons name="calendar-outline" size={18} color="#FFF" />
+            <Text style={styles.bookBtnText}>Book Appointment</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {/* Create Appointments — only shown to doctor on their own profile */}
+        {onCreateAppointment ? (
+          <TouchableOpacity
+            style={styles.createAppointmentBtn}
+            onPress={onCreateAppointment}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#6B7FED" />
+            <Text style={styles.createAppointmentBtnText}>Create Appointments</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Activity header */}
@@ -724,7 +799,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             <View style={styles.postAvatar}>{avatarEl}</View>
             <View style={{ flex: 1 }}>
               <Text style={styles.postAuthorName}>
-                {userProfile?.fullName?.toUpperCase() ?? "YOU"}
+                {displayName(userProfile?.fullName, "You")}
               </Text>
               <View style={styles.postMeta}>
                 <Text style={styles.postTime}>
@@ -919,13 +994,21 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
 
       {/* ── Sticky Top Nav ── */}
-      <View style={[styles.topNav, { paddingTop: insets.top + 10 }]}>
-        <Text style={styles.topNavTitle}>
-          {userProfile?.fullName?.toUpperCase() || "PROFILE"}
-        </Text>
-        <TouchableOpacity>
-          <Ionicons name="settings-outline" size={24} color="#FFF" />
-        </TouchableOpacity>
+      <View style={[styles.topNav, { paddingTop: insets.top + 4 }]}>
+        {onBack ? (
+          <TouchableOpacity onPress={onBack}>
+            <Ionicons name="arrow-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 24 }} />
+        )}
+        {onBack ? (
+          <View style={{ width: 24 }} />
+        ) : (
+          <TouchableOpacity onPress={onOpenSettings}>
+            <Ionicons name="settings-outline" size={24} color="#FFF" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <FlatList
@@ -1264,7 +1347,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingBottom: 18,
+    paddingBottom: 8,
   },
   topNavTitle: {
     fontSize: 20,
@@ -1280,6 +1363,38 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 20,
     marginBottom: 8,
+  },
+  bookBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#6B7FED",
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginTop: 16,
+    gap: 8,
+  },
+  bookBtnText: {
+    color: "#FFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  createAppointmentBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginTop: 10,
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: "#6B7FED",
+    backgroundColor: "#F0F3FF",
+  },
+  createAppointmentBtnText: {
+    color: "#6B7FED",
+    fontSize: 15,
+    fontWeight: "700",
   },
   profileTopRow: {
     flexDirection: "row",
