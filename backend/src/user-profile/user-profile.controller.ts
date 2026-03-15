@@ -1,9 +1,17 @@
-import { Controller, Get, Put, Param, Body, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Param,
+  Body,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { UserProfileService } from './user-profile.service';
-import { UpdateUserProfileDto } from './dto/user-profile.dto';
 
 @Controller('profiles')
 export class UserProfileController {
@@ -17,22 +25,18 @@ export class UserProfileController {
   ) {
     const type = ownerType === 'doctor' ? 'Doctor' : 'User';
     const profile = await this.profileService.getProfile(ownerId, type);
-    return { success: true, data: profile ?? { ownerId, ownerType: type, bio: null, profileImage: null } };
+    return {
+      success: true,
+      data: profile ?? {
+        ownerId,
+        ownerType: type,
+        bio: null,
+        profileImage: null,
+      },
+    };
   }
 
-  // PUT /profiles/:ownerType/:ownerId — update bio
- @Put(':ownerType/:ownerId')
-async updateProfile(
-  @Param('ownerId') ownerId: string,
-  @Param('ownerType') ownerType: string,
-  @Body() dto: UpdateUserProfileDto,
-) {
-  console.log('updateProfile called:', ownerId, ownerType, dto); // ← add this
-  const type = ownerType === 'doctor' ? 'Doctor' : 'User';
-  const profile = await this.profileService.upsertProfile(ownerId, type, dto);
-  return { success: true, data: profile };
-}
-
+  // ⚠️ MUST come BEFORE PUT :ownerType/:ownerId
   // PUT /profiles/:ownerType/:ownerId/image — upload profile image
   @Put(':ownerType/:ownerId/image')
   @UseInterceptors(
@@ -61,7 +65,26 @@ async updateProfile(
     if (!file) throw new BadRequestException('No file uploaded');
     const type = ownerType === 'doctor' ? 'Doctor' : 'User';
     const imageUrl = `/uploads/profiles/${file.filename}`;
-    const profile = await this.profileService.upsertProfile(ownerId, type, { profileImage: imageUrl });
+    const profile = await this.profileService.upsertProfile(ownerId, type, {
+      profileImage: imageUrl,
+    });
+    return { success: true, data: profile };
+  }
+
+  // PUT /profiles/:ownerType/:ownerId — update bio or other fields
+  // Uses plain body object (not DTO class) to avoid whitelist stripping fields
+  @Put(':ownerType/:ownerId')
+  async updateProfile(
+    @Param('ownerId') ownerId: string,
+    @Param('ownerType') ownerType: string,
+    @Body() body: { bio?: string; profileImage?: string },
+  ) {
+    const type = ownerType === 'doctor' ? 'Doctor' : 'User';
+    const profile = await this.profileService.upsertProfile(
+      ownerId,
+      type,
+      body,
+    );
     return { success: true, data: profile };
   }
 }

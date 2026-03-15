@@ -95,6 +95,12 @@ export class PostsController {
   }
 
   // ⚠️ MUST be before @Get(':id') ──────────────────────────────────
+  @Get('approved-by/:doctorId/count')
+  async countApprovedByDoctor(@Param('doctorId') doctorId: string) {
+    const count = await this.postsService.countApprovedByDoctor(doctorId);
+    return { success: true, data: { count } };
+  }
+
   @Get(':id/comments')
   async getComments(@Param('id') id: string) {
     const comments = await this.postsService.getComments(id);

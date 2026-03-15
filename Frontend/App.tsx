@@ -17,6 +17,7 @@ import DoctorCreateAppointmentScreen from './src/screens/doctors/DoctorCreateApp
 import DoctorAppointmentDetailScreen from './src/screens/dashboard/Doctorappointmentdetailscreen';
 import PatientChatScreen from './src/screens/chat/PatientChatScreen';
 import DoctorChatScreen from './src/screens/chat/DoctorChatScreen';
+import SettingsScreen from './src/screens/dashboard/SettingsScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -33,7 +34,8 @@ export type RootStackParamList = {
   };
   BookAppointments: undefined;
   userSession: undefined;
-  CreateAppointment: undefined;
+  CreateAppointment: { doctorId: string };
+  Settings: { id: string; role: 'user' | 'doctor' };
   DoctorAppointmentDetail: {
     doctor: {
       _id: string;
@@ -91,6 +93,7 @@ export default function App() {
           <Stack.Screen name="DoctorAppointmentDetail" component={DoctorAppointmentDetailScreen} />
           <Stack.Screen name="DoctorChat"           component={DoctorChatScreen} />
           <Stack.Screen name="PatientChat"          component={PatientChatScreen} />
+          <Stack.Screen name="Settings"             component={SettingsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
