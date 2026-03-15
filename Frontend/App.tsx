@@ -14,7 +14,9 @@ import UserDashboardScreen from './src/screens/dashboard/UserDashboardScreen';
 import BookAppointment from './src/screens/dashboard/BookAppointment';
 import UserSession from './src/screens/dashboard/UserSession';
 import DoctorCreateAppointmentScreen from './src/screens/doctors/DoctorCreateAppointmentScreen';
-import DoctorAppointmentDetailScreen from './src/screens/dashboard/Doctorappointmentdetailscreen'
+import DoctorAppointmentDetailScreen from './src/screens/dashboard/Doctorappointmentdetailscreen';
+import PatientChatScreen from './src/screens/chat/PatientChatScreen';
+import DoctorChatScreen from './src/screens/chat/DoctorChatScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -25,25 +27,40 @@ export type RootStackParamList = {
   DoctorUnverified: { doctorId: string; doctorName: string };
   HealthProfile: { userId: string };
   EmergencyContact: { userId: string };
- Dashboard: {
-  id: string;
-  role: 'user' | 'doctor';
-};
-  BookAppointments: undefined; 
-  userSession:undefined;
-  CreateAppointment:undefined;
- DoctorAppointmentDetail: {
-  doctor: {
-    _id: string;
-    fullName: string;
-    specialization: string;
-    email: string;
-    profileImage?: string;
-    consultationFee?: number;
-    sessionDuration?: number;
+  Dashboard: {
+    id: string;
+    role: 'user' | 'doctor';
   };
-  userId: string;
-};
+  BookAppointments: undefined;
+  userSession: undefined;
+  CreateAppointment: undefined;
+  DoctorAppointmentDetail: {
+    doctor: {
+      _id: string;
+      fullName: string;
+      specialization: string;
+      email: string;
+      profileImage?: string;
+      consultationFee?: number;
+      sessionDuration?: number;
+    };
+    userId: string;
+  };
+
+  // ── Chat screens ────────────────────────────────────────────────────────────
+  DoctorChat: {
+    patientId: string;
+    patientName: string;
+    patientAvatar?: string;
+    conversationId: string;
+  };
+  PatientChat: {
+    doctorId: string;
+    doctorName: string;
+    doctorAvatar?: string;
+    doctorSpecialty?: string;
+    conversationId: string;
+  };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -56,23 +73,24 @@ export default function App() {
           initialRouteName="Splash"
           screenOptions={{
             headerShown: false,
-            animation: 'slide_from_right'
+            animation: 'slide_from_right',
           }}
         >
-          <Stack.Screen name="Splash" component={SplashScreen} />
-          <Stack.Screen name="LoginType" component={LoginTypeScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
-          <Stack.Screen name="CreateDoctorAccount" component={CreateDoctorAccountScreen} />
-          <Stack.Screen name="DoctorUnverified" component={DoctorPendingScreen} /> 
-          <Stack.Screen name="HealthProfile" component={HealthProfileScreen} />
-          <Stack.Screen name="EmergencyContact" component={EmergencyContactScreen} />
-          <Stack.Screen name="Dashboard" component={UserDashboardScreen} />
-          <Stack.Screen name='BookAppointments' component={BookAppointment}/>
-          <Stack.Screen name='userSession' component={UserSession}/>
-          <Stack.Screen name='CreateAppointment' component={DoctorCreateAppointmentScreen}/>
+          <Stack.Screen name="Splash"               component={SplashScreen} />
+          <Stack.Screen name="LoginType"            component={LoginTypeScreen} />
+          <Stack.Screen name="Login"                component={LoginScreen} />
+          <Stack.Screen name="CreateAccount"        component={CreateAccountScreen} />
+          <Stack.Screen name="CreateDoctorAccount"  component={CreateDoctorAccountScreen} />
+          <Stack.Screen name="DoctorUnverified"     component={DoctorPendingScreen} />
+          <Stack.Screen name="HealthProfile"        component={HealthProfileScreen} />
+          <Stack.Screen name="EmergencyContact"     component={EmergencyContactScreen} />
+          <Stack.Screen name="Dashboard"            component={UserDashboardScreen} />
+          <Stack.Screen name="BookAppointments"     component={BookAppointment} />
+          <Stack.Screen name="userSession"          component={UserSession} />
+          <Stack.Screen name="CreateAppointment"    component={DoctorCreateAppointmentScreen} />
           <Stack.Screen name="DoctorAppointmentDetail" component={DoctorAppointmentDetailScreen} />
-
+          <Stack.Screen name="DoctorChat"           component={DoctorChatScreen} />
+          <Stack.Screen name="PatientChat"          component={PatientChatScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
