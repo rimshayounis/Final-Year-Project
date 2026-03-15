@@ -17,6 +17,8 @@
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/native-stack": "^6.11.0",
     "axios": "^1.7.9",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "expo": "~54.0.0",
     "expo-audio": "^1.1.1",
     "expo-av": "~16.0.8",

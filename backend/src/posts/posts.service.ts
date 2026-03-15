@@ -15,15 +15,57 @@ import { ApprovePostDto } from './dto/approve-post.dto';
 export class PostsService {
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
+    @InjectModel('User') private userModel: Model<any>,
+    @InjectModel('Doctor') private doctorModel: Model<any>,
   ) {}
+
+  // ── Populate userId from User first, then Doctor for unpopulated posts ──
+  // ── Populate userId using refPath (works for both User and Doctor) ──
+  private async populateAuthors(posts: PostDocument[]): Promise<PostDocument[]> {
+    // Ensure userModel is set correctly before populating
+    // Old posts may have wrong userModel - fix on the fly
+    for (const post of posts) {
+      if (!(post as any).userModel) {
+        (post as any).userModel = 'User';
+      }
+    }
+
+    // First pass: populate with refPath
+    await this.postModel.populate(posts, {
+      path: 'userId',
+      select: 'fullName email profileImage',
+    });
+
+    // Second pass: for any post where userId.fullName is still null,
+    // the userModel was wrong — try Doctor collection explicitly
+    const stillUnpopulated = posts.filter(
+      (p) => p.userId && !(p.userId as any)?.fullName,
+    );
+
+    if (stillUnpopulated.length > 0) {
+      // Override userModel to Doctor and re-populate
+      for (const post of stillUnpopulated) {
+        (post as any).userModel = 'Doctor';
+      }
+      await this.postModel.populate(stillUnpopulated, {
+        path: 'userId',
+        select: 'fullName email profileImage',
+        model: 'Doctor',
+      });
+    }
+
+    return posts;
+  }
+
 
   async create(createPostDto: CreatePostDto, mediaUrls: string[] = []): Promise<PostDocument> {
     try {
       const post = new this.postModel({
         ...createPostDto,
         userId: new Types.ObjectId(createPostDto.userId),
+        userModel: createPostDto.userModel || 'User', // 'Doctor' for doctor posts
         mediaUrls: mediaUrls,
-        status: 'pending',
+        status: createPostDto.status || 'pending',
       });
       return await post.save();
     } catch (error) {
@@ -41,9 +83,11 @@ export class PostsService {
     const skip = (page - 1) * limit;
 
     const [posts, total] = await Promise.all([
-      this.postModel.find(query).populate('userId', 'fullName email profileImage').sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.postModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
       this.postModel.countDocuments(query),
     ]);
+
+    await this.populateAuthors(posts);
 
     return { posts, total, page, totalPages: Math.ceil(total / limit) };
   }
@@ -70,9 +114,11 @@ export class PostsService {
     const skip = (page - 1) * limit;
 
     const [posts, total] = await Promise.all([
-      this.postModel.find({ status: 'pending', isActive: true }).populate('userId', 'fullName email profileImage').sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.postModel.find({ status: 'pending', isActive: true }).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
       this.postModel.countDocuments({ status: 'pending', isActive: true }),
     ]);
+
+    await this.populateAuthors(posts);
 
     return { posts, total, page, totalPages: Math.ceil(total / limit) };
   }
@@ -84,52 +130,49 @@ export class PostsService {
 
     const post = await this.postModel
       .findById(id)
-      .populate('userId', 'fullName email profileImage')
       .populate('approvedBy', 'fullName email')
       .exec();
 
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+
+    await this.populateAuthors([post]);
+
     return post;
   }
 
-async update(id: string, userId: string, updatePostDto: UpdatePostDto): Promise<PostDocument> {
-  if (!Types.ObjectId.isValid(id)) {
-    throw new BadRequestException('Invalid post ID');
-  }
-
-  const post = await this.postModel.findById(id).exec(); // no populate = raw ObjectId
-  if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
-
-  if (!post.userId || post.userId.toString() !== userId) {
-    throw new ForbiddenException('You can only edit your own posts');
-  }
-
-  const updatedPost = await this.postModel.findByIdAndUpdate(id, updatePostDto, { new: true }).exec();
-  if (!updatedPost) throw new NotFoundException(`Post with ID ${id} not found`);
-  return updatedPost;
-}
-
-async delete(id: string, userId: string): Promise<void> {
-  if (!Types.ObjectId.isValid(id)) {
-    throw new BadRequestException('Invalid post ID');
-  }
-
-  const post = await this.postModel.findById(id).exec(); // no populate = raw ObjectId
-  if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
-
-  if (!post.userId || post.userId.toString() !== userId) {
-    throw new ForbiddenException('You can only delete your own posts');
-  }
-
-  await this.postModel.findByIdAndUpdate(id, { isActive: false }).exec();
-}
-  async approveOrReject(id: string, approvePostDto: ApprovePostDto): Promise<PostDocument> {
-    const post = await this.findOne(id);
-
-    if (post.status !== 'pending') {
-      throw new BadRequestException('This post has already been reviewed');
+  async update(id: string, userId: string, updatePostDto: UpdatePostDto): Promise<PostDocument> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid post ID');
     }
 
+    const post = await this.postModel.findById(id).exec();
+    if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+
+    if (!post.userId || post.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only edit your own posts');
+    }
+
+    const updatedPost = await this.postModel.findByIdAndUpdate(id, updatePostDto, { new: true }).exec();
+    if (!updatedPost) throw new NotFoundException(`Post with ID ${id} not found`);
+    return updatedPost;
+  }
+
+  async delete(id: string, userId: string): Promise<void> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid post ID');
+    }
+
+    const post = await this.postModel.findById(id).exec();
+    if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+
+    if (!post.userId || post.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only delete your own posts');
+    }
+
+    await this.postModel.findByIdAndUpdate(id, { isActive: false }).exec();
+  }
+
+  async approveOrReject(id: string, approvePostDto: ApprovePostDto): Promise<PostDocument> {
     const updateData: any = {
       status: approvePostDto.action,
       approvedBy: new Types.ObjectId(approvePostDto.doctorId),
@@ -142,11 +185,13 @@ async delete(id: string, userId: string): Promise<void> {
 
     const updatedPost = await this.postModel
       .findByIdAndUpdate(id, updateData, { new: true })
-      .populate('userId', 'fullName email')
       .populate('approvedBy', 'fullName email')
       .exec();
 
     if (!updatedPost) throw new NotFoundException(`Post with ID ${id} not found`);
+
+    await this.populateAuthors([updatedPost]);
+
     return updatedPost;
   }
 
@@ -158,7 +203,14 @@ async delete(id: string, userId: string): Promise<void> {
     return post;
   }
 
-  // ── FIXED: two-step update to handle missing commentsList on old posts ──
+  async decrementLikes(id: string): Promise<PostDocument> {
+    const post = await this.postModel
+      .findByIdAndUpdate(id, { $inc: { likes: -1 } }, { new: true })
+      .exec();
+    if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+    return post;
+  }
+
   async addComment(
     id: string,
     userId: string,
@@ -173,20 +225,15 @@ async delete(id: string, userId: string): Promise<void> {
       createdAt: new Date(),
     };
 
-    // Step 1: initialize commentsList if it doesn't exist on this document
     await this.postModel.updateOne(
       { _id: new Types.ObjectId(id), commentsList: { $exists: false } },
       { $set: { commentsList: [] } },
     ).exec();
 
-    // Step 2: push new comment and increment counter
     const post = await this.postModel
       .findByIdAndUpdate(
         id,
-        {
-          $inc: { comments: 1 },
-          $push: { commentsList: newComment },
-        },
+        { $inc: { comments: 1 }, $push: { commentsList: newComment } },
         { new: true },
       )
       .exec();
@@ -195,15 +242,11 @@ async delete(id: string, userId: string): Promise<void> {
     return post;
   }
 
-  // ── Fetch comments list for a post ──────────────────────────────
   async getComments(id: string): Promise<any[]> {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Invalid post ID');
     }
-    const post = await this.postModel
-      .findById(id)
-      .select('commentsList')
-      .exec();
+    const post = await this.postModel.findById(id).select('commentsList').exec();
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
     return post.commentsList || [];
   }
@@ -215,13 +258,6 @@ async delete(id: string, userId: string): Promise<void> {
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
     return post;
   }
-  async decrementLikes(id: string): Promise<PostDocument> {
-  const post = await this.postModel
-    .findByIdAndUpdate(id, { $inc: { likes: -1 } }, { new: true })
-    .exec();
-  if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
-  return post;
-}
 
   async getPostsByCategory(
     category: string,
@@ -231,9 +267,11 @@ async delete(id: string, userId: string): Promise<void> {
     const skip = (page - 1) * limit;
 
     const [posts, total] = await Promise.all([
-      this.postModel.find({ category, status: 'approved', isActive: true }).populate('userId', 'fullName email profileImage').sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.postModel.find({ category, status: 'approved', isActive: true }).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
       this.postModel.countDocuments({ category, status: 'approved', isActive: true }),
     ]);
+
+    await this.populateAuthors(posts);
 
     return { posts, total, page, totalPages: Math.ceil(total / limit) };
   }

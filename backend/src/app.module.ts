@@ -9,6 +9,7 @@ import { PostsModule } from './posts/posts.module';
 import {ChatbotModule} from './chatbot/chatbot.module'
 import {AppointmentAvailabilityModule} from './appointment-availability/appointment-availability.module'
 import {BookedAppointmentModule} from './booked-appointment/booked-appointment.module' 
+import { UserProfileModule } from './user-profile/user-profile.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import {BookedAppointmentModule} from './booked-appointment/booked-appointment.m
     ChatbotModule,
     AppointmentAvailabilityModule,
     BookedAppointmentModule,
+    UserProfileModule,
   ],
 })
 export class AppModule {}

@@ -20,19 +20,14 @@ apiClient.interceptors.request.use(
   }
 );
 
+// In your response error interceptor, ignore 404s silently
 apiClient.interceptors.response.use(
-  (response) => {
-    console.log('API Response:', response.config.url, response.status);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    if (error.response) {
-      console.error('API Error:', error.response.data);
-      console.error('Status Code:', error.response.status);
-    } else if (error.request) {
-      console.error('Network Error:', error.message);
-    } else {
-      console.error('Error:', error.message);
+    // Only log non-404 errors to reduce noise
+    if (error.response?.status !== 404) {
+      console.error('API Error:', error.response?.data);
+      console.error('Status Code:', error.response?.status);
     }
     return Promise.reject(error);
   }

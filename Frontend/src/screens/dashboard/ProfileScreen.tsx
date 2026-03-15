@@ -179,13 +179,31 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
     try {
       const endpoint = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
       const res = await apiClient.get(endpoint);
-      // Unwrap any nesting: { doctor:{} } | { user:{} } | { data:{} } | direct
       const raw = res.data;
       const data = raw?.doctor ?? raw?.user ?? raw?.data ?? raw;
-      console.log("Profile name:", data?.fullName);
-      setUserProfile(data);
-      setEditName(data?.fullName ?? "");
-      setBioText(data?.bio ?? "");
+
+      // Fetch bio + profileImage from separate UserProfile collection
+      const ownerType = role === "doctor" ? "doctor" : "user";
+      let bio: string | null = null;
+      let profileImage: string | null = null;
+      try {
+        const profileRes = await apiClient.get(`/profiles/${ownerType}/${id}`);
+        const pd = profileRes.data?.data;
+        bio = pd?.bio ?? null;
+        if (pd?.profileImage) {
+          const baseUrl = API_URL.replace("/api", "");
+          profileImage = pd.profileImage.startsWith("http")
+            ? pd.profileImage
+            : baseUrl + pd.profileImage;
+        }
+      } catch {
+        // No profile doc yet — fine, will be created on first save
+      }
+
+      const merged = { ...data, bio, profileImage };
+      setUserProfile(merged);
+      setEditName(merged?.fullName ?? "");
+      setBioText(merged?.bio ?? "");
     } catch (e) {
       console.error("fetchProfile error:", e);
     }
@@ -240,8 +258,8 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
   const handleSaveBio = async () => {
     setEditLoading(true);
     try {
-      const ep = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
-      await apiClient.put(ep, { bio: bioText });
+      const ownerType = role === "doctor" ? "doctor" : "user";
+      await apiClient.put(`/profiles/${ownerType}/${id}`, { bio: bioText });
       setUserProfile((p) => (p ? { ...p, bio: bioText } : p));
       setBioModal(false);
     } catch {
@@ -272,13 +290,20 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
           name: "profile.jpg",
           type: "image/jpeg",
         } as any);
-        const ep = role === "doctor" ? `/doctors/${id}` : `/users/${id}`;
-        await apiClient.put(ep, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        setUserProfile((p) =>
-          p ? { ...p, profileImage: result.assets[0].uri } : p,
+        const ownerType = role === "doctor" ? "doctor" : "user";
+        const res = await apiClient.put(
+          `/profiles/${ownerType}/${id}/image`,
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } },
         );
+        const savedPath = res.data?.data?.profileImage;
+        const baseUrl = API_URL.replace("/api", "");
+        const displayUrl = savedPath
+          ? savedPath.startsWith("http")
+            ? savedPath
+            : baseUrl + savedPath
+          : result.assets[0].uri;
+        setUserProfile((p) => (p ? { ...p, profileImage: displayUrl } : p));
       } catch {
         Alert.alert("Error", "Failed to update photo");
       }
@@ -578,7 +603,7 @@ export default function ProfileScreen({ id, role }: ProfileScreenProps) {
             {role === "doctor" && (
               <View style={styles.doctorBadge}>
                 <FontAwesome5 name="user-md" size={10} color="#6B7FED" />
-                <Text style={styles.doctorBadgeText}>Verified Doctor</Text>
+                <Text style={styles.doctorBadgeText}>Verified by PMDC</Text>
               </View>
             )}
 

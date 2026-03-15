@@ -24,4 +24,14 @@ export class CreatePostDto {
   @IsOptional()
   @IsString()
   backgroundColor?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['pending', 'approved', 'rejected'])
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['User', 'Doctor'])
+  userModel?: string;
 }
