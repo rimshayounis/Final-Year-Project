@@ -25,7 +25,7 @@ interface MediaFile {
 }
 
 type CreatePostScreenProps = {
-  id: string; // user or doctor id
+  id: string;
   role: "doctor" | "user";
 };
 
@@ -66,17 +66,16 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
     "Other",
   ];
 
-  // ---------------- CATEGORY & COLOR ----------------
   const handleCategorySelect = (category: string) => {
     setSelectedCategory(category);
     setShowCategoryModal(false);
   };
+
   const handleColorSelect = (color: string) => {
-    setSelectedColor(color);
+    setSelectedColor(color === selectedColor ? "" : color);
     setShowColorModal(false);
   };
 
-  // ---------------- MEDIA PICKER ----------------
   const handlePickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted")
@@ -108,8 +107,10 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const newMedia: MediaFile = { uri: result.assets[0].uri, type: "image" };
-      setMediaFiles((prev) => [...prev, newMedia]);
+      setMediaFiles((prev) => [
+        ...prev,
+        { uri: result.assets[0].uri, type: "image" },
+      ]);
     }
   };
 
@@ -125,7 +126,6 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
     setMediaFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ---------------- SUBMIT POST ----------------
   const handleSubmit = async () => {
     if (!postTitle.trim() || !description.trim() || !selectedCategory) {
       Alert.alert("Error", "Please fill all required fields");
@@ -135,20 +135,17 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
     try {
       setLoading(true);
 
-      // Determine status based on role
-      const status = role === "doctor" ? "approved" : "pending";
-
       const formData = new FormData();
-      formData.append("userId", id); // from props
+      formData.append("userId", id);
       formData.append("title", postTitle);
       formData.append("description", description);
       formData.append("category", selectedCategory);
-      formData.append("status", status);
+      formData.append("status", role === "doctor" ? "approved" : "pending");
+      formData.append("userModel", role === "doctor" ? "Doctor" : "User"); // ← tells backend which collection
       if (selectedColor) formData.append("backgroundColor", selectedColor);
 
       mediaFiles.forEach((file) => {
-        const uriParts = file.uri.split("/");
-        const fileName = uriParts[uriParts.length - 1];
+        const fileName = file.uri.split("/").pop() ?? "image.jpg";
         formData.append("media", {
           uri: file.uri,
           name: fileName,
@@ -156,7 +153,7 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
         } as any);
       });
 
-      const response = await postAPI.createPost(formData);
+      await postAPI.createPost(formData);
       Alert.alert("Success", "Post created successfully!");
 
       setPostTitle("");
@@ -175,7 +172,6 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
     }
   };
 
-  // ---------------- RENDER ----------------
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: "#6B7FED" }}
@@ -207,24 +203,34 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
                 style={styles.colorPickerButton}
                 onPress={() => setShowColorModal(true)}
               >
-                <MaterialIcons name="palette" size={20} color="#6B7FED" />
-                <Text style={styles.colorPickerText}>Background</Text>
+                {selectedColor ? (
+                  <View
+                    style={[
+                      styles.colorDot,
+                      { backgroundColor: selectedColor },
+                    ]}
+                  />
+                ) : (
+                  <MaterialIcons name="palette" size={20} color="#6B7FED" />
+                )}
+                <Text style={styles.colorPickerText}>
+                  {selectedColor ? "Change" : "Background"}
+                </Text>
               </TouchableOpacity>
             </View>
             <View
               style={[
                 styles.descriptionContainer,
-                selectedColor && { backgroundColor: selectedColor },
+                selectedColor ? { backgroundColor: selectedColor } : {},
               ]}
             >
               <TextInput
                 style={[
                   styles.input,
                   styles.textArea,
-                  selectedColor && {
-                    backgroundColor: "transparent",
-                    color: "#FFF",
-                  },
+                  selectedColor
+                    ? { backgroundColor: "transparent", color: "#FFF" }
+                    : {},
                 ]}
                 placeholder="Enter description"
                 placeholderTextColor={
@@ -258,7 +264,11 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
             style={styles.mediaButton}
             onPress={handleMediaOptions}
           >
-            <Text style={styles.mediaButtonText}>Add Media</Text>
+            <Text style={styles.mediaButtonText}>
+              {mediaFiles.length > 0
+                ? `${mediaFiles.length} file${mediaFiles.length > 1 ? "s" : ""} selected`
+                : "Add Media"}
+            </Text>
             <Ionicons name="camera-outline" size={24} color="#6B7FED" />
           </TouchableOpacity>
 
@@ -287,7 +297,9 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
             {loading ? (
               <ActivityIndicator color="#FFF" />
             ) : (
-              <Text style={styles.submitButtonText}>Submit</Text>
+              <Text style={styles.submitButtonText}>
+                {role === "doctor" ? "Publish Post" : "Submit for Review"}
+              </Text>
             )}
           </TouchableOpacity>
         </ScrollView>
@@ -352,6 +364,34 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.colorList}>
+              {/* None option */}
+              <TouchableOpacity
+                style={[
+                  styles.noneOption,
+                  !selectedColor && styles.noneOptionActive,
+                ]}
+                onPress={() => {
+                  setSelectedColor("");
+                  setShowColorModal(false);
+                }}
+              >
+                <MaterialIcons
+                  name="format-color-reset"
+                  size={20}
+                  color={!selectedColor ? "#6B7FED" : "#999"}
+                />
+                <Text
+                  style={[
+                    styles.noneOptionText,
+                    !selectedColor && { color: "#6B7FED" },
+                  ]}
+                >
+                  No Background
+                </Text>
+                {!selectedColor && (
+                  <MaterialIcons name="check" size={18} color="#6B7FED" />
+                )}
+              </TouchableOpacity>
               <View style={styles.colorGrid}>
                 {BACKGROUND_COLORS.map((color) => (
                   <TouchableOpacity
@@ -379,7 +419,6 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
   );
 }
 
-// ---------------- STYLES ----------------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#6B7FED" },
   header: {
@@ -411,13 +450,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
+    gap: 5,
   },
-  colorPickerText: {
-    fontSize: 13,
-    color: "#6B7FED",
-    fontWeight: "600",
-    marginLeft: 5,
-  },
+  colorDot: { width: 16, height: 16, borderRadius: 8 },
+  colorPickerText: { fontSize: 13, color: "#6B7FED", fontWeight: "600" },
   descriptionContainer: { borderRadius: 10, overflow: "hidden" },
   input: {
     backgroundColor: "#F5F5F5",
@@ -458,13 +494,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     marginBottom: 20,
+    gap: 10,
   },
   mediaPreview: {
     width: 100,
     height: 100,
     borderRadius: 10,
-    marginRight: 10,
-    marginBottom: 10,
     position: "relative",
   },
   mediaImage: { width: "100%", height: "100%", borderRadius: 10 },
@@ -523,7 +558,19 @@ const styles = StyleSheet.create({
   categoryOptionActive: { backgroundColor: "#E8F0FE" },
   categoryOptionText: { fontSize: 16, color: "#2C3E50" },
   categoryOptionTextActive: { color: "#6B7FED", fontWeight: "600" },
-  colorList: { paddingHorizontal: 25, paddingTop: 20 },
+  colorList: { paddingHorizontal: 25, paddingTop: 10 },
+  noneOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginBottom: 14,
+    backgroundColor: "#F8F8F8",
+  },
+  noneOptionActive: { backgroundColor: "#EEF0FB" },
+  noneOptionText: { flex: 1, fontSize: 15, color: "#999", fontWeight: "600" },
   colorGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -536,7 +583,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     justifyContent: "center",
     alignItems: "center",
-    position: "relative",
     borderWidth: 2,
     borderColor: "transparent",
   },

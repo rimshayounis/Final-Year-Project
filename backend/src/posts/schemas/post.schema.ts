@@ -6,7 +6,7 @@ export type PostDocument = Post & Document;
 // ── Comment Sub-Schema ──────────────────────────────────────────
 @Schema({ _id: true, timestamps: true })
 export class Comment {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: Types.ObjectId, required: true })
   userId: Types.ObjectId;
 
   @Prop({ default: 'User' })
@@ -24,7 +24,11 @@ export const CommentSchema = SchemaFactory.createForClass(Comment);
 // ── Post Schema ─────────────────────────────────────────────────
 @Schema({ timestamps: true })
 export class Post {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  // userModel tracks which collection userId belongs to
+  @Prop({ type: String, enum: ['User', 'Doctor'], default: 'User' })
+  userModel: string;
+
+  @Prop({ type: Types.ObjectId, refPath: 'userModel', required: true })
   userId: Types.ObjectId;
 
   @Prop({ required: true, trim: true })
@@ -49,7 +53,11 @@ export class Post {
   })
   status: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  // approvedByModel tracks which collection approvedBy belongs to (always Doctor)
+  @Prop({ type: String, enum: ['User', 'Doctor'], default: 'Doctor' })
+  approvedByModel: string;
+
+  @Prop({ type: Types.ObjectId, refPath: 'approvedByModel', default: null })
   approvedBy: Types.ObjectId;
 
   @Prop({ default: null })
@@ -67,7 +75,7 @@ export class Post {
   @Prop({ default: 0 })
   shares: number;
 
-  @Prop({ type: [CommentSchema], default: [] })   // ← NEW
+  @Prop({ type: [CommentSchema], default: [] })
   commentsList: Comment[];
 
   @Prop({ default: true })
