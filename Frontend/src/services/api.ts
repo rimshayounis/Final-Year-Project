@@ -1,6 +1,9 @@
 import axios from 'axios'
 
-export const API_URL = 'http://192.168.137.1:3000/api';
+export const API_URL = 'http://192.168.100.47:3000/api';
+
+// ── Base socket URL (no /api suffix) ──────────────────────────────────────────
+export const SOCKET_URL = 'http://192.168.100.47:3000';
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -38,12 +41,12 @@ apiClient.interceptors.response.use(
   }
 );
 
-// ── Booked Appointment ──
+// ── Booked Appointment ────────────────────────────────────────────────────────
 export interface BookAppointmentData {
   userId: string;
   doctorId: string;
-  date: string;        // YYYY-MM-DD
-  time: string;        // HH:MM
+  date: string;
+  time: string;
   sessionDuration: number;
   consultationFee: number;
   healthConcern: string;
@@ -55,41 +58,34 @@ export interface UpdateAppointmentStatusData {
 }
 
 export const bookedAppointmentAPI = {
-  // Book a new appointment
   book: (data: BookAppointmentData) =>
     apiClient.post('/booked-appointments', data),
 
-  // Get all appointments for a user
   getUserAppointments: (userId: string) =>
     apiClient.get(`/booked-appointments/user/${userId}`),
 
-  // Get upcoming appointments for a user
   getUserUpcoming: (userId: string) =>
     apiClient.get(`/booked-appointments/user/${userId}/upcoming`),
 
-  // Get all appointments for a doctor
   getDoctorAppointments: (doctorId: string) =>
     apiClient.get(`/booked-appointments/doctor/${doctorId}`),
 
-  // Get upcoming appointments for a doctor
   getDoctorUpcoming: (doctorId: string) =>
     apiClient.get(`/booked-appointments/doctor/${doctorId}/upcoming`),
 
-  // Get single appointment
   getById: (appointmentId: string) =>
     apiClient.get(`/booked-appointments/${appointmentId}`),
 
-  // Update status (confirm / complete)
   updateStatus: (appointmentId: string, data: UpdateAppointmentStatusData) =>
     apiClient.patch(`/booked-appointments/${appointmentId}/status`, data),
 
-  // Cancel appointment
   cancel: (appointmentId: string, cancelReason?: string) =>
     apiClient.delete(`/booked-appointments/${appointmentId}/cancel`, {
       data: { cancelReason },
     }),
 };
 
+// ── Post ──────────────────────────────────────────────────────────────────────
 export interface CreatePostData {
   userId: string;
   title: string;
@@ -107,6 +103,7 @@ export const postAPI = {
     }),
 };
 
+// ── Auth / User ───────────────────────────────────────────────────────────────
 export interface RegisterData {
   fullName: string;
   age: number;
@@ -151,7 +148,7 @@ export interface SendMessageData {
   fileUrl?: string;
 }
 
-// ✅ NEW: Appointment Availability Interfaces
+// ── Appointment Availability Interfaces ───────────────────────────────────────
 export interface TimeSlot {
   start: string;
   end: string;
@@ -190,7 +187,7 @@ export interface AvailableSlotsResponse {
   availableSlots: AvailableSlot[];
 }
 
-// User API endpoints
+// ── User API ──────────────────────────────────────────────────────────────────
 export const userAPI = {
   register: (data: RegisterData) =>
     apiClient.post('/users/register', data),
@@ -214,7 +211,7 @@ export const userAPI = {
     apiClient.delete(`/users/${userId}`),
 };
 
-// Doctor API endpoints
+// ── Doctor API ────────────────────────────────────────────────────────────────
 export const doctorAPI = {
   register: (data: FormData) =>
     axios.post(`${API_URL}/doctors/register`, data, {
@@ -235,7 +232,7 @@ export const doctorAPI = {
     apiClient.get(`/doctors/${doctorId}/verification-status`),
 };
 
-// Chatbot API endpoints
+// ── Chatbot API ───────────────────────────────────────────────────────────────
 export const chatbotAPI = {
   sendMessage: (data: SendMessageData) =>
     apiClient.post('/chatbot/message', data),
@@ -250,40 +247,51 @@ export const chatbotAPI = {
     apiClient.get(`/chatbot/stats/${userId}`),
 };
 
-// ✅ NEW: Appointment Availability API endpoints
+// ── Appointment Availability API ──────────────────────────────────────────────
 export const appointmentAPI = {
-  // Create or update doctor's availability
   createOrUpdateAvailability: (data: CreateAvailabilityData) =>
     apiClient.post('/appointment-availability', data),
 
-  // Get doctor's availability settings
   getDoctorAvailability: (doctorId: string) =>
     apiClient.get(`/appointment-availability/doctor/${doctorId}`),
 
-  // Get available slots for booking
-  getAvailableSlots: (
-    doctorId: string,
-    startDate?: string,
-    endDate?: string
-  ) => {
+  getAvailableSlots: (doctorId: string, startDate?: string, endDate?: string) => {
     const params: any = { doctorId };
     if (startDate) params.startDate = startDate;
-    if (endDate) params.endDate = endDate;
-    
+    if (endDate)   params.endDate   = endDate;
     return apiClient.get('/appointment-availability/slots', { params });
   },
 
-  // Update availability settings
   updateAvailability: (doctorId: string, data: UpdateAvailabilityData) =>
     apiClient.put(`/appointment-availability/doctor/${doctorId}`, data),
 
-  // Delete availability settings
   deleteAvailability: (doctorId: string) =>
     apiClient.delete(`/appointment-availability/doctor/${doctorId}`),
 
-  // Get all doctors with availability
   getAllDoctorsWithAvailability: () =>
     apiClient.get('/appointment-availability/doctors'),
+};
+
+// ── Chat API ──────────────────────────────────────────────────────────────────
+export const chatAPI = {
+  // Get message history for a conversation
+  getHistory: (conversationId: string, page = 1, limit = 50) =>
+    apiClient.get(`/chat/history/${conversationId}?page=${page}&limit=${limit}`),
+
+  // ✅ FIXED: userId param add kiya — no JWT needed
+  getConversations: (userId: string) =>
+    apiClient.get(`/chat/conversations/${userId}`),
+
+  // Get or create a conversation between doctor and patient
+  getOrCreateConversation: (doctorId: string, patientId: string) =>
+    apiClient.post('/chat/conversation', { doctorId, patientId }),
+
+  // Upload a file (image / document / voice)
+  uploadFile: (formData: FormData) =>
+    axios.post(`${API_URL}/chat/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    }),
 };
 
 export default apiClient;
