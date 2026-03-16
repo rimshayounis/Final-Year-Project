@@ -1,14 +1,8 @@
 import axios from 'axios'
-
-<<<<<<< HEAD
 export const API_URL = 'http://192.168.100.47:3000/api';
-export const SOCKET_URL = 'http://192.168.100.47:3000';
-=======
-export const API_URL = 'http://192.168.137.1:3000/api';
-
 // ── Base socket URL (no /api suffix) ──────────────────────────────────────────
-export const SOCKET_URL = 'http://192.168.137.1:3000';
->>>>>>> 714043731280cd7571b1c1852fa910543188330d
+export const SOCKET_URL = 'http://192.168.100.47:3000';
+
 
 const apiClient = axios.create({
   baseURL: API_URL,

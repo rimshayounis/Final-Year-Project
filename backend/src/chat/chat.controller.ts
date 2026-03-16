@@ -60,15 +60,16 @@ export class ChatController {
     return { cwd: process.cwd(), uploadPath, voicePath, imagePath, voiceFiles, imageFiles };
   }
 
+  // ✅ SINGLE @Post('upload') — no duplicates
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: (req, _file, cb) => {
-          const type = (req.query?.fileType as string) || 'misc';
-          const dir  = join(process.cwd(), 'uploads', 'chat', type);
+        // ✅ Save to temp first — fileType is not reliably available in multer's
+        // destination callback because multer runs BEFORE NestJS parses the query
+        destination: (_req, _file, cb) => {
+          const dir = join(process.cwd(), 'uploads', 'chat', 'temp');
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-          console.log(`[Upload] fileType="${type}" dir="${dir}"`);
           cb(null, dir);
         },
         filename: (_req, file, cb) => {
@@ -77,7 +78,6 @@ export class ChatController {
         },
       }),
       limits: { fileSize: 100 * 1024 * 1024 },
-      // ✅ Only block executables — allow all image/video/audio/document types
       fileFilter: (_req, file, cb) => {
         const blocked = ['.exe', '.bat', '.sh', '.cmd', '.msi', '.dll', '.vbs'];
         const fileExt = extname(file.originalname).toLowerCase();
@@ -99,12 +99,22 @@ export class ChatController {
   ) {
     if (!file) return { success: false, message: 'No file received' };
 
-    const type    = fileType || 'misc';
+    // ✅ fileType is now properly parsed by NestJS before this runs
+    const type = fileType || 'misc';
+
+    // ✅ Move file from temp folder to the correct folder
+    const targetDir  = join(process.cwd(), 'uploads', 'chat', type);
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+    const targetPath = join(targetDir, file.filename);
+    fs.renameSync(file.path, targetPath);
+
     const appUrl  = process.env.APP_URL || 'http://192.168.100.47:3000';
     const fileUrl = `${appUrl}/uploads/chat/${type}/${file.filename}`;
 
-    console.log(`[Upload] ✅ Disk path : ${file.path}`);
-    console.log(`[Upload] ✅ Public URL: ${fileUrl}`);
+    console.log(`[Upload] ✅ fileType : ${type}`);
+    console.log(`[Upload] ✅ Disk path: ${targetPath}`);
+    console.log(`[Upload] ✅ URL      : ${fileUrl}`);
 
     return {
       success:  true,

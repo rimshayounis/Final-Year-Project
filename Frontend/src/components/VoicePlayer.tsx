@@ -85,6 +85,8 @@ export default function VoicePlayer({ audioUri, duration, isUserMessage = false 
   };
 
   const playSound = async () => {
+    console.log('[VoicePlayer] audioUri:', audioUri);
+  console.log('[VoicePlayer] duration:', duration);
     try {
       setIsLoading(true);
 
