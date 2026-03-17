@@ -31,6 +31,17 @@ export class Message {
 
   @Prop({ default: false })
   read: boolean;
+
+  // ✅ New: track if message was edited
+  @Prop({ default: false })
+  edited: boolean;
+
+  // ✅ New: emoji reactions — array of { emoji, userId }
+  @Prop({
+    type: [{ emoji: String, userId: String }],
+    default: [],
+  })
+  reactions: { emoji: string; userId: string }[];
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);

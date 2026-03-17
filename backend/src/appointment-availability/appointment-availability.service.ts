@@ -28,37 +28,32 @@ export class AppointmentAvailabilityService {
   ) {}
 
   // Create or update doctor's availability
-  async createOrUpdateAvailability(createDto: CreateAvailabilityDto): Promise<AppointmentAvailability> {
-    try {
-      // Validate time slots
-      this.validateTimeSlots(createDto.specificDates);
+  async createOrUpdateAvailability(
+    createDto: CreateAvailabilityDto,
+  ): Promise<AppointmentAvailability> {
+    // ── Validate time slots BEFORE the try/catch so the real error surfaces ──
+    this.validateTimeSlots(createDto.specificDates);
 
-      const existingAvailability = await this.availabilityModel.findOne({
-        doctorId: new Types.ObjectId(createDto.doctorId),
-      });
+    const existingAvailability = await this.availabilityModel.findOne({
+      doctorId: new Types.ObjectId(createDto.doctorId),
+    });
 
-      if (existingAvailability) {
-        // Update existing
-        existingAvailability.sessionDuration = createDto.sessionDuration;
-        existingAvailability.consultationFee = createDto.consultationFee;
-        existingAvailability.specificDates = createDto.specificDates;
-        existingAvailability.lastUpdated = new Date();
-        
-        return await existingAvailability.save();
-      } else {
-        // Create new
-        const availability = new this.availabilityModel({
-          doctorId: new Types.ObjectId(createDto.doctorId),
-          sessionDuration: createDto.sessionDuration,
-          consultationFee: createDto.consultationFee,
-          specificDates: createDto.specificDates,
-        });
-
-        return await availability.save();
-      }
-    } catch (error) {
-      throw new BadRequestException('Failed to save availability settings');
+    if (existingAvailability) {
+      existingAvailability.sessionDuration = createDto.sessionDuration;
+      existingAvailability.consultationFee = createDto.consultationFee;
+      existingAvailability.specificDates   = createDto.specificDates;
+      existingAvailability.lastUpdated     = new Date();
+      return await existingAvailability.save();
     }
+
+    const availability = new this.availabilityModel({
+      doctorId:        new Types.ObjectId(createDto.doctorId),
+      sessionDuration: createDto.sessionDuration,
+      consultationFee: createDto.consultationFee,
+      specificDates:   createDto.specificDates,
+    });
+
+    return await availability.save();
   }
 
   // Get doctor's availability settings
@@ -68,7 +63,9 @@ export class AppointmentAvailabilityService {
       .exec();
 
     if (!availability) {
-      throw new NotFoundException(`Availability settings not found for doctor ${doctorId}`);
+      throw new NotFoundException(
+        `Availability settings not found for doctor ${doctorId}`,
+      );
     }
 
     return availability;
@@ -83,26 +80,27 @@ export class AppointmentAvailabilityService {
   }): Promise<AvailableSlotsResponse> {
     const availability = await this.getDoctorAvailability(query.doctorId);
 
-    const startDate = query.startDate 
-      ? new Date(query.startDate) 
-      : new Date();
-    
-    const endDate = query.endDate
+    const startDate = query.startDate ? new Date(query.startDate) : new Date();
+    const endDate   = query.endDate
       ? new Date(query.endDate)
       : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     const availableSlots: DaySlots[] = [];
 
-    // Loop through each day in the range
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const dateStr = this.formatDate(d);
-      const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+    for (
+      let d = new Date(startDate);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      const dateStr  = this.formatDate(d);
+      const dayName  = d.toLocaleDateString('en-US', { weekday: 'long' });
+      const specific = availability.specificDates.find(sd => sd.date === dateStr);
 
-      // Check if there's a specific date
-      const specificDate = availability.specificDates.find(sd => sd.date === dateStr);
-
-      if (specificDate) {
-        const slots = this.generateTimeSlots(specificDate.timeSlots, availability.sessionDuration);
+      if (specific) {
+        const slots = this.generateTimeSlots(
+          specific.timeSlots,
+          availability.sessionDuration,
+        );
         if (slots.length > 0) {
           availableSlots.push({
             date: dateStr,
@@ -115,7 +113,7 @@ export class AppointmentAvailabilityService {
     }
 
     return {
-      doctorId: query.doctorId,
+      doctorId:        query.doctorId,
       sessionDuration: availability.sessionDuration,
       consultationFee: availability.consultationFee,
       availableSlots,
@@ -123,13 +121,18 @@ export class AppointmentAvailabilityService {
   }
 
   // Update availability
-  async updateAvailability(doctorId: string, updateDto: UpdateAvailabilityDto): Promise<AppointmentAvailability> {
+  async updateAvailability(
+    doctorId: string,
+    updateDto: UpdateAvailabilityDto,
+  ): Promise<AppointmentAvailability> {
     const availability = await this.availabilityModel.findOne({
       doctorId: new Types.ObjectId(doctorId),
     });
 
     if (!availability) {
-      throw new NotFoundException(`Availability settings not found for doctor ${doctorId}`);
+      throw new NotFoundException(
+        `Availability settings not found for doctor ${doctorId}`,
+      );
     }
 
     if (updateDto.specificDates) {
@@ -138,7 +141,6 @@ export class AppointmentAvailabilityService {
 
     Object.assign(availability, updateDto);
     availability.lastUpdated = new Date();
-
     return await availability.save();
   }
 
@@ -149,48 +151,86 @@ export class AppointmentAvailabilityService {
     });
 
     if (result.deletedCount === 0) {
-      throw new NotFoundException(`Availability settings not found for doctor ${doctorId}`);
+      throw new NotFoundException(
+        `Availability settings not found for doctor ${doctorId}`,
+      );
     }
   }
 
-  // Helper: Validate time slots
+  // Get all doctors with availability
+  async getAllDoctorsWithAvailability(): Promise<AppointmentAvailability[]> {
+    return await this.availabilityModel
+      .find({ isActive: true })
+      .populate('doctorId', 'fullName email profileImage doctorProfile')
+      .exec();
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────────
+
   private validateTimeSlots(specificDates: any[]): void {
+    if (!specificDates || specificDates.length === 0) {
+      throw new BadRequestException('At least one date with time slots is required');
+    }
+
     for (const dateData of specificDates) {
+      if (!dateData.date) {
+        throw new BadRequestException('Each entry must have a date in YYYY-MM-DD format');
+      }
+
+      if (!dateData.timeSlots || dateData.timeSlots.length === 0) {
+        throw new BadRequestException(
+          `Date ${dateData.date} must have at least one time slot`,
+        );
+      }
+
       for (const slot of dateData.timeSlots) {
+        if (!slot.start || !slot.end) {
+          throw new BadRequestException(
+            `Time slot on ${dateData.date} is missing start or end time`,
+          );
+        }
+
+        if (!this.isValidTimeFormat(slot.start) || !this.isValidTimeFormat(slot.end)) {
+          throw new BadRequestException(
+            `Time slot on ${dateData.date} has invalid format. Use HH:MM (e.g. 09:00)`,
+          );
+        }
+
         if (!this.isValidTimeSlot(slot.start, slot.end)) {
-          throw new BadRequestException(`Invalid time slot for ${dateData.date}: ${slot.start} - ${slot.end}`);
+          throw new BadRequestException(
+            `Invalid time slot on ${dateData.date}: ${slot.start} - ${slot.end}. End time must be after start time`,
+          );
         }
       }
     }
   }
 
-  // Helper: Check if time slot is valid
-  private isValidTimeSlot(start: string, end: string): boolean {
-    const [startHour, startMin] = start.split(':').map(Number);
-    const [endHour, endMin] = end.split(':').map(Number);
-
-    const startMinutes = startHour * 60 + startMin;
-    const endMinutes = endHour * 60 + endMin;
-
-    return endMinutes > startMinutes;
+  private isValidTimeFormat(time: string): boolean {
+    return /^\d{2}:\d{2}$/.test(time);
   }
 
-  // Helper: Generate time slots based on duration
+  private isValidTimeSlot(start: string, end: string): boolean {
+    const [startHour, startMin] = start.split(':').map(Number);
+    const [endHour,   endMin]   = end.split(':').map(Number);
+    return endHour * 60 + endMin > startHour * 60 + startMin;
+  }
+
   private generateTimeSlots(timeSlots: any[], sessionDuration: number): string[] {
     const slots: string[] = [];
 
     for (const slot of timeSlots) {
       const [startHour, startMin] = slot.start.split(':').map(Number);
-      const [endHour, endMin] = slot.end.split(':').map(Number);
+      const [endHour,   endMin]   = slot.end.split(':').map(Number);
 
       let currentMinutes = startHour * 60 + startMin;
-      const endMinutes = endHour * 60 + endMin;
+      const endMinutes   = endHour   * 60 + endMin;
 
       while (currentMinutes + sessionDuration <= endMinutes) {
-        const hours = Math.floor(currentMinutes / 60);
-        const minutes = currentMinutes % 60;
-        const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-        slots.push(timeStr);
+        const h   = Math.floor(currentMinutes / 60);
+        const m   = currentMinutes % 60;
+        slots.push(
+          `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`,
+        );
         currentMinutes += sessionDuration;
       }
     }
@@ -198,20 +238,10 @@ export class AppointmentAvailabilityService {
     return slots;
   }
 
-  // Helper: Format date to YYYY-MM-DD
   private formatDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  // Get all doctors with availability
-  async getAllDoctorsWithAvailability(): Promise<AppointmentAvailability[]> {
-    return await this.availabilityModel
-      .find({ isActive: true })
-      // .populate('doctorId', 'fullName specialization profileImage email')
-      .populate('doctorId', 'fullName email profileImage doctorProfile')
-      .exec();
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 }

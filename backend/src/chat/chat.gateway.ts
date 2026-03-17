@@ -77,16 +77,53 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       senderId:       saved.senderId.toString(),
       receiverId:     saved.receiverId.toString(),
       text:           saved.text     ?? undefined,
-      fileUrl:        saved.fileUrl  ?? undefined,
-      fileType:       saved.fileType ?? undefined,
-      fileName:       saved.fileName ?? undefined,
-      duration:       saved.duration ?? 0,
+      // ✅ use incoming data as fallback in case DB returns null
+      fileUrl:        saved.fileUrl  ?? data.fileUrl  ?? undefined,
+      fileType:       saved.fileType ?? data.fileType ?? undefined,
+      fileName:       saved.fileName ?? data.fileName ?? undefined,
+      duration:       saved.duration ?? data.duration ?? 0,
       createdAt:      (saved as any).createdAt,
       read:           saved.read,
     };
 
     this.server.to(data.conversationId).emit('receive_message', payload);
     return payload;
+  }
+
+  // ── Edit message ────────────────────────────────────────────────────────────
+  @SubscribeMessage('edit_message')
+  async handleEditMessage(
+    @MessageBody() data: { messageId: string; text: string; conversationId: string },
+  ) {
+    await this.chatService.editMessage(data.messageId, data.text);
+    this.server.to(data.conversationId).emit('message_edited', {
+      messageId: data.messageId,
+      text:      data.text,
+    });
+  }
+
+  // ── Delete message ──────────────────────────────────────────────────────────
+  @SubscribeMessage('delete_message')
+  async handleDeleteMessage(
+    @MessageBody() data: { messageId: string; conversationId: string },
+  ) {
+    await this.chatService.deleteMessage(data.messageId);
+    this.server.to(data.conversationId).emit('message_deleted', {
+      messageId: data.messageId,
+    });
+  }
+
+  // ── React to message ────────────────────────────────────────────────────────
+  @SubscribeMessage('react_message')
+  async handleReactMessage(
+    @MessageBody() data: { messageId: string; emoji: string; userId: string; conversationId: string },
+  ) {
+    await this.chatService.reactToMessage(data.messageId, data.emoji, data.userId);
+    this.server.to(data.conversationId).emit('message_reaction', {
+      messageId: data.messageId,
+      emoji:     data.emoji,
+      userId:    data.userId,
+    });
   }
 
   @SubscribeMessage('typing')

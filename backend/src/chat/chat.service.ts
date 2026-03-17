@@ -85,6 +85,40 @@ export class ChatService {
     await this.messageModel.findByIdAndUpdate(messageId, { read: true });
   }
 
+  // ── Edit message ─────────────────────────────────────────────────────────
+  async editMessage(messageId: string, text: string): Promise<void> {
+    await this.messageModel.findByIdAndUpdate(messageId, {
+      text,
+      edited: true,
+    });
+  }
+
+  // ── Delete message ────────────────────────────────────────────────────────
+  async deleteMessage(messageId: string): Promise<void> {
+    await this.messageModel.findByIdAndDelete(messageId);
+  }
+
+  // ── React to message ──────────────────────────────────────────────────────
+  async reactToMessage(messageId: string, emoji: string, userId: string): Promise<void> {
+    const message = await this.messageModel.findById(messageId);
+    if (!message) return;
+
+    const reactions = (message as any).reactions || [];
+    const existingIndex = reactions.findIndex(
+      (r: any) => r.userId === userId && r.emoji === emoji,
+    );
+
+    if (existingIndex >= 0) {
+      // Toggle off — remove reaction
+      reactions.splice(existingIndex, 1);
+    } else {
+      // Add reaction
+      reactions.push({ emoji, userId });
+    }
+
+    await this.messageModel.findByIdAndUpdate(messageId, { reactions });
+  }
+
   async getOrCreateConversation(userAId: string, userBId: string): Promise<ConversationDocument> {
     const a = new Types.ObjectId(userAId);
     const b = new Types.ObjectId(userBId);

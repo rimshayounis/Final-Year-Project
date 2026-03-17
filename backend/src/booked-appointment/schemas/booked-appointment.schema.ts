@@ -40,11 +40,13 @@ export class BookedAppointment {
 
   @Prop({ type: String, default: null })
   cancelReason: string | null;
+
+  @Prop({ type: Date, default: null })   // ← ADD THIS
+  completedAt: Date | null;
 }
 
 export const BookedAppointmentSchema = SchemaFactory.createForClass(BookedAppointment);
 
-// Indexes for common queries
 BookedAppointmentSchema.index({ userId: 1, date: -1 });
 BookedAppointmentSchema.index({ doctorId: 1, date: -1 });
-BookedAppointmentSchema.index({ doctorId: 1, date: 1, time: 1 }, { unique: true }); // prevent double booking
+BookedAppointmentSchema.index({ doctorId: 1, date: 1, time: 1 }, { unique: true });
