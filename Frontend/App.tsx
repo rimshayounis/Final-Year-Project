@@ -18,6 +18,8 @@ import DoctorAppointmentDetailScreen from './src/screens/dashboard/Doctorappoint
 import PatientChatScreen from './src/screens/chat/PatientChatScreen';
 import DoctorChatScreen from './src/screens/chat/DoctorChatScreen';
 import SettingsScreen from './src/screens/dashboard/SettingsScreen';
+import SubscriptionScreen from './src/screens/doctors/SubscriptionScreen';
+import WalletScreen from './src/screens/doctors/WalletScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -25,7 +27,8 @@ export type RootStackParamList = {
   Login: { userType: 'user' | 'doctor' };
   CreateAccount: { userType: 'user' | 'doctor' };
   CreateDoctorAccount: undefined;
-  DoctorUnverified: { doctorId: string; doctorName: string };
+  DoctorSubscription: { doctorId: string; doctorName: string; isVerified?: boolean };
+  DoctorUnverified: { doctorId: string; doctorName: string; selectedPlan?: string };
   HealthProfile: { userId: string };
   EmergencyContact: { userId: string };
   Dashboard: {
@@ -36,6 +39,7 @@ export type RootStackParamList = {
   userSession: undefined;
   CreateAppointment: { doctorId: string };
   Settings: { id: string; role: 'user' | 'doctor' };
+  Wallet: { doctorId: string };
   DoctorAppointmentDetail: {
     doctor: {
       _id: string;
@@ -83,6 +87,7 @@ export default function App() {
           <Stack.Screen name="Login"                component={LoginScreen} />
           <Stack.Screen name="CreateAccount"        component={CreateAccountScreen} />
           <Stack.Screen name="CreateDoctorAccount"  component={CreateDoctorAccountScreen} />
+          <Stack.Screen name="DoctorSubscription"   component={SubscriptionScreen} />
           <Stack.Screen name="DoctorUnverified"     component={DoctorPendingScreen} />
           <Stack.Screen name="HealthProfile"        component={HealthProfileScreen} />
           <Stack.Screen name="EmergencyContact"     component={EmergencyContactScreen} />
@@ -94,6 +99,7 @@ export default function App() {
           <Stack.Screen name="DoctorChat"           component={DoctorChatScreen} />
           <Stack.Screen name="PatientChat"          component={PatientChatScreen} />
           <Stack.Screen name="Settings"             component={SettingsScreen} />
+          <Stack.Screen name="Wallet"               component={WalletScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

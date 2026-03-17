@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../../App";
+import apiClient from "../../services/api";
 
 type SettingsNav = NativeStackNavigationProp<RootStackParamList, "Settings">;
 type SettingsRoute = RouteProp<RootStackParamList, "Settings">;
@@ -70,6 +71,15 @@ export default function SettingsScreen() {
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
+  const [doctorPlan, setDoctorPlan] = useState<string>("free_trial");
+
+  useEffect(() => {
+    if (role === "doctor") {
+      apiClient.get(`/doctors/${id}`)
+        .then((res) => setDoctorPlan(res.data?.doctor?.subscriptionPlan ?? "free_trial"))
+        .catch(() => {});
+    }
+  }, [id, role]);
 
   const handleLogout = () => {
     Alert.alert("Log Out", "Are you sure you want to log out?", [
@@ -178,6 +188,44 @@ export default function SettingsScreen() {
                 sublabel="PMDC license & credentials"
                 onPress={() => placeholder("Verification Status")}
               />
+              <View style={styles.divider} />
+              <SettingRow
+                icon={
+                  <MaterialIcons name="card-membership" size={20} color="#6B7FED" />
+                }
+                label="Manage Subscription"
+                sublabel="View or change your plan"
+                onPress={() =>
+                  navigation.navigate("DoctorSubscription", {
+                    doctorId: id,
+                    doctorName: "",
+                    isVerified: true,
+                  })
+                }
+              />
+              <View style={styles.divider} />
+              <View style={doctorPlan === "free_trial" ? styles.blurRow : undefined}>
+                <SettingRow
+                  icon={
+                    <Ionicons
+                      name="wallet-outline"
+                      size={20}
+                      color={doctorPlan === "free_trial" ? "#C0C5D8" : "#00B374"}
+                    />
+                  }
+                  label="Wallet Management"
+                  sublabel={
+                    doctorPlan === "free_trial"
+                      ? "Upgrade plan to access wallet"
+                      : "Balance, conversions & withdrawals"
+                  }
+                  onPress={
+                    doctorPlan === "free_trial"
+                      ? () => Alert.alert("Upgrade Required", "Wallet is not available on Free Trial. Please upgrade to Basic, Professional, or Premium plan.")
+                      : () => navigation.navigate("Wallet", { doctorId: id })
+                  }
+                />
+              </View>
             </View>
           </>
         )}
@@ -337,5 +385,8 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "#F0F4FF",
     marginLeft: 66,
+  },
+  blurRow: {
+    opacity: 0.4,
   },
 });

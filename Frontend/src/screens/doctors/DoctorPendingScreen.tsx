@@ -5,6 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  StatusBar,
+  Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,17 +19,37 @@ type DoctorDashboardScreenProps = {
   route: RouteProp<RootStackParamList, 'DoctorUnverified'>;
 };
 
-export default function DoctorPendingScreen({ 
-  navigation, 
-  route 
+export default function DoctorPendingScreen({
+  navigation,
+  route
 }: DoctorDashboardScreenProps) {
   const { doctorId,doctorName } = route.params;
 
+  const handleLogout = () => {
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: () => navigation.reset({ index: 0, routes: [{ name: 'LoginType' }] }),
+      },
+    ]);
+  };
+
   return (
-  <SafeAreaView style={styles.container} edges={['top']}>
+  <SafeAreaView style={styles.container} edges={['bottom']}>
+      <StatusBar backgroundColor="#6B7FED" barStyle="light-content" />
       <View style={styles.header}>
-        <Text style={styles.greeting}>Welcome, {doctorName}</Text>
-        <Text style={styles.appName}>TruHeal-Link</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.greeting}>Welcome, {doctorName}</Text>
+            <Text style={styles.appName}>TruHeal-Link</Text>
+          </View>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <MaterialIcons name="logout" size={20} color="#fff" />
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.statusBadge}>
           <MaterialIcons name="verified" size={16} color="#FFD700" />
           <Text style={styles.statusText}>Pending Verification</Text>
@@ -105,11 +127,30 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#6B7FED',
-    paddingTop: 20,
+    paddingTop: 50,
     paddingBottom: 30,
     paddingHorizontal: 30,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   greeting: {
     fontSize: 18,

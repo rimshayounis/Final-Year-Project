@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mongosh \"mongodb://localhost:27017/truheal-link\" --eval \"db.points_rewards.updateOne\\({doctorId: ObjectId\\(''69971320035677ca5d85f0f1''\\)}, {$set: {totalPoints: 0, postMilestones: [], trustScore: 0, trustBadge: ''none''}}\\)\" --quiet)"
+    ]
+  }
+}
