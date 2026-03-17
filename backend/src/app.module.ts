@@ -10,6 +10,9 @@ import { BookedAppointmentModule } from './booked-appointment/booked-appointment
 import { ChatModule } from './chat/chat.module';
 
 import { UserProfileModule } from './user-profile/user-profile.module';
+import { PointsRewardModule } from './points-reward/points-reward.module';
+import { SubscriptionPlanModule } from './subscription-plan/subscription-plan.module';
+import { WalletModule } from './wallet/wallet.module';
 
 
 @Module({
@@ -26,6 +29,9 @@ import { UserProfileModule } from './user-profile/user-profile.module';
     BookedAppointmentModule,
     ChatModule,
     UserProfileModule,
+    PointsRewardModule,
+    SubscriptionPlanModule,
+    WalletModule,
   ],
 })
 export class AppModule {}

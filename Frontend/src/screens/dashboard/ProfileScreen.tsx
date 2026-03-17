@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -64,6 +64,7 @@ interface UserProfile {
   bio?: string;
   userType?: string;
   specialization?: string;
+  subscriptionPlan?: string;
 }
 
 type ProfileScreenProps = {
@@ -158,6 +159,28 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [approvedByDoctorCount, setApprovedByDoctorCount] = useState<number>(0);
+  const [appointmentCount, setAppointmentCount] = useState<number>(0);
+  const [pointsSummary, setPointsSummary] = useState<{
+    totalPoints: number;
+    cashValue: number;
+    trustBadge: string;
+    trustScore: number;
+  } | null>(null);
+  const avatarSource = useMemo(
+    () => userProfile?.profileImage ? { uri: userProfile.profileImage } : null,
+    [userProfile?.profileImage],
+  );
+  const [pointsRefreshing, setPointsRefreshing] = useState(false);
+
+  // Points conversion modal
+  const [convertModal, setConvertModal] = useState(false);
+  const [convertInput, setConvertInput] = useState("");
+  const [convertLoading, setConvertLoading] = useState(false);
+  const [verificationSlots, setVerificationSlots] = useState<{
+    remainingSlots: number;
+    totalSlots: number;
+    usedSlots: number;
+  } | null>(null);
 
   // Name edit
   const [editModal, setEditModal] = useState(false);
@@ -248,12 +271,78 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
     }
   };
 
+  const fetchAppointmentCount = async () => {
+    try {
+      const res = await apiClient.get(`/booked-appointments/doctor/${id}`);
+      setAppointmentCount(res.data?.count ?? 0);
+    } catch {
+      // silent
+    }
+  };
+
+  const fetchPointsSummary = async () => {
+    try {
+      const res = await apiClient.get(`/points-reward/${id}/summary`);
+      setPointsSummary(res.data?.data ?? null);
+    } catch {
+      // silent
+    }
+  };
+
+  const fetchVerificationSlots = async () => {
+    try {
+      const docRes = await apiClient.get(`/doctors/${id}`);
+      const plan = docRes.data?.doctor?.subscriptionPlan ?? 'free_trial';
+      const slotsRes = await apiClient.get(`/points-reward/${id}/verification-slots?plan=${plan}`);
+      setVerificationSlots(slotsRes.data?.data ?? null);
+    } catch {
+      // silent
+    }
+  };
+
+  const handlePointsRefresh = async () => {
+    setPointsRefreshing(true);
+    await Promise.all([fetchPointsSummary(), fetchVerificationSlots()]);
+    setPointsRefreshing(false);
+  };
+
+  const handleConvertPoints = async () => {
+    const pts = parseInt(convertInput, 10);
+    if (!pts || pts <= 0) {
+      Alert.alert("Invalid", "Enter a valid number of points.");
+      return;
+    }
+    if (pointsSummary && pts > pointsSummary.totalPoints) {
+      Alert.alert("Insufficient Points", `You only have ${pointsSummary.totalPoints} points.`);
+      return;
+    }
+    setConvertLoading(true);
+    try {
+      await apiClient.post("/wallet/convert", { doctorId: id, points: pts });
+      setConvertModal(false);
+      setConvertInput("");
+      Alert.alert("Success", `PKR ${(pts * 0.1).toFixed(2)} has been added to your wallet.`);
+      await Promise.all([fetchPointsSummary(), fetchVerificationSlots()]);
+    } catch (e: any) {
+      Alert.alert("Error", e?.response?.data?.message || "Conversion failed.");
+    } finally {
+      setConvertLoading(false);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
       fetchProfile();
       fetchUserPosts();
-      if (role === "doctor") fetchApprovedByCount();
+      if (role === "doctor") {
+        fetchApprovedByCount();
+        fetchAppointmentCount();
+        fetchPointsSummary();
+        if (!onBookAppointment) fetchVerificationSlots();
+      }
+
+      return () => {};
     }, [id]),
   );
 
@@ -261,7 +350,12 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
     setRefreshing(true);
     fetchProfile();
     fetchUserPosts();
-    if (role === "doctor") fetchApprovedByCount();
+    if (role === "doctor") {
+      fetchApprovedByCount();
+      fetchAppointmentCount();
+      fetchPointsSummary();
+      if (!onBookAppointment) fetchVerificationSlots();
+    }
   };
 
   /* ── Save name ── */
@@ -602,9 +696,9 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
             onPress={handlePickPhoto}
             style={styles.avatarTouchable}
           >
-            {userProfile?.profileImage ? (
+            {avatarSource ? (
               <Image
-                source={{ uri: userProfile.profileImage }}
+                source={avatarSource}
                 style={styles.avatarImage}
               />
             ) : (
@@ -622,9 +716,14 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
           {/* Name + Stats */}
           <View style={styles.nameStatsCol}>
             <View style={styles.nameRow}>
-              <Text style={styles.profileName} numberOfLines={1}>
-                {displayName(userProfile?.fullName)}
-              </Text>
+              <View style={styles.nameWithTick}>
+                <Text style={styles.profileName} numberOfLines={1}>
+                  {displayName(userProfile?.fullName)}
+                </Text>
+                {role === "doctor" && userProfile?.subscriptionPlan === "premium" && (
+                  <Ionicons name="checkmark-circle" size={17} color="#1D9BF0" />
+                )}
+              </View>
               <TouchableOpacity
                 onPress={() => {
                   setEditName(userProfile?.fullName ?? "");
@@ -643,6 +742,13 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
               </View>
             )}
 
+            {role === "doctor" && userProfile?.subscriptionPlan === "premium" && (
+              <View style={styles.premiumBadge}>
+                <Ionicons name="star" size={10} color="#C8960C" />
+                <Text style={styles.premiumBadgeText}>Premium Member</Text>
+              </View>
+            )}
+
             {/* Stats */}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
@@ -651,10 +757,17 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
               </View>
               <View style={styles.statDivider} />
               {role === "doctor" ? (
-                <View style={styles.statItem}>
-                  <Text style={styles.statNum}>{approvedByDoctorCount}</Text>
-                  <Text style={styles.statLabel}>Approved</Text>
-                </View>
+                <>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNum}>{approvedByDoctorCount}</Text>
+                    <Text style={styles.statLabel}>Approved</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNum}>{appointmentCount}</Text>
+                    <Text style={styles.statLabel}>Appointments</Text>
+                  </View>
+                </>
               ) : (
                 <>
                   <View style={styles.statItem}>
@@ -713,6 +826,104 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
           </View>
         </View>
 
+        {/* Trust Badge — visible to ALL users on doctor profiles */}
+        {role === "doctor" && pointsSummary !== null && (
+          <View style={styles.pointsCard}>
+            {!onBookAppointment && (
+              <View style={styles.pointsCardHeader}>
+                <Text style={styles.pointsCardTitle}>Points & Rewards</Text>
+                <TouchableOpacity onPress={handlePointsRefresh} disabled={pointsRefreshing} style={styles.pointsRefreshBtn}>
+                  {pointsRefreshing
+                    ? <ActivityIndicator size={14} color="#6B7FED" />
+                    : <Ionicons name="refresh" size={16} color="#6B7FED" />}
+                </TouchableOpacity>
+              </View>
+            )}
+            <View style={styles.pointsRow}>
+
+              {/* Points — only visible to the doctor on their own profile */}
+              {!onBookAppointment && (
+                <>
+                  <TouchableOpacity
+                    style={styles.pointsItem}
+                    onPress={() => { setConvertInput(""); setConvertModal(true); }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="star" size={18} color="#F6A623" />
+                    <Text style={styles.pointsNum}>{pointsSummary.totalPoints}</Text>
+                    <Text style={styles.pointsLabel}>My Points</Text>
+                    <Text style={styles.pointsCash}>
+                      PKR {pointsSummary.cashValue.toFixed(0)}
+                    </Text>
+                    <Text style={styles.pointsTapHint}>Tap to convert</Text>
+                  </TouchableOpacity>
+                  <View style={styles.pointsVertDivider} />
+                </>
+              )}
+
+              {/* Trust Badge */}
+              <View style={styles.pointsItem}>
+                <Ionicons
+                  name="shield-checkmark"
+                  size={18}
+                  color={
+                    pointsSummary.trustBadge === "platinum" ? "#7B1FA2"
+                    : pointsSummary.trustBadge === "gold"   ? "#F9A825"
+                    : pointsSummary.trustBadge === "silver" ? "#78909C"
+                    : pointsSummary.trustBadge === "bronze" ? "#8D6E63"
+                    : "#CCC"
+                  }
+                />
+                <Text style={styles.pointsNum}>
+                  {pointsSummary.trustBadge === "none"
+                    ? "—"
+                    : pointsSummary.trustBadge.charAt(0).toUpperCase() +
+                      pointsSummary.trustBadge.slice(1)}
+                </Text>
+                <Text style={styles.pointsLabel}>Trust Badge</Text>
+                <Text style={styles.pointsCash}>
+                  Score: {pointsSummary.trustScore}
+                </Text>
+              </View>
+            </View>
+
+            {/* Hint — only for doctor's own profile */}
+            {!onBookAppointment && (
+              <View style={styles.pointsHint}>
+                <Ionicons name="information-circle-outline" size={13} color="#6B7FED" />
+                <Text style={styles.pointsHintText}>
+                  Earn pts when posts you approve go viral · 1 pt = PKR 0.10
+                </Text>
+              </View>
+            )}
+
+            {/* Verification Slots — only for doctor's own profile */}
+            {!onBookAppointment && verificationSlots !== null && (
+              <View style={styles.slotsRow}>
+                <Ionicons name="checkmark-circle" size={14} color="#00B374" />
+                <Text style={styles.slotsLabel}>Post verify credits this month:</Text>
+                <View style={styles.slotsPillWrap}>
+                  {Array.from({ length: verificationSlots.totalSlots }).map((_, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.slotPill,
+                        i < verificationSlots.usedSlots ? styles.slotPillUsed : styles.slotPillFree,
+                      ]}
+                    />
+                  ))}
+                  {verificationSlots.totalSlots === 0 && (
+                    <Text style={styles.slotsNone}>No slots (upgrade plan)</Text>
+                  )}
+                </View>
+                <Text style={styles.slotsCount}>
+                  {verificationSlots.remainingSlots}/{verificationSlots.totalSlots}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Book Appointment — only shown to users viewing a doctor profile */}
         {onBookAppointment ? (
           <TouchableOpacity
@@ -763,9 +974,9 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
     const needsExpand = item.description.length > descLimit && !hasColor;
     const baseUrl = API_URL.replace("/api", "");
 
-    const avatarEl = userProfile?.profileImage ? (
+    const avatarEl = avatarSource ? (
       <Image
-        source={{ uri: userProfile.profileImage }}
+        source={avatarSource}
         style={styles.postAvatarImg}
       />
     ) : (
@@ -1036,6 +1247,88 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
           />
         }
       />
+
+      {/* ══ Points Conversion Modal ══ */}
+      <Modal
+        visible={convertModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConvertModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.convertOverlay}>
+          <TouchableWithoutFeedback onPress={() => {}}>
+          <View style={styles.convertBox}>
+            {/* Modal header */}
+            <View style={styles.convertHeader}>
+              <Text style={styles.convertTitle}>Convert Points</Text>
+              <TouchableOpacity onPress={() => setConvertModal(false)}>
+                <Ionicons name="close" size={22} color="#555" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.convertAvailLbl}>Available Points</Text>
+            <Text style={styles.convertAvailVal}>{pointsSummary?.totalPoints ?? 0} pts</Text>
+
+            <View style={styles.convertRow}>
+              {/* Points input */}
+              <View style={styles.convertBoxLeft}>
+                <Text style={styles.convertBoxLbl}>Points</Text>
+                <TextInput
+                  style={styles.convertInput}
+                  value={convertInput}
+                  onChangeText={(v) => {
+                    const digits = v.replace(/[^0-9]/g, "");
+                    const max = pointsSummary?.totalPoints ?? 0;
+                    const num = parseInt(digits, 10);
+                    if (!digits || isNaN(num)) { setConvertInput(""); return; }
+                    setConvertInput(String(Math.min(num, max)));
+                  }}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor="#CCC"
+                />
+                <TouchableOpacity
+                  style={styles.convertMaxBtn}
+                  onPress={() => setConvertInput(String(pointsSummary?.totalPoints ?? 0))}
+                >
+                  <Text style={styles.convertMaxTxt}>Max</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Arrow */}
+              <View style={styles.convertArrow}>
+                <Ionicons name="arrow-forward" size={20} color="#6B7FED" />
+              </View>
+
+              {/* PKR preview */}
+              <View style={styles.convertBoxRight}>
+                <Text style={styles.convertBoxLbl}>PKR</Text>
+                <Text style={styles.convertPkrVal}>
+                  {convertInput && parseInt(convertInput, 10) > 0
+                    ? (parseInt(convertInput, 10) * 0.1).toFixed(2)
+                    : "0.00"}
+                </Text>
+                <Text style={styles.convertRateLbl}>1 pt = PKR 0.10</Text>
+              </View>
+            </View>
+
+            <Text style={styles.convertMinHint}>Minimum 5,000 points required to convert</Text>
+
+            <TouchableOpacity
+              style={[styles.convertBtn, (convertLoading || parseInt(convertInput || "0", 10) < 5000) && { opacity: 0.4 }]}
+              onPress={handleConvertPoints}
+              disabled={convertLoading || parseInt(convertInput || "0", 10) < 5000}
+            >
+              {convertLoading
+                ? <ActivityIndicator color="#FFF" size="small" />
+                : <Text style={styles.convertBtnTxt}>Convert</Text>}
+            </TouchableOpacity>
+          </View>
+          </TouchableWithoutFeedback>
+        </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       {/* ══ Edit Name Modal ══ */}
       <BottomSheetModal
@@ -1442,7 +1735,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     gap: 8,
   },
-  profileName: { fontSize: 17, fontWeight: "800", color: "#1A1D2E", flex: 1 },
+  profileName: { fontSize: 17, fontWeight: "800", color: "#1A1D2E" },
+  nameWithTick: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1, flex: 1 },
   pencilBtn: {
     width: 26,
     height: 26,
@@ -1458,11 +1752,162 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   doctorBadgeText: { fontSize: 11, color: "#6B7FED", fontWeight: "700" },
+  premiumBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 8,
+  },
+  premiumBadgeText: { fontSize: 11, color: "#C8960C", fontWeight: "700" },
   statsRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
   statItem: { flex: 1, alignItems: "center" },
   statNum: { fontSize: 17, fontWeight: "800", color: "#1A1D2E" },
   statLabel: { fontSize: 11, color: "#888", marginTop: 1 },
   statDivider: { width: 1, height: 26, backgroundColor: "#E8EAF6" },
+
+  // Points card
+  pointsCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  pointsCardTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#3D4A8A",
+  },
+  pointsRefreshBtn: {
+    padding: 4,
+  },
+  pointsCard: {
+    backgroundColor: "#F0F4FF",
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: "#E0E6FF",
+  },
+  pointsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+  },
+  pointsItem: { alignItems: "center", flex: 1 },
+  pointsNum: { fontSize: 16, fontWeight: "800", color: "#1A1D2E", marginTop: 4 },
+  pointsLabel: { fontSize: 11, color: "#888", marginTop: 1 },
+  pointsCash: { fontSize: 11, color: "#6B7FED", fontWeight: "600", marginTop: 2 },
+  pointsVertDivider: { width: 1, height: 50, backgroundColor: "#D8DCEF" },
+  pointsHint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 10,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 8,
+    gap: 5,
+  },
+  pointsHintText: { fontSize: 11, color: "#6B7FED", flex: 1, lineHeight: 16 },
+  pointsTapHint: { fontSize: 10, color: "#6B7FED", marginTop: 2, opacity: 0.7 },
+
+  // Convert modal
+  convertOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  convertBox: {
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+  },
+  convertHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  convertTitle: { fontSize: 17, fontWeight: "800", color: "#1A1D2E" },
+  convertAvailLbl: { fontSize: 11, color: "#9099B5", fontWeight: "600" },
+  convertAvailVal: { fontSize: 22, fontWeight: "800", color: "#F6A623", marginBottom: 20 },
+  convertRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 20,
+  },
+  convertBoxLeft: {
+    flex: 1,
+    backgroundColor: "#F5F7FF",
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E8EAF6",
+  },
+  convertBoxRight: {
+    flex: 1,
+    backgroundColor: "#F0FFF9",
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#C6F6E6",
+  },
+  convertBoxLbl: { fontSize: 11, fontWeight: "700", color: "#9099B5", marginBottom: 6 },
+  convertInput: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#1A1D2E",
+    textAlign: "center",
+    width: "100%",
+  },
+  convertMaxBtn: {
+    marginTop: 6,
+    backgroundColor: "#6B7FED",
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  convertMaxTxt: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  convertArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F0F4FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  convertPkrVal: { fontSize: 24, fontWeight: "800", color: "#00B374" },
+  convertRateLbl: { fontSize: 10, color: "#9099B5", marginTop: 6 },
+  convertMinHint: { fontSize: 11, color: "#E53E3E", textAlign: "center", marginBottom: 12 },
+  convertBtn: {
+    backgroundColor: "#6B7FED",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  convertBtnTxt: { color: "#FFF", fontSize: 15, fontWeight: "700" },
+  slotsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E0E6FF",
+  },
+  slotsLabel: { fontSize: 11, color: "#555", fontWeight: "600" },
+  slotsPillWrap: { flexDirection: "row", gap: 4, flexWrap: "wrap", flex: 1 },
+  slotPill: { width: 14, height: 14, borderRadius: 7 },
+  slotPillFree: { backgroundColor: "#00B374" },
+  slotPillUsed: { backgroundColor: "#E0E0E0" },
+  slotsCount: { fontSize: 12, fontWeight: "700", color: "#1A1D2E" },
+  slotsNone: { fontSize: 11, color: "#F6A623", fontStyle: "italic" },
 
   // Bio
   bioSection: { borderTopWidth: 1, borderTopColor: "#F0F2F8", paddingTop: 14 },

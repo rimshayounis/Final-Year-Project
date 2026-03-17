@@ -227,6 +227,8 @@ export default function FeedScreen({
   >({});
   // Which post has the verified-by dropdown open
   const [verifiedDropdown, setVerifiedDropdown] = useState<string | null>(null);
+  const [slotsRemaining, setSlotsRemaining] = useState<number | null>(null);
+  const [doctorPlan, setDoctorPlan] = useState<string>("free_trial");
 
   const categories = [
     "All",
@@ -274,6 +276,25 @@ export default function FeedScreen({
       return info;
     } catch {
       return null;
+    }
+  };
+
+  const fetchVerificationSlots = async () => {
+    if (role !== "doctor") return;
+    try {
+      const drRes = await apiClient.get(`/doctors/${id}`);
+      const plan = drRes.data?.doctor?.subscriptionPlan ?? "free_trial";
+      setDoctorPlan(plan);
+      if (plan === "free_trial") {
+        setSlotsRemaining(0);
+        return;
+      }
+      const slotsRes = await apiClient.get(
+        `/points-reward/${id}/verification-slots?plan=${plan}`,
+      );
+      setSlotsRemaining(slotsRes.data?.data?.remainingSlots ?? 0);
+    } catch {
+      setSlotsRemaining(null);
     }
   };
 
@@ -408,6 +429,7 @@ export default function FeedScreen({
       setLoading(true);
       fetchPosts();
       fetchUserName();
+      if (role === "doctor") fetchVerificationSlots();
     }, []),
   );
   useEffect(() => {
@@ -553,6 +575,7 @@ export default function FeedScreen({
             });
             Alert.alert("Approved!", "Post is now visible in the feed.");
             fetchPosts();
+            fetchVerificationSlots();
           } catch (e: any) {
             Alert.alert(
               "Error",
@@ -752,28 +775,46 @@ export default function FeedScreen({
           </View>
           {role === "doctor" && !isOwnPost && item.status === "pending" ? (
             <View style={s.reviewBtns}>
-              <TouchableOpacity
-                style={s.approveBtn}
-                onPress={() => handleApprove(item)}
-                disabled={isReviewing}
-              >
-                {isReviewing ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark-circle" size={13} color="#FFF" />
-                    <Text style={s.approveBtnText}>{"Approve"}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={s.rejectBtn}
-                onPress={() => handleReject(item)}
-                disabled={isReviewing}
-              >
-                <Ionicons name="close-circle" size={13} color="#E53E3E" />
-                <Text style={s.rejectBtnText}>{"Reject"}</Text>
-              </TouchableOpacity>
+              {doctorPlan === "free_trial" ? (
+                <View style={s.slotsExhausted}>
+                  <Ionicons name="card-outline" size={12} color="#E53E3E" />
+                  <Text style={[s.slotsExhaustedText, { color: "#E53E3E" }]}>
+                    Buy subscription to verify post
+                  </Text>
+                </View>
+              ) : slotsRemaining === 0 ? (
+                <View style={s.slotsExhausted}>
+                  <Ionicons name="lock-closed" size={12} color="#F6A623" />
+                  <Text style={s.slotsExhaustedText}>
+                    Verification limit reached for this month
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={s.approveBtn}
+                    onPress={() => handleApprove(item)}
+                    disabled={isReviewing}
+                  >
+                    {isReviewing ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-circle" size={13} color="#FFF" />
+                        <Text style={s.approveBtnText}>{"Approve"}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={s.rejectBtn}
+                    onPress={() => handleReject(item)}
+                    disabled={isReviewing}
+                  >
+                    <Ionicons name="close-circle" size={13} color="#E53E3E" />
+                    <Text style={s.rejectBtnText}>{"Reject"}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           ) : null}
         </View>
@@ -1569,5 +1610,21 @@ const s = StyleSheet.create({
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
+  },
+  slotsExhausted: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#FFF8EC",
+    borderWidth: 1,
+    borderColor: "#F6A623",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  slotsExhaustedText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#F6A623",
   },
 });

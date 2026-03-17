@@ -10,6 +10,7 @@ import { Post, PostDocument } from './schemas/post.schema';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { ApprovePostDto } from './dto/approve-post.dto';
+import { PointsRewardService } from '../points-reward/points-reward.service';
 
 @Injectable()
 export class PostsService {
@@ -17,6 +18,7 @@ export class PostsService {
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     @InjectModel('User') private userModel: Model<any>,
     @InjectModel('Doctor') private doctorModel: Model<any>,
+    private readonly pointsRewardService: PointsRewardService,
   ) {}
 
   // ── Populate userId from User first, then Doctor for unpopulated posts ──
@@ -170,9 +172,30 @@ export class PostsService {
     }
 
     await this.postModel.findByIdAndUpdate(id, { isActive: false }).exec();
+
+    // Fire-and-forget: reverse all milestone points earned from this post
+    if (post.approvedBy && post.status === 'approved') {
+      this.pointsRewardService
+        .handlePostDeleted(id, post.approvedBy.toString(), post.likes)
+        .catch((err) => console.error('[PointsReward] handlePostDeleted failed:', err?.message));
+    }
   }
 
   async approveOrReject(id: string, approvePostDto: ApprovePostDto): Promise<PostDocument> {
+    // ── Slot check: only when approving (rejection doesn't cost a slot) ──
+    if (approvePostDto.action === 'approved') {
+      const doctor = await this.doctorModel
+        .findById(approvePostDto.doctorId)
+        .select('subscriptionPlan')
+        .exec();
+
+      const plan = (doctor as any)?.subscriptionPlan ?? 'free_trial';
+      await this.pointsRewardService.checkAndConsumeVerificationSlot(
+        approvePostDto.doctorId,
+        plan,
+      );
+    }
+
     const updateData: any = {
       status: approvePostDto.action,
       approvedBy: new Types.ObjectId(approvePostDto.doctorId),
@@ -200,6 +223,18 @@ export class PostsService {
       .findByIdAndUpdate(id, { $inc: { likes: 1 } }, { new: true })
       .exec();
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+
+    // Fire-and-forget: award points/trust badge to the approving doctor
+    if (post.approvedBy && post.status === 'approved') {
+      this.pointsRewardService
+        .handleLikeMilestone(
+          post._id.toString(),
+          post.likes,
+          post.approvedBy.toString(),
+        )
+        .catch((err) => console.error('[PointsReward] handleLikeMilestone failed:', err?.message));
+    }
+
     return post;
   }
 
@@ -208,6 +243,18 @@ export class PostsService {
       .findByIdAndUpdate(id, { $inc: { likes: -1 } }, { new: true })
       .exec();
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+
+    // Fire-and-forget: reverse any milestone points that are no longer valid
+    if (post.approvedBy && post.status === 'approved') {
+      this.pointsRewardService
+        .handleLikeDecrement(
+          post._id.toString(),
+          post.likes,
+          post.approvedBy.toString(),
+        )
+        .catch(() => { /* silent */ });
+    }
+
     return post;
   }
 
