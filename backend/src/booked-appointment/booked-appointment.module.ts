@@ -1,21 +1,29 @@
+// src/booked-appointment/booked-appointment.module.ts
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { BookedAppointmentController } from './booked-appointment.controller';
+import { ScheduleModule } from '@nestjs/schedule';
+
+import {
+  BookedAppointment,
+  BookedAppointmentSchema,
+} from './schemas/booked-appointment.schema';
 import { BookedAppointmentService } from './booked-appointment.service';
-import { BookedAppointment, BookedAppointmentSchema } from './schemas/booked-appointment.schema';
-import { User, UserSchema } from '../users/schemas/user.schema';         // ← ADD
-import { Doctor, DoctorSchema } from '../doctors/schemas/doctor.schema'; // ← ADD
+import { BookedAppointmentController } from './booked-appointment.controller';
+import { AppointmentGateway } from './appointment.gateway';
+import { AppointmentCompletionScheduler } from './appointment-completion.scheduler';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     MongooseModule.forFeature([
       { name: BookedAppointment.name, schema: BookedAppointmentSchema },
-      { name: User.name, schema: UserSchema },         // ← ADD
-      { name: Doctor.name, schema: DoctorSchema },     // ← ADD
     ]),
   ],
   controllers: [BookedAppointmentController],
-  providers: [BookedAppointmentService],
-  exports: [BookedAppointmentService],
+  providers: [
+    BookedAppointmentService,
+    AppointmentGateway,
+    AppointmentCompletionScheduler,
+  ],
 })
 export class BookedAppointmentModule {}

@@ -24,7 +24,6 @@ export class BookedAppointmentService {
 
   // Book a new appointment
   async bookAppointment(dto: CreateBookedAppointmentDto): Promise<any> {
-    // Check if this slot is already booked
     const existing = await this.bookedAppointmentModel.findOne({
       doctorId: new Types.ObjectId(dto.doctorId),
       date: dto.date,
@@ -61,10 +60,11 @@ export class BookedAppointmentService {
   async getUserAppointments(userId: string): Promise<any> {
     const appointments = await this.bookedAppointmentModel
       .find({ userId: new Types.ObjectId(userId) })
-      .populate('userId', 'fullName email')  
+      .populate('userId', 'fullName email')
       .populate('doctorId', 'fullName email doctorProfile')
       .sort({ date: -1, time: -1 })
       .exec();
+
     return {
       success: true,
       count: appointments.length,
@@ -116,7 +116,6 @@ export class BookedAppointmentService {
       throw new NotFoundException('Appointment not found');
     }
 
-    // Prevent invalid status transitions
     if (appointment.status === 'completed' || appointment.status === 'cancelled') {
       throw new BadRequestException(
         `Cannot update a ${appointment.status} appointment`,
@@ -128,6 +127,11 @@ export class BookedAppointmentService {
     if (dto.status === 'cancelled') {
       appointment.cancelledAt = new Date();
       appointment.cancelReason = dto.cancelReason || null;
+    }
+
+    // ── SET completedAt when status becomes completed ──
+    if (dto.status === 'completed') {
+      appointment.completedAt = new Date();
     }
 
     const updated = await appointment.save();
@@ -190,5 +194,32 @@ export class BookedAppointmentService {
       count: appointments.length,
       data: appointments,
     };
+  }
+
+  // ── AUTO-COMPLETE: called by the scheduler every minute ──
+  async autoCompleteExpired(): Promise<void> {
+    const now = new Date();
+
+    // Find all confirmed appointments where date+time+duration has passed
+    const confirmed = await this.bookedAppointmentModel
+      .find({ status: 'confirmed' })
+      .exec();
+
+    for (const appt of confirmed) {
+      // Build a JS Date from the stored "YYYY-MM-DD" + "HH:MM" strings
+      const [hours, minutes] = appt.time.split(':').map(Number);
+      const apptStart = new Date(appt.date);
+      apptStart.setHours(hours, minutes, 0, 0);
+
+      const apptEnd = new Date(
+        apptStart.getTime() + appt.sessionDuration * 60 * 1000,
+      );
+
+      if (now >= apptEnd) {
+        appt.status = 'completed';
+        appt.completedAt = now;
+        await appt.save();
+      }
+    }
   }
 }
