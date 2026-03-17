@@ -4,7 +4,8 @@ import { PostsController } from './posts.controller';
 import { PostsService } from './posts.service';
 import { Post, PostSchema } from './schemas/post.schema';
 import { User, UserSchema } from '../users/schemas/user.schema';
-import { Doctor, DoctorSchema } from '../doctors/schemas/doctor.schema'; // ← add this
+import { Doctor, DoctorSchema } from '../doctors/schemas/doctor.schema';
+import { PointsRewardModule } from '../points-reward/points-reward.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { Doctor, DoctorSchema } from '../doctors/schemas/doctor.schema'; // ← 
       { name: User.name, schema: UserSchema },
       { name: Doctor.name, schema: DoctorSchema },
     ]),
+    PointsRewardModule,
   ],
   controllers: [PostsController],
   providers: [PostsService],

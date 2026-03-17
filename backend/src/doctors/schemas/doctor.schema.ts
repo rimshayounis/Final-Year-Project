@@ -23,6 +23,8 @@ export class DoctorProfile {
   registeredAt: Date;
 }
 
+export type SubscriptionPlan = 'free_trial' | 'basic' | 'professional' | 'premium';
+
 // Doctor Schema
 @Schema({ timestamps: true })
 export class Doctor {
@@ -37,6 +39,9 @@ export class Doctor {
 
   @Prop({ type: DoctorProfile, required: true })
   doctorProfile: DoctorProfile;
+
+  @Prop({ default: 'free_trial' })
+  subscriptionPlan: SubscriptionPlan;
 }
 
 export const DoctorSchema = SchemaFactory.createForClass(Doctor);

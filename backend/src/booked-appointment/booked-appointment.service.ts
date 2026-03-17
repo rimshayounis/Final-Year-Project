@@ -14,12 +14,17 @@ import {
   CreateBookedAppointmentDto,
   UpdateAppointmentStatusDto,
 } from './dto/booked-appointment.dto';
+import { PointsRewardService } from '../points-reward/points-reward.service';
+import { Doctor, DoctorDocument } from '../doctors/schemas/doctor.schema';
 
 @Injectable()
 export class BookedAppointmentService {
   constructor(
     @InjectModel(BookedAppointment.name)
     private bookedAppointmentModel: Model<BookedAppointmentDocument>,
+    @InjectModel(Doctor.name)
+    private doctorModel: Model<DoctorDocument>,
+    private readonly pointsRewardService: PointsRewardService,
   ) {}
 
   // Book a new appointment
@@ -131,6 +136,19 @@ export class BookedAppointmentService {
     }
 
     const updated = await appointment.save();
+
+    // Award monthly booking points + bonus slots when appointment is completed
+    if (dto.status === 'completed') {
+      const yearMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+      const doctor = await this.doctorModel
+        .findById(appointment.doctorId)
+        .select('subscriptionPlan')
+        .exec();
+      const plan = (doctor as any)?.subscriptionPlan ?? 'free_trial';
+      this.pointsRewardService
+        .handleBookingCompleted(appointment.doctorId.toString(), yearMonth, plan)
+        .catch(() => { /* silent — never block the status update */ });
+    }
 
     return {
       success: true,

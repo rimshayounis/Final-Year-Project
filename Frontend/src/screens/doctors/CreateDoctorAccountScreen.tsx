@@ -138,12 +138,12 @@ if (response.data.success) {
 
   Alert.alert(
     'Registration Successful',
-    'Your account is pending verification by admin.',
+    'Account created! Please choose a subscription plan to continue.',
     [
       {
         text: 'OK',
         onPress: () =>
-          navigation.replace('DoctorUnverified', {
+          navigation.replace('DoctorSubscription', {
             doctorId,
             doctorName,
           }),
