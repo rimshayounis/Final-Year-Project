@@ -1,5 +1,4 @@
-// src/booked-appointment/booked-appointment.module.ts
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -13,6 +12,8 @@ import { AppointmentGateway } from './appointment.gateway';
 import { AppointmentCompletionScheduler } from './appointment-completion.scheduler';
 import { Doctor, DoctorSchema } from '../doctors/schemas/doctor.schema';
 import { PointsRewardModule } from '../points-reward/points-reward.module';
+import { PaymentModule } from '../payment/payment.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -22,6 +23,8 @@ import { PointsRewardModule } from '../points-reward/points-reward.module';
       { name: Doctor.name, schema: DoctorSchema },
     ]),
     PointsRewardModule,
+    forwardRef(() => PaymentModule),
+    NotificationModule,
   ],
   controllers: [BookedAppointmentController],
   providers: [

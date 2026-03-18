@@ -27,9 +27,9 @@ type WalletRoute = RouteProp<RootStackParamList, "Wallet">;
 interface WalletLimits {
   minWithdrawal: number;
   maxPerTransaction: number;
-  monthlyLimit: number | null;   // null = unlimited (premium)
+  monthlyLimit: number | null;
   monthlyUsed: number;
-  monthlyRemaining: number | null; // null = unlimited
+  monthlyRemaining: number | null;
 }
 
 interface WalletTx {
@@ -39,6 +39,22 @@ interface WalletTx {
   description: string;
   status: string | null;
   createdAt: string;
+  // appointment earning fields
+  patientName?: string | null;
+  doctorName?: string | null;
+  sessionDate?: string | null;
+  sessionTime?: string | null;
+  sessionDuration?: number | null;
+  commissionRate?: number | null;
+  commissionAmount?: number | null;
+  appointmentId?: string | null;
+}
+
+interface BankDetails {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  addedAt: string;
 }
 
 interface WalletData {
@@ -57,7 +73,9 @@ function formatDate(iso: string) {
   });
 }
 
-function TxIcon({ type }: { type: string }) {
+function TxIcon({ type, isEarning }: { type: string; isEarning: boolean }) {
+  if (isEarning)
+    return <Ionicons name="medkit" size={18} color="#6B7FED" />;
   if (type === "points_converted")
     return <Ionicons name="swap-horizontal" size={18} color="#00B374" />;
   if (type.startsWith("withdrawal"))
@@ -78,16 +96,23 @@ export default function WalletScreen() {
   const route = useRoute<WalletRoute>();
   const { doctorId } = route.params;
 
-  const [wallet, setWallet] = useState<WalletData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [withdrawModal, setWithdrawModal] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [wallet,          setWallet]          = useState<WalletData | null>(null);
+  const [bankDetails,     setBankDetails]     = useState<BankDetails | null>(null);
+  const [loading,         setLoading]         = useState(true);
+  const [withdrawModal,   setWithdrawModal]   = useState(false);
+  const [withdrawAmount,  setWithdrawAmount]  = useState("");
   const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [expandedIndex,   setExpandedIndex]   = useState<number | null>(null);
+  const [apptCache,       setApptCache]       = useState<Record<string, any>>({});
 
   const fetchWallet = async () => {
     try {
-      const res = await apiClient.get(`/wallet/${doctorId}`);
-      setWallet(res.data?.data ?? null);
+      const [walletRes, bankRes] = await Promise.all([
+        apiClient.get(`/wallet/${doctorId}`),
+        apiClient.get(`/doctors/${doctorId}/bank-details`),
+      ]);
+      setWallet(walletRes.data?.data ?? null);
+      setBankDetails(bankRes.data?.data ?? null);
     } catch {
       Alert.alert("Error", "Could not load wallet.");
     } finally {
@@ -104,8 +129,8 @@ export default function WalletScreen() {
 
   const effectiveMax = () => {
     if (!wallet) return 5000;
-    const { maxPerTransaction, monthlyRemaining, balance } = wallet.limits;
-    const caps = [maxPerTransaction, balance];
+    const { maxPerTransaction, monthlyRemaining } = wallet.limits;
+    const caps = [maxPerTransaction, wallet.balance];
     if (monthlyRemaining !== null) caps.push(monthlyRemaining);
     return Math.min(...caps);
   };
@@ -119,7 +144,7 @@ export default function WalletScreen() {
     setWithdrawLoading(true);
     try {
       await apiClient.post("/wallet/withdraw", { doctorId, amount: amt });
-      Alert.alert("Requested", `Withdrawal of PKR ${amt} submitted. Processing in 3–5 business days.`);
+      Alert.alert("Requested", `Withdrawal of PKR ${amt} submitted. Processing within 24 hours.`);
       setWithdrawModal(false);
       setWithdrawAmount("");
       fetchWallet();
@@ -225,7 +250,6 @@ export default function WalletScreen() {
               </View>
             </View>
 
-            {/* Monthly usage bar */}
             {wallet.limits.monthlyLimit !== null && (
               <View style={s.monthlyRow}>
                 <View style={s.monthlyBarBg}>
@@ -252,10 +276,41 @@ export default function WalletScreen() {
           </View>
         )}
 
+        {/* Bank Details Quick Banner */}
+        {!bankDetails && (
+          <TouchableOpacity
+            style={s.bankWarningBanner}
+            onPress={() => navigation.navigate("BankDetails", { doctorId })}
+          >
+            <Ionicons name="alert-circle" size={18} color="#856404" />
+            <Text style={s.bankWarningTxt}>No bank account linked. Add one to withdraw funds.</Text>
+            <Ionicons name="chevron-forward" size={16} color="#856404" />
+          </TouchableOpacity>
+        )}
+        {bankDetails && (
+          <View style={s.bankLinkedBanner}>
+            <Ionicons name="checkmark-circle" size={18} color="#00B374" />
+            <View style={{ flex: 1 }}>
+              <Text style={s.bankLinkedTxt}>{bankDetails.bankName}</Text>
+              <Text style={s.bankLinkedSub}>****{bankDetails.accountNumber.slice(-4)} · {bankDetails.accountName}</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate("BankDetails", { doctorId })}>
+              <Text style={s.bankChangeBtn}>Change</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Withdraw Button */}
         <TouchableOpacity
-          style={[s.withdrawBtn, !(wallet?.balance) && { opacity: 0.4 }]}
+          style={[s.withdrawBtn, (!wallet?.balance || !bankDetails) && { opacity: 0.4 }]}
           onPress={() => {
+            if (!bankDetails) {
+              Alert.alert("Bank Account Required", "Please link a bank account before requesting a withdrawal.", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Add Bank", onPress: () => navigation.navigate("BankDetails", { doctorId }) },
+              ]);
+              return;
+            }
             if (!wallet?.balance) {
               Alert.alert("No Balance", "Convert your points first to add balance.");
               return;
@@ -278,27 +333,155 @@ export default function WalletScreen() {
             <Text style={s.emptyHint}>Convert your points to see history here</Text>
           </View>
         ) : (
-          wallet.transactions.map((tx, i) => (
-            <View key={i} style={s.txCard}>
-              <View style={s.txIconBox}>
-                <TxIcon type={tx.type} />
-              </View>
-              <View style={s.txBody}>
-                <Text style={s.txDesc}>{tx.description}</Text>
-                <Text style={s.txDate}>{formatDate(tx.createdAt)}</Text>
-                {tx.status && (
-                  <View style={[s.txStatusBadge, { backgroundColor: statusColor(tx.status) + "20" }]}>
-                    <Text style={[s.txStatusTxt, { color: statusColor(tx.status) }]}>
-                      {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+          wallet.transactions.map((tx, i) => {
+            const isWithdrawal = tx.type === "withdrawal_requested";
+            // covers new "appointment_earning" AND old "points_converted" records
+            // that describe an appointment fee release
+            const isEarning =
+              tx.type === "appointment_earning" ||
+              (tx.type === "points_converted" &&
+                (tx.commissionRate != null ||
+                  tx.description?.toLowerCase().includes("appointment")));
+            const isPoints = tx.type === "points_converted" && !isEarning;
+            const canExpand    = isWithdrawal || isEarning;
+            const isExpanded   = expandedIndex === i;
+            const isCredit     = isEarning || isPoints;
+
+            const grossAmount = isEarning
+              ? (tx.amount + (tx.commissionAmount ?? 0)).toFixed(2)
+              : null;
+
+            return (
+              <TouchableOpacity
+                key={i}
+                activeOpacity={canExpand ? 0.7 : 1}
+                onPress={() => {
+                  if (!canExpand) return;
+                  const next = isExpanded ? null : i;
+                  setExpandedIndex(next);
+                  // fetch appointment details from API if not cached yet
+                  if (!isExpanded && isEarning && tx.appointmentId && !apptCache[tx.appointmentId]) {
+                    apiClient
+                      .get(`/booked-appointments/${tx.appointmentId}`)
+                      .then((r) =>
+                        setApptCache((prev) => ({ ...prev, [tx.appointmentId!]: r.data?.data })),
+                      )
+                      .catch(() => {});
+                  }
+                }}
+                style={[
+                  s.txCard,
+                  isWithdrawal && s.txCardWithdraw,
+                  isEarning    && s.txCardEarning,
+                ]}
+              >
+                {/* ── Collapsed header row ─── */}
+                <View style={s.txHeaderRow}>
+                  <View style={s.txIconBox}>
+                    <TxIcon type={tx.type} isEarning={isEarning} />
+                  </View>
+
+                  <View style={s.txBody}>
+                    <Text style={s.txDesc} numberOfLines={isExpanded ? undefined : 2}>
+                      {tx.description}
                     </Text>
+                    <Text style={s.txDate}>{formatDate(tx.createdAt)}</Text>
+                    {isPoints && tx.pointsUsed > 0 && (
+                      <Text style={s.txPointsUsed}>{tx.pointsUsed} pts converted</Text>
+                    )}
+                    {tx.status && (
+                      <View style={[s.txStatusBadge, { backgroundColor: statusColor(tx.status) + "20" }]}>
+                        <Text style={[s.txStatusTxt, { color: statusColor(tx.status) }]}>
+                          {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={s.txRight}>
+                    <Text style={[s.txAmount, isCredit ? s.txAmountCredit : s.txAmountDebit]}>
+                      {isCredit ? "+" : "−"}PKR {tx.amount.toFixed(0)}
+                    </Text>
+                    {canExpand && (
+                      <Ionicons
+                        name={isExpanded ? "chevron-up" : "chevron-down"}
+                        size={13}
+                        color="#9099B5"
+                        style={{ alignSelf: "center", marginTop: 4 }}
+                      />
+                    )}
+                  </View>
+                </View>
+
+                {/* ── Expanded: Withdrawal ─── */}
+                {isExpanded && isWithdrawal && (
+                  <View style={s.txExpandBox}>
+                    <View style={s.txExpandDivider} />
+
+                    <DetailRow label="Amount"    value={`PKR ${tx.amount.toFixed(2)}`} />
+                    {bankDetails && (
+                      <>
+                        <DetailRow label="Bank"      value={bankDetails.bankName} />
+                        <DetailRow label="Account"   value={`****${bankDetails.accountNumber.slice(-4)} · ${bankDetails.accountName}`} />
+                      </>
+                    )}
+                    <DetailRow label="Date"      value={formatDate(tx.createdAt)} />
+                    <DetailRow
+                      label="Status"
+                      value={tx.status ? tx.status.charAt(0).toUpperCase() + tx.status.slice(1) : "—"}
+                      valueColor={statusColor(tx.status)}
+                    />
+
+                    <View style={s.txProcessNote}>
+                      <Ionicons name="time-outline" size={12} color="#F6A623" />
+                      <Text style={s.txProcessTxt}>Processing within 24 hours</Text>
+                    </View>
                   </View>
                 )}
-              </View>
-              <Text style={[s.txAmount, tx.type === "points_converted" ? s.txAmountCredit : s.txAmountDebit]}>
-                {tx.type === "points_converted" ? "+" : "-"}PKR {tx.amount.toFixed(0)}
-              </Text>
-            </View>
-          ))
+
+                {/* ── Expanded: Appointment Earning ─── */}
+                {isExpanded && isEarning && (() => {
+                  // prefer live API data, fall back to fields stored in tx
+                  const appt = tx.appointmentId ? apptCache[tx.appointmentId] : null;
+                  const patientName    = appt?.userId?.fullName   ?? tx.patientName   ?? null;
+                  const doctorName     = appt?.doctorId?.fullName ?? tx.doctorName    ?? null;
+                  const sessionDate    = appt?.date               ?? tx.sessionDate   ?? null;
+                  const sessionTime    = appt?.time               ?? tx.sessionTime   ?? null;
+                  const sessionDuration = appt?.sessionDuration   ?? tx.sessionDuration ?? null;
+                  return (
+                    <View style={s.txExpandBox}>
+                      <View style={s.txExpandDivider} />
+
+                      {patientName     && <DetailRow label="Patient"       value={patientName} />}
+                      {doctorName      && <DetailRow label="Doctor"        value={`Dr. ${doctorName}`} />}
+                      {sessionDate     && <DetailRow label="Session Date"  value={sessionDate} />}
+                      {sessionTime     && <DetailRow label="Session Time"  value={sessionTime} />}
+                      {sessionDuration != null && (
+                        <DetailRow label="Duration" value={`${sessionDuration} min`} />
+                      )}
+
+                      <View style={[s.txExpandDivider, { marginVertical: 8 }]} />
+
+                      <DetailRow label="Appointment Fee" value={`PKR ${grossAmount}`} />
+                      {tx.commissionRate != null && (
+                        <DetailRow
+                          label={`Commission (${Math.round(tx.commissionRate * 100)}%)`}
+                          value={`−PKR ${(tx.commissionAmount ?? 0).toFixed(2)}`}
+                          valueColor="#E53E3E"
+                        />
+                      )}
+                      <DetailRow
+                        label="Net Earned"
+                        value={`+PKR ${tx.amount.toFixed(2)}`}
+                        valueColor="#00B374"
+                        bold
+                      />
+                    </View>
+                  );
+                })()}
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
 
@@ -325,7 +508,6 @@ export default function WalletScreen() {
                   PKR {(wallet?.balance ?? 0).toFixed(2)}
                 </Text>
 
-                {/* Limit chips */}
                 <View style={s.chipRow}>
                   <View style={s.chip}>
                     <Text style={s.chipTxt}>Min PKR {wallet?.limits.minWithdrawal.toLocaleString()}</Text>
@@ -382,6 +564,34 @@ export default function WalletScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+    </View>
+  );
+}
+
+// ── Small helper component ───────────────────────────────────────────────────
+function DetailRow({
+  label,
+  value,
+  valueColor,
+  bold,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  bold?: boolean;
+}) {
+  return (
+    <View style={s.txDetailRow}>
+      <Text style={s.txDetailLbl}>{label}</Text>
+      <Text
+        style={[
+          s.txDetailVal,
+          valueColor ? { color: valueColor } : undefined,
+          bold ? { fontWeight: "800" } : undefined,
+        ]}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
@@ -480,8 +690,6 @@ const s = StyleSheet.create({
 
   // Transaction card
   txCard: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: "#FFF",
     marginHorizontal: 16,
     marginBottom: 10,
@@ -492,19 +700,52 @@ const s = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  txCardWithdraw: { borderLeftWidth: 3, borderLeftColor: "#E53E3E" },
+  txCardEarning:  { borderLeftWidth: 3, borderLeftColor: "#6B7FED" },
+
+  // Header row inside card
+  txHeaderRow: { flexDirection: "row", alignItems: "flex-start" },
   txIconBox: {
     width: 38, height: 38, borderRadius: 19,
     backgroundColor: "#F0F4FF",
-    justifyContent: "center", alignItems: "center", marginRight: 12,
+    justifyContent: "center", alignItems: "center",
+    marginRight: 12,
+    flexShrink: 0,
   },
-  txBody: { flex: 1 },
+  txBody: { flex: 1, minWidth: 0 },
   txDesc: { fontSize: 13, fontWeight: "600", color: "#1A1D2E" },
   txDate: { fontSize: 11, color: "#9099B5", marginTop: 2 },
+  txPointsUsed: { fontSize: 11, color: "#00B374", marginTop: 2 },
   txStatusBadge: { alignSelf: "flex-start", marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
   txStatusTxt: { fontSize: 10, fontWeight: "700" },
-  txAmount: { fontSize: 14, fontWeight: "700", marginLeft: 8 },
+
+  // Amount column (right side of header row)
+  txRight: { alignItems: "flex-end", flexShrink: 0, marginLeft: 8 },
+  txAmount: { fontSize: 14, fontWeight: "700" },
   txAmountCredit: { color: "#00B374" },
-  txAmountDebit: { color: "#E53E3E" },
+  txAmountDebit:  { color: "#E53E3E" },
+
+  // Expanded details section
+  txExpandBox: { marginTop: 4 },
+  txExpandDivider: { height: 1, backgroundColor: "#F0F4FF", marginVertical: 10 },
+  txDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 3,
+  },
+  txDetailLbl: { fontSize: 12, color: "#9099B5", flex: 1 },
+  txDetailVal: { fontSize: 12, fontWeight: "600", color: "#1A1D2E", textAlign: "right", flexShrink: 1 },
+  txProcessNote: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
+  txProcessTxt:  { fontSize: 11, color: "#F6A623", fontWeight: "600" },
+
+  // Bank linked banner
+  bankWarningBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFF3CD", borderRadius: 12, padding: 12, marginHorizontal: 16, marginBottom: 10 },
+  bankWarningTxt:    { flex: 1, fontSize: 12, color: "#856404", fontWeight: "600" },
+  bankLinkedBanner:  { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#D4F8E8", borderRadius: 12, padding: 12, marginHorizontal: 16, marginBottom: 10 },
+  bankLinkedTxt:     { fontSize: 13, fontWeight: "700", color: "#1A1D2E" },
+  bankLinkedSub:     { fontSize: 11, color: "#555", marginTop: 1 },
+  bankChangeBtn:     { fontSize: 12, fontWeight: "700", color: "#00B374" },
 
   // Modal
   modalOverlay: {

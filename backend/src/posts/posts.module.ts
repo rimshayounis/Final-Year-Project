@@ -6,6 +6,7 @@ import { Post, PostSchema } from './schemas/post.schema';
 import { User, UserSchema } from '../users/schemas/user.schema';
 import { Doctor, DoctorSchema } from '../doctors/schemas/doctor.schema';
 import { PointsRewardModule } from '../points-reward/points-reward.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { PointsRewardModule } from '../points-reward/points-reward.module';
       { name: Doctor.name, schema: DoctorSchema },
     ]),
     PointsRewardModule,
+    NotificationModule,
   ],
   controllers: [PostsController],
   providers: [PostsService],

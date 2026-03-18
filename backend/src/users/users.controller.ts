@@ -4,12 +4,14 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+
 import { UsersService } from './users.service';
 import {
   RegisterUserDto,
@@ -73,5 +75,42 @@ export class UsersController {
   @Delete(':userId')
   async deleteUser(@Param('userId') userId: string) {
     return this.usersService.deleteUser(userId);
+  }
+
+  @Patch(':userId/change-password')
+  async changePassword(
+    @Param('userId') userId: string,
+    @Body() body: { oldPassword: string; newPassword: string },
+  ) {
+    return this.usersService.changePassword(userId, body.oldPassword, body.newPassword);
+  }
+
+  @Patch(':userId/change-email')
+  async changeEmail(
+    @Param('userId') userId: string,
+    @Body() body: { password: string; newEmail: string },
+  ) {
+    return this.usersService.changeEmail(userId, body.password, body.newEmail);
+  }
+
+  @Get(':userId/notification-settings')
+  async getNotificationSettings(@Param('userId') userId: string) {
+    return this.usersService.getNotificationSettings(userId);
+  }
+
+  @Patch(':userId/notification-settings')
+  async updateNotificationSettings(
+    @Param('userId') userId: string,
+    @Body() body: { pushEnabled?: boolean; emailEnabled?: boolean },
+  ) {
+    return this.usersService.updateNotificationSettings(userId, body);
+  }
+
+  @Patch(':userId/push-token')
+  async savePushToken(
+    @Param('userId') userId: string,
+    @Body() body: { token: string | null },
+  ) {
+    return this.usersService.savePushToken(userId, body.token ?? null);
   }
 }

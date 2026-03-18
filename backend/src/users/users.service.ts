@@ -166,4 +166,70 @@ export class UsersService {
       message: 'User deleted successfully',
     };
   }
+
+  async changePassword(
+    userId: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<any> {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const valid = await bcrypt.compare(oldPassword, user.password);
+    if (!valid) throw new UnauthorizedException('Current password is incorrect');
+
+    if (newPassword.length < 8)
+      throw new ConflictException('New password must be at least 8 characters');
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    return { success: true, message: 'Password updated successfully' };
+  }
+
+  async changeEmail(
+    userId: string,
+    password: string,
+    newEmail: string,
+  ): Promise<any> {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) throw new UnauthorizedException('Password is incorrect');
+
+    const taken = await this.userModel.findOne({ email: newEmail });
+    if (taken) throw new ConflictException('Email is already in use');
+
+    user.email = newEmail;
+    await user.save();
+    return { success: true, message: 'Email updated successfully' };
+  }
+
+  async getNotificationSettings(userId: string): Promise<any> {
+    const user = await this.userModel.findById(userId).select('notificationSettings').exec();
+    if (!user) throw new NotFoundException('User not found');
+    return { success: true, data: user.notificationSettings };
+  }
+
+  async updateNotificationSettings(userId: string, settings: { pushEnabled?: boolean; emailEnabled?: boolean }): Promise<any> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) throw new NotFoundException('User not found');
+
+    const ns = user.notificationSettings ?? {} as any;
+    if (settings.pushEnabled  !== undefined) ns.pushEnabled  = settings.pushEnabled;
+    if (settings.emailEnabled !== undefined) ns.emailEnabled = settings.emailEnabled;
+
+    user.notificationSettings = ns;
+    user.markModified('notificationSettings');
+    await user.save();
+    return { success: true, data: user.notificationSettings };
+  }
+
+  async savePushToken(userId: string, token: string | null): Promise<any> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) throw new NotFoundException('User not found');
+    user.expoPushToken = token;
+    await user.save();
+    return { success: true, message: 'Push token saved' };
+  }
 }

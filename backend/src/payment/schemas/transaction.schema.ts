@@ -5,19 +5,41 @@ export type TransactionDocument = Transaction & Document;
 
 @Schema({ timestamps: true, collection: 'transactions' })
 export class Transaction {
-  /** Doctor who made the payment */
+  /**
+   * Type of transaction:
+   *  - subscription_payment  → doctor buys a plan
+   *  - appointment_payment   → user pays for appointment (held by admin)
+   *  - appointment_release   → admin releases held payment to doctor wallet
+   *  - appointment_commission→ commission portion kept by admin
+   */
+  @Prop({
+    required: true,
+    enum: ['subscription_payment', 'appointment_payment', 'appointment_release', 'appointment_commission'],
+    default: 'subscription_payment',
+  })
+  type: string;
+
+  /** Doctor involved in the transaction */
   @Prop({ type: Types.ObjectId, ref: 'Doctor', required: true })
   doctorId: Types.ObjectId;
 
-  /** Doctor's full name (snapshot at time of payment) */
-  @Prop({ required: true })
+  /** Doctor's full name (snapshot) */
+  @Prop({ default: '' })
   doctorName: string;
 
-  /** Subscription plan purchased */
-  @Prop({ required: true, enum: ['basic', 'professional', 'premium'] })
-  plan: string;
+  /** User who made the appointment payment (null for subscription) */
+  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
+  userId: Types.ObjectId | null;
 
-  /** Payment description, e.g. "Basic Plan - 1 Month" */
+  /** Appointment reference (null for subscription) */
+  @Prop({ type: Types.ObjectId, ref: 'BookedAppointment', default: null })
+  appointmentId: Types.ObjectId | null;
+
+  /** Subscription plan purchased (only for subscription_payment) */
+  @Prop({ type: String, default: null })
+  plan: string | null;
+
+  /** Human-readable description */
   @Prop({ required: true })
   description: string;
 
@@ -25,19 +47,27 @@ export class Transaction {
   @Prop({ required: true })
   amount: number;
 
+  /** Commission rate applied (for release/commission types) */
+  @Prop({ default: 0 })
+  commissionRate: number;
+
+  /** Commission amount in PKR */
+  @Prop({ default: 0 })
+  commissionAmount: number;
+
   /** Currency code */
   @Prop({ default: 'PKR' })
   currency: string;
 
-  /** Stripe PaymentIntent ID (pi_xxx) */
-  @Prop({ required: true })
-  stripePaymentIntentId: string;
+  /** Stripe PaymentIntent ID */
+  @Prop({ type: String, default: null })
+  stripePaymentIntentId: string | null;
 
-  /** Payment status from Stripe */
+  /** Payment status */
   @Prop({ default: 'succeeded', enum: ['succeeded', 'pending', 'failed'] })
   status: string;
 
-  /** Payment method type e.g. "card" */
+  /** Payment method type */
   @Prop({ default: 'card' })
   paymentMethod: string;
 }

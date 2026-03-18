@@ -23,6 +23,29 @@ export class DoctorProfile {
   registeredAt: Date;
 }
 
+// Notification Settings Sub-Schema
+@Schema({ _id: false })
+export class NotificationSettings {
+  @Prop({ default: false }) emailEnabled:    boolean;
+  @Prop({ default: true  }) appNotifEnabled: boolean;
+}
+
+// Bank Details Sub-Schema
+@Schema({ _id: false })
+export class BankDetails {
+  @Prop({ required: true })
+  bankName: string;
+
+  @Prop({ required: true })
+  accountName: string;
+
+  @Prop({ required: true })
+  accountNumber: string;
+
+  @Prop({ default: Date.now })
+  addedAt: Date;
+}
+
 export type SubscriptionPlan = 'free_trial' | 'basic' | 'professional' | 'premium';
 
 // Doctor Schema
@@ -42,6 +65,18 @@ export class Doctor {
 
   @Prop({ default: 'free_trial' })
   subscriptionPlan: SubscriptionPlan;
+
+  @Prop({ type: BankDetails, default: null })
+  bankDetails: BankDetails | null;
+
+  @Prop({
+    type: NotificationSettings,
+    default: () => ({ emailEnabled: false, appNotifEnabled: true }),
+  })
+  notificationSettings: NotificationSettings;
+
+  @Prop({ type: String, default: null })
+  expoPushToken: string | null;
 }
 
 export const DoctorSchema = SchemaFactory.createForClass(Doctor);

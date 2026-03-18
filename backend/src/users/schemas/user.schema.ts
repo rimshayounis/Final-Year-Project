@@ -4,6 +4,12 @@ import { Document } from 'mongoose';
 
 export type UserDocument = User & Document;
 
+@Schema({ _id: false })
+export class UserNotificationSettings {
+  @Prop({ default: true  }) pushEnabled:  boolean;
+  @Prop({ default: false }) emailEnabled: boolean;
+}
+
 // Health Profile Schema (only for users)
 @Schema({ _id: false })
 export class HealthProfile {
@@ -58,12 +64,21 @@ export class User {
   @Prop({ type: HealthProfile, required: false })
   healthProfile?: HealthProfile;
 
-  @Prop({ 
-    type: [EmergencyContact], 
+  @Prop({
+    type: [EmergencyContact],
     default: undefined,
-    required: false 
+    required: false
   })
   emergencyContacts?: EmergencyContact[];
+
+  @Prop({
+    type: UserNotificationSettings,
+    default: () => ({ pushEnabled: true, emailEnabled: false }),
+  })
+  notificationSettings: UserNotificationSettings;
+
+  @Prop({ type: String, default: null })
+  expoPushToken: string | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
