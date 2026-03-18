@@ -13,6 +13,7 @@ import { UserProfileModule } from './user-profile/user-profile.module';
 import { PointsRewardModule } from './points-reward/points-reward.module';
 import { SubscriptionPlanModule } from './subscription-plan/subscription-plan.module';
 import { WalletModule } from './wallet/wallet.module';
+import { PaymentModule } from './payment/payment.module';
 
 
 @Module({
@@ -32,6 +33,7 @@ import { WalletModule } from './wallet/wallet.module';
     PointsRewardModule,
     SubscriptionPlanModule,
     WalletModule,
+    PaymentModule,
   ],
 })
 export class AppModule {}

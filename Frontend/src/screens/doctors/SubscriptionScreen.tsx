@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../../App';
 import apiClient from '../../services/api';
+import { useStripe } from '@stripe/stripe-react-native';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'DoctorSubscription'>;
@@ -158,42 +159,118 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
   const { doctorId, doctorName, isVerified } = route.params;
   const [selected, setSelected] = useState<PlanKey>('free_trial');
   const [loading, setLoading] = useState(false);
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const selectedPlan = PLANS.find(p => p.key === selected)!;
 
   const handleContinue = () => {
+    // Free trial — no payment needed
+    if (selected === 'free_trial') {
+      Alert.alert(
+        'Confirm Free Trial',
+        'Start your 15-day free trial now?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Start Trial',
+            onPress: async () => {
+              setLoading(true);
+              try {
+                await apiClient.post('/subscriptions', { doctorId, plan: 'free_trial' });
+              } catch (e: any) {
+                console.error(e?.response?.data?.message ?? e?.message);
+              } finally {
+                setLoading(false);
+              }
+              if (isVerified) {
+                navigation.goBack();
+              } else {
+                navigation.replace('DoctorUnverified', { doctorId, doctorName, selectedPlan: selected });
+              }
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    // Paid plan — go through Stripe
     Alert.alert(
-      `Confirm Plan`,
-      `You selected the ${selectedPlan.name} plan (${selectedPlan.price}${selectedPlan.key !== 'free_trial' ? '/month' : ''}).\n\nProceed?`,
+      'Confirm Purchase',
+      `You are about to purchase the ${selectedPlan.name} plan for ${selectedPlan.price}/month.\n\nYou will be prompted to enter your card details.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await apiClient.post('/subscriptions', {
-                doctorId,
-                plan: selected,
-              });
-            } catch (e: any) {
-              console.error('Subscription save failed:', e?.response?.data?.message ?? e?.message);
-            } finally {
-              setLoading(false);
-            }
-            if (isVerified) {
-              navigation.goBack();
-            } else {
-              navigation.replace('DoctorUnverified', {
-                doctorId,
-                doctorName,
-                selectedPlan: selected,
-              });
-            }
-          },
+          text: 'Proceed to Payment',
+          onPress: () => handleStripePayment(),
         },
-      ]
+      ],
     );
+  };
+
+  const handleStripePayment = async () => {
+    setLoading(true);
+    try {
+      // Step 1 — create PaymentIntent on backend
+      const intentRes = await apiClient.post('/payment/create-intent', {
+        doctorId,
+        plan: selected,
+      });
+      const { clientSecret, paymentIntentId } = intentRes.data;
+
+      // Step 2 — init Stripe payment sheet
+      const { error: initError } = await initPaymentSheet({
+        paymentIntentClientSecret: clientSecret,
+        merchantDisplayName: 'TruHeal Link',
+        style: 'automatic',
+      });
+
+      if (initError) {
+        Alert.alert('Payment Error', initError.message);
+        setLoading(false);
+        return;
+      }
+
+      // Step 3 — present the payment sheet to user
+      const { error: payError } = await presentPaymentSheet();
+
+      if (payError) {
+        if (payError.code !== 'Canceled') {
+          Alert.alert('Payment Failed', payError.message);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Step 4 — payment succeeded on Stripe, confirm on backend
+      await apiClient.post('/payment/confirm', {
+        doctorId,
+        plan: selected,
+        paymentIntentId,
+        doctorName: doctorName || 'Doctor',
+      });
+
+      Alert.alert(
+        'Payment Successful! 🎉',
+        `Your ${selectedPlan.name} plan is now active. Welcome aboard!`,
+        [
+          {
+            text: 'Continue',
+            onPress: () => {
+              if (isVerified) {
+                navigation.goBack();
+              } else {
+                navigation.replace('DoctorUnverified', { doctorId, doctorName, selectedPlan: selected });
+              }
+            },
+          },
+        ],
+      );
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
