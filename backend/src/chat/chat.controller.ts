@@ -1,8 +1,9 @@
 import {
-  Controller, Get, Post, Param, Query, Body,
+  Controller, Get, Post, Param, Query, Body, Req,
   UploadedFile, UseInterceptors, ParseIntPipe,
   DefaultValuePipe, HttpCode, HttpStatus,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -89,6 +90,7 @@ export class ChatController {
     }),
   )
   uploadFile(
+    @Req() req: Request,
     @UploadedFile() file: Express.Multer.File,
     @Query('fileType') fileType: string,
     @Body() body: {
@@ -109,7 +111,7 @@ export class ChatController {
     const targetPath = join(targetDir, file.filename);
     fs.renameSync(file.path, targetPath);
 
-    const appUrl  = process.env.APP_URL || 'http://192.168.100.47:3000';
+    const appUrl  = `${req.protocol}://${req.get('host')}`;
     const fileUrl = `${appUrl}/uploads/chat/${type}/${file.filename}`;
 
     console.log(`[Upload] ✅ fileType : ${type}`);

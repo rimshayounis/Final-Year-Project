@@ -13,6 +13,10 @@ export class AdminWallet {
   @Prop({ default: 0 })
   totalEarned: number;
 
+  /** Total commissions earned from appointment payouts */
+  @Prop({ default: 0 })
+  totalCommission: number;
+
   /** Total number of successful transactions */
   @Prop({ default: 0 })
   totalTransactions: number;

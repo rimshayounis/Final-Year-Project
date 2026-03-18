@@ -16,6 +16,7 @@ import {
 } from './dto/booked-appointment.dto';
 import { PointsRewardService } from '../points-reward/points-reward.service';
 import { Doctor, DoctorDocument } from '../doctors/schemas/doctor.schema';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class BookedAppointmentService {
@@ -25,6 +26,7 @@ export class BookedAppointmentService {
     @InjectModel(Doctor.name)
     private doctorModel: Model<DoctorDocument>,
     private readonly pointsRewardService: PointsRewardService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // Book a new appointment
@@ -53,6 +55,17 @@ export class BookedAppointmentService {
     });
 
     const saved = await appointment.save();
+
+    // Send notification to doctor (fire-and-forget)
+    this.notificationService.notifyDoctorNewAppointment({
+      doctorId:        dto.doctorId,
+      userId:          dto.userId,
+      date:            dto.date,
+      time:            dto.time,
+      sessionDuration: dto.sessionDuration,
+      consultationFee: dto.consultationFee,
+      healthConcern:   dto.healthConcern,
+    }).catch((e) => console.error('[Notification] Failed:', e.message));
 
     return {
       success: true,
@@ -129,9 +142,17 @@ export class BookedAppointmentService {
 
     appointment.status = dto.status;
 
+    if (dto.status === 'confirmed') {
+      // Doctor confirmed → user must now pay
+      appointment.paymentStatus = 'pending_payment';
+    }
+
     if (dto.status === 'cancelled') {
       appointment.cancelledAt = new Date();
       appointment.cancelReason = dto.cancelReason || null;
+      if (appointment.paymentStatus === 'payment_held') {
+        appointment.paymentStatus = 'refunded';
+      }
     }
 
     // ── SET completedAt when status becomes completed ──

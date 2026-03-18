@@ -12,7 +12,7 @@ import { io, Socket } from 'socket.io-client';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { chatAPI, SOCKET_URL } from '../../services/api';
+import { chatAPI, SOCKET_URL, API_URL } from '../../services/api';
 import VoicePlayer        from '../../components/VoicePlayer';
 import VoiceRecorder      from '../../components/VoiceRecorder';
 import VideoPlayer        from '../../components/VideoPlayer';
@@ -75,6 +75,7 @@ export default function DoctorChatScreen({ route }: Props) {
   const insets     = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
+  const [resolvedAvatar,    setResolvedAvatar]    = useState<string | null>(patientAvatar ?? null);
   const [messages,          setMessages]          = useState<Message[]>([]);
   const [inputText,         setInputText]         = useState('');
   const [isPatientTyping,   setIsPatientTyping]   = useState(false);
@@ -100,6 +101,20 @@ export default function DoctorChatScreen({ route }: Props) {
   const dot3            = useRef(new Animated.Value(0)).current;
   const sessionEndedRef = useRef(false);
   const countdownRef    = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch patient's real profile image
+  useEffect(() => {
+    const base = API_URL.replace('/api', '');
+    fetch(`${API_URL}/profiles/user/${patientId}`)
+      .then((r) => r.json())
+      .then((json) => {
+        const imgPath = json?.data?.profileImage;
+        if (imgPath) {
+          setResolvedAvatar(imgPath.startsWith('http') ? imgPath : base + imgPath);
+        }
+      })
+      .catch(() => {});
+  }, [patientId]);
 
   useEffect(() => {
     let mounted = true;
@@ -327,16 +342,21 @@ export default function DoctorChatScreen({ route }: Props) {
   const timerBg    = isUrgent ? '#FFE0E0' : isWarning ? '#FFF3E0' : 'rgba(255,255,255,0.2)';
   const timerColor = isUrgent ? '#C0392B' : isWarning ? '#B25E00' : '#FFFFFF';
 
+  const resolveFileUrl = (url: string) => {
+    if (!url || url.startsWith('http')) return url;
+    return API_URL.replace('/api', '') + url;
+  };
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe    = item.senderId === doctorIdRef.current;
     const isMedia = item.fileType === 'image' || item.fileType === 'video';
     const content = () => {
       if (item.fileType === 'voice' && item.fileUrl)
-        return <VoicePlayer audioUri={item.fileUrl} duration={item.duration ?? 0} isUserMessage={isMe} />;
+        return <VoicePlayer audioUri={resolveFileUrl(item.fileUrl)} duration={item.duration ?? 0} isUserMessage={isMe} />;
       if (item.fileType === 'image' && item.fileUrl)
-        return <ImageViewer uri={item.fileUrl} thumbnailStyle={{ width: 200, height: 150, borderRadius: 12, marginBottom: 4 }} />;
+        return <ImageViewer uri={resolveFileUrl(item.fileUrl)} thumbnailStyle={{ width: 200, height: 150, borderRadius: 12, marginBottom: 4 }} />;
       if (item.fileType === 'video' && item.fileUrl)
-        return <VideoPlayer uri={item.fileUrl} fileName={item.fileName} />;
+        return <VideoPlayer uri={resolveFileUrl(item.fileUrl)} fileName={item.fileName} />;
       if (item.fileType === 'document')
         return (
           <View style={styles.docRow}>
@@ -360,7 +380,7 @@ export default function DoctorChatScreen({ route }: Props) {
       <TouchableOpacity activeOpacity={0.85} onLongPress={(e) => !item.isTemp && handleLongPress(item, e)} delayLongPress={350}>
         <View style={[styles.msgRow, isMe ? styles.rowRight : styles.rowLeft]}>
           {!isMe && (
-            <Image source={patientAvatar ? { uri: patientAvatar } : { uri: 'https://i.pravatar.cc/150?img=5' }} style={styles.msgAvatar} />
+            <Image source={resolvedAvatar ? { uri: resolvedAvatar } : require('../../../assets/icon.png')} style={styles.msgAvatar} />
           )}
           <View style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '74%' }}>
             <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem, item.isTemp && { opacity: 0.7 }, isMedia && { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0, overflow: 'hidden' }, item.fileType === 'voice' && { width: 260 }]}>
@@ -394,7 +414,7 @@ export default function DoctorChatScreen({ route }: Props) {
           <MaterialIcons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.avatarWrap}>
-          <Image source={patientAvatar ? { uri: patientAvatar } : { uri: 'https://i.pravatar.cc/150?img=5' }} style={styles.headerAvatar} />
+          <Image source={resolvedAvatar ? { uri: resolvedAvatar } : require('../../../assets/icon.png')} style={styles.headerAvatar} />
           {isPatientOnline && <View style={styles.onlineDot} />}
         </View>
         <View style={styles.headerTextWrap}>
@@ -454,7 +474,7 @@ export default function DoctorChatScreen({ route }: Props) {
         )}
         {isPatientTyping && (
           <View style={styles.typingRow}>
-            <Image source={patientAvatar ? { uri: patientAvatar } : { uri: 'https://i.pravatar.cc/150?img=5' }} style={styles.msgAvatar} />
+            <Image source={resolvedAvatar ? { uri: resolvedAvatar } : require('../../../assets/icon.png')} style={styles.msgAvatar} />
             <View style={styles.typingBubble}>
               {[dot1, dot2, dot3].map((d, i) => (
                 <Animated.View key={i} style={[styles.typingDot, { transform: [{ translateY: d }] }]} />
@@ -575,7 +595,7 @@ const styles = StyleSheet.create({
   typingRow:          { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingBottom: 6 },
   typingBubble:       { flexDirection: 'row', alignItems: 'center', backgroundColor: WHITE, borderRadius: 16, borderBottomLeftRadius: 4, borderWidth: 1.5, borderColor: '#E8ECFF', paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
   typingDot:          { width: 7, height: 7, borderRadius: 4, backgroundColor: '#B0B3C6' },
-  attachMenu:         { position: 'absolute', bottom: 68, left: 16, backgroundColor: WHITE, borderRadius: 16, padding: 14, flexDirection: 'row', gap: 16, borderWidth: 1, borderColor: '#E8ECFF', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 8 },
+  attachMenu:         { backgroundColor: WHITE, borderRadius: 16, padding: 14, flexDirection: 'row', gap: 16, borderWidth: 1, borderColor: '#E8ECFF', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 8, marginHorizontal: 16, marginBottom: 6 },
   attachItem:         { alignItems: 'center', gap: 6 },
   attachIconWrap:     { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   attachLabel:        { fontSize: 11, color: '#555', fontWeight: '600' },

@@ -4,6 +4,7 @@ import {
   ConflictException,
   NotFoundException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -161,5 +162,124 @@ export class DoctorsService {
       success: true,
       message: 'Doctor deleted successfully',
     };
+  }
+
+  // ── Bank Details ───────────────────────────────────────────────────────────
+
+  async getBankDetails(doctorId: string): Promise<any> {
+    const doctor = await this.doctorModel
+      .findById(doctorId)
+      .select('bankDetails')
+      .exec();
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    return { success: true, data: doctor.bankDetails ?? null };
+  }
+
+  async saveBankDetails(
+    doctorId: string,
+    password: string,
+    bankName: string,
+    accountName: string,
+    accountNumber: string,
+  ): Promise<any> {
+    const doctor = await this.doctorModel.findById(doctorId).exec();
+    if (!doctor) throw new NotFoundException('Doctor not found');
+
+    const valid = await bcrypt.compare(password, doctor.password);
+    if (!valid) throw new UnauthorizedException('Incorrect password');
+
+    if (!bankName || !accountName || !accountNumber) {
+      throw new BadRequestException('All bank detail fields are required');
+    }
+
+    doctor.bankDetails = { bankName, accountName, accountNumber, addedAt: new Date() };
+    await doctor.save();
+
+    return { success: true, message: 'Bank details saved successfully', data: doctor.bankDetails };
+  }
+
+  async deleteBankDetails(doctorId: string, password: string): Promise<any> {
+    const doctor = await this.doctorModel.findById(doctorId).exec();
+    if (!doctor) throw new NotFoundException('Doctor not found');
+
+    const valid = await bcrypt.compare(password, doctor.password);
+    if (!valid) throw new UnauthorizedException('Incorrect password');
+
+    doctor.bankDetails = null;
+    await doctor.save();
+
+    return { success: true, message: 'Bank details removed successfully' };
+  }
+
+  async getNotificationSettings(doctorId: string): Promise<any> {
+    const doctor = await this.doctorModel
+      .findById(doctorId)
+      .select('notificationSettings')
+      .exec();
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    return { success: true, data: doctor.notificationSettings };
+  }
+
+  async updateNotificationSettings(doctorId: string, settings: {
+    emailEnabled?: boolean;
+    appNotifEnabled?: boolean;
+  }): Promise<any> {
+    const doctor = await this.doctorModel.findById(doctorId).exec();
+    if (!doctor) throw new NotFoundException('Doctor not found');
+
+    const ns = doctor.notificationSettings ?? {} as any;
+    if (settings.emailEnabled    !== undefined) ns.emailEnabled    = settings.emailEnabled;
+    if (settings.appNotifEnabled !== undefined) ns.appNotifEnabled = settings.appNotifEnabled;
+
+    doctor.notificationSettings = ns;
+    doctor.markModified('notificationSettings');
+    await doctor.save();
+    return { success: true, data: doctor.notificationSettings };
+  }
+
+  async savePushToken(doctorId: string, token: string | null): Promise<any> {
+    const doctor = await this.doctorModel.findById(doctorId).exec();
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    doctor.expoPushToken = token;
+    await doctor.save();
+    return { success: true, message: 'Push token saved' };
+  }
+
+  async changePassword(
+    doctorId: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<any> {
+    const doctor = await this.doctorModel.findById(doctorId).exec();
+    if (!doctor) throw new NotFoundException('Doctor not found');
+
+    const valid = await bcrypt.compare(oldPassword, doctor.password);
+    if (!valid) throw new UnauthorizedException('Current password is incorrect');
+
+    if (newPassword.length < 8)
+      throw new BadRequestException('New password must be at least 8 characters');
+
+    doctor.password = await bcrypt.hash(newPassword, 10);
+    await doctor.save();
+    return { success: true, message: 'Password updated successfully' };
+  }
+
+  async changeEmail(
+    doctorId: string,
+    password: string,
+    newEmail: string,
+  ): Promise<any> {
+    const doctor = await this.doctorModel.findById(doctorId).exec();
+    if (!doctor) throw new NotFoundException('Doctor not found');
+
+    const valid = await bcrypt.compare(password, doctor.password);
+    if (!valid) throw new UnauthorizedException('Password is incorrect');
+
+    const taken = await this.doctorModel.findOne({ email: newEmail }).exec();
+    if (taken) throw new ConflictException('Email is already in use');
+
+    doctor.email = newEmail;
+    await doctor.save();
+    return { success: true, message: 'Email updated successfully' };
   }
 }

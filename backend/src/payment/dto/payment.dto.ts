@@ -24,3 +24,20 @@ export class ConfirmPaymentDto {
   @IsOptional()
   doctorName?: string;
 }
+
+export class CreateAppointmentPaymentDto {
+  @IsString()
+  appointmentId: string;
+}
+
+export class ConfirmAppointmentPaymentDto {
+  @IsString()
+  appointmentId: string;
+
+  @IsString()
+  paymentIntentId: string;
+
+  @IsString()
+  @IsOptional()
+  userId?: string;
+}

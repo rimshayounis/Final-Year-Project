@@ -1,4 +1,31 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+
+// Show banner + play sound even when app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert:  true,
+    shouldPlaySound:  true,
+    shouldSetBadge:   false,
+    shouldShowBanner: true,
+    shouldShowList:   true,
+  }),
+});
+
+// Create the Android sound-enabled channel at module load time
+// (must exist before any push arrives, not just when user registers)
+if (Platform.OS === 'android') {
+  Notifications.setNotificationChannelAsync('default', {
+    name: 'TruHeal Notifications',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#6B7FED',
+    enableVibrate: true,
+    showBadge: true,
+  });
+}
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -21,6 +48,8 @@ import DoctorChatScreen from './src/screens/chat/DoctorChatScreen';
 import SettingsScreen from './src/screens/dashboard/SettingsScreen';
 import SubscriptionScreen from './src/screens/doctors/SubscriptionScreen';
 import WalletScreen from './src/screens/doctors/WalletScreen';
+import BankDetailsScreen from './src/screens/doctors/BankDetailsScreen';
+import NotificationSettingsScreen from './src/screens/doctors/NotificationSettingsScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -41,6 +70,8 @@ export type RootStackParamList = {
   CreateAppointment: { doctorId: string };
   Settings: { id: string; role: 'user' | 'doctor' };
   Wallet: { doctorId: string };
+  BankDetails: { doctorId: string };
+  NotificationSettings: { doctorId: string };
   DoctorAppointmentDetail: {
     doctor: {
       _id: string;
@@ -73,6 +104,14 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
+  useEffect(() => {
+    // Listen for notifications received while app is foregrounded
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      console.log('[Push] Received:', notification.request.content.title);
+    });
+    return () => sub.remove();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <StripeProvider publishableKey="pk_test_51TCBMfR4G6lL4JOFxa4zONwnxiuq8c59n03D2gyzirdMdlhhv0Ntk9a2I9aw2PUHRDmPjPAvngQzp8PndA5IQxMh003DjzSFS1">
@@ -102,6 +141,8 @@ export default function App() {
           <Stack.Screen name="PatientChat"          component={PatientChatScreen} />
           <Stack.Screen name="Settings"             component={SettingsScreen} />
           <Stack.Screen name="Wallet"               component={WalletScreen} />
+          <Stack.Screen name="BankDetails"             component={BankDetailsScreen} />
+          <Stack.Screen name="NotificationSettings"  component={NotificationSettingsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
       </StripeProvider>

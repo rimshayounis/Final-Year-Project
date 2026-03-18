@@ -4,6 +4,7 @@ import { Document, Types } from 'mongoose';
 export type BookedAppointmentDocument = BookedAppointment & Document;
 
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+export type PaymentStatus = 'not_required' | 'pending_payment' | 'payment_held' | 'released' | 'refunded';
 
 @Schema({ timestamps: true })
 export class BookedAppointment {
@@ -41,8 +42,35 @@ export class BookedAppointment {
   @Prop({ type: String, default: null })
   cancelReason: string | null;
 
-  @Prop({ type: Date, default: null })   // ← ADD THIS
+  @Prop({ type: Date, default: null })
   completedAt: Date | null;
+
+  // ── Payment fields ────────────────────────────────────────────────────────
+  @Prop({
+    type: String,
+    enum: ['not_required', 'pending_payment', 'payment_held', 'released', 'refunded'],
+    default: 'not_required',
+  })
+  paymentStatus: PaymentStatus;
+
+  @Prop({ type: String, default: null })
+  paymentIntentId: string | null;
+
+  /** Full amount paid by user and held by admin */
+  @Prop({ type: Number, default: 0 })
+  heldAmount: number;
+
+  /** Amount to be released to doctor (after commission) */
+  @Prop({ type: Number, default: 0 })
+  doctorEarning: number;
+
+  /** Commission amount kept by admin */
+  @Prop({ type: Number, default: 0 })
+  commissionAmount: number;
+
+  /** Commission rate applied (e.g. 0.20 = 20%) */
+  @Prop({ type: Number, default: 0 })
+  commissionRate: number;
 }
 
 export const BookedAppointmentSchema = SchemaFactory.createForClass(BookedAppointment);

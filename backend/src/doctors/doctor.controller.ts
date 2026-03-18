@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -101,5 +102,67 @@ export class DoctorsController {
   @Delete(':doctorId')
   async deleteDoctor(@Param('doctorId') doctorId: string) {
     return this.doctorsService.deleteDoctor(doctorId);
+  }
+
+  // ── Bank Details ───────────────────────────────────────────────────────────
+
+  @Get(':doctorId/bank-details')
+  async getBankDetails(@Param('doctorId') doctorId: string) {
+    return this.doctorsService.getBankDetails(doctorId);
+  }
+
+  @Post(':doctorId/bank-details')
+  async saveBankDetails(
+    @Param('doctorId') doctorId: string,
+    @Body() body: { password: string; bankName: string; accountName: string; accountNumber: string },
+  ) {
+    return this.doctorsService.saveBankDetails(
+      doctorId, body.password, body.bankName, body.accountName, body.accountNumber,
+    );
+  }
+
+  @Delete(':doctorId/bank-details')
+  async deleteBankDetails(
+    @Param('doctorId') doctorId: string,
+    @Body() body: { password: string },
+  ) {
+    return this.doctorsService.deleteBankDetails(doctorId, body.password);
+  }
+
+  @Get(':doctorId/notification-settings')
+  async getNotificationSettings(@Param('doctorId') doctorId: string) {
+    return this.doctorsService.getNotificationSettings(doctorId);
+  }
+
+  @Patch(':doctorId/notification-settings')
+  async updateNotificationSettings(
+    @Param('doctorId') doctorId: string,
+    @Body() body: { emailEnabled?: boolean; appNotifEnabled?: boolean },
+  ) {
+    return this.doctorsService.updateNotificationSettings(doctorId, body);
+  }
+
+  @Patch(':doctorId/push-token')
+  async savePushToken(
+    @Param('doctorId') doctorId: string,
+    @Body() body: { token: string | null },
+  ) {
+    return this.doctorsService.savePushToken(doctorId, body.token ?? null);
+  }
+
+  @Patch(':doctorId/change-password')
+  async changePassword(
+    @Param('doctorId') doctorId: string,
+    @Body() body: { oldPassword: string; newPassword: string },
+  ) {
+    return this.doctorsService.changePassword(doctorId, body.oldPassword, body.newPassword);
+  }
+
+  @Patch(':doctorId/change-email')
+  async changeEmail(
+    @Param('doctorId') doctorId: string,
+    @Body() body: { password: string; newEmail: string },
+  ) {
+    return this.doctorsService.changeEmail(doctorId, body.password, body.newEmail);
   }
 }

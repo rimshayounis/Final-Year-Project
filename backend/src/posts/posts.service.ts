@@ -11,6 +11,7 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { ApprovePostDto } from './dto/approve-post.dto';
 import { PointsRewardService } from '../points-reward/points-reward.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class PostsService {
@@ -19,6 +20,7 @@ export class PostsService {
     @InjectModel('User') private userModel: Model<any>,
     @InjectModel('Doctor') private doctorModel: Model<any>,
     private readonly pointsRewardService: PointsRewardService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // ── Populate userId from User first, then Doctor for unpopulated posts ──
@@ -235,6 +237,15 @@ export class PostsService {
         .catch((err) => console.error('[PointsReward] handleLikeMilestone failed:', err?.message));
     }
 
+    // Fire-and-forget: notify post author about new like
+    this.notificationService.notifyUserPostActivity({
+      postAuthorId: (post.userId as any)?.toString() ?? '',
+      authorModel:  (post as any).userModel ?? 'User',
+      actorName:    'Someone',
+      activity:     'liked',
+      postTitle:    post.title ?? 'your post',
+    }).catch(() => {});
+
     return post;
   }
 
@@ -286,6 +297,16 @@ export class PostsService {
       .exec();
 
     if (!post) throw new NotFoundException(`Post with ID ${id} not found`);
+
+    // Fire-and-forget: notify post author about new comment
+    this.notificationService.notifyUserPostActivity({
+      postAuthorId: (post.userId as any)?.toString() ?? '',
+      authorModel:  (post as any).userModel ?? 'User',
+      actorName:    userName ?? 'Someone',
+      activity:     'commented on',
+      postTitle:    post.title ?? 'your post',
+    }).catch(() => {});
+
     return post;
   }
 

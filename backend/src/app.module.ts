@@ -14,6 +14,7 @@ import { PointsRewardModule } from './points-reward/points-reward.module';
 import { SubscriptionPlanModule } from './subscription-plan/subscription-plan.module';
 import { WalletModule } from './wallet/wallet.module';
 import { PaymentModule } from './payment/payment.module';
+import { NotificationModule } from './notification/notification.module';
 
 
 @Module({
@@ -34,6 +35,7 @@ import { PaymentModule } from './payment/payment.module';
     SubscriptionPlanModule,
     WalletModule,
     PaymentModule,
+    NotificationModule,
   ],
 })
 export class AppModule {}

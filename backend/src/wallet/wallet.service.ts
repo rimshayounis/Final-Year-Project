@@ -10,6 +10,7 @@ import { Wallet, WalletDocument } from './schemas/wallet.schema';
 import { ConvertPointsDto, WithdrawDto } from './dto/wallet.dto';
 import { PointsReward, PointsRewardDocument } from '../points-reward/schemas/points-reward.schema';
 import { Doctor, DoctorDocument } from '../doctors/schemas/doctor.schema';
+import { BookedAppointment, BookedAppointmentDocument } from '../booked-appointment/schemas/booked-appointment.schema';
 
 const PKR_PER_POINT = 0.1;
 const MIN_WITHDRAWAL = 500;
@@ -31,6 +32,8 @@ export class WalletService {
     private pointsRewardModel: Model<PointsRewardDocument>,
     @InjectModel(Doctor.name)
     private doctorModel: Model<DoctorDocument>,
+    @InjectModel(BookedAppointment.name)
+    private appointmentModel: Model<BookedAppointmentDocument>,
   ) {}
 
   // ── Get or create wallet ──────────────────────────────────────────────────
@@ -58,21 +61,68 @@ export class WalletService {
   async getWallet(doctorId: string): Promise<any> {
     const wallet = await this.getOrCreateWallet(doctorId);
 
-    const [pointsDoc, doctor] = await Promise.all([
+    const [pointsDoc, doctor, completedAppts] = await Promise.all([
       this.pointsRewardModel
         .findOne({ doctorId: new Types.ObjectId(doctorId) })
         .select('totalPoints')
         .exec(),
       this.doctorModel
         .findById(doctorId)
-        .select('subscriptionPlan')
+        .select('subscriptionPlan fullName')
+        .exec(),
+      // fetch completed appointments to enrich earning transactions
+      this.appointmentModel
+        .find({ doctorId: new Types.ObjectId(doctorId), status: 'completed' })
+        .populate('userId', 'fullName')
+        .select('date time sessionDuration heldAmount commissionAmount commissionRate doctorEarning userId')
         .exec(),
     ]);
 
     const plan = (doctor as any)?.subscriptionPlan ?? 'free_trial';
+    const doctorName = (doctor as any)?.fullName ?? '';
     const monthlyLimit = MONTHLY_LIMIT[plan] ?? 0;
     const monthlyUsed = this._monthlyWithdrawn(wallet);
     const monthlyRemaining = monthlyLimit === Infinity ? null : Math.max(0, monthlyLimit - monthlyUsed);
+
+    // Enrich appointment-type transactions with patient/session details
+    const isApptTx = (t: any) =>
+      t.type === 'appointment_earning' ||
+      (t.type === 'points_converted' && t.description?.toLowerCase().includes('appointment'));
+
+    const enriched = wallet.transactions.map((tx) => {
+      const t = tx as any;
+      if (!isApptTx(t)) return t;
+
+      // Try to find matching appointment
+      let appt: any = null;
+
+      if (t.appointmentId) {
+        // new-style: exact match by stored appointmentId
+        appt = completedAppts.find((a) => a._id.toString() === t.appointmentId);
+      }
+
+      if (!appt) {
+        // old-style: match by earning amount (within PKR 1 rounding tolerance)
+        appt = completedAppts.find((a) => {
+          const earning = (a as any).heldAmount - (a as any).commissionAmount;
+          return Math.abs(earning - t.amount) < 1;
+        });
+      }
+
+      if (!appt) return t;
+
+      return {
+        ...t,
+        patientName:      (appt.userId as any)?.fullName   ?? t.patientName    ?? null,
+        doctorName:       doctorName                        || t.doctorName     || null,
+        sessionDate:      appt.date                        ?? t.sessionDate    ?? null,
+        sessionTime:      appt.time                        ?? t.sessionTime    ?? null,
+        sessionDuration:  appt.sessionDuration             ?? t.sessionDuration ?? null,
+        commissionRate:   appt.commissionRate              ?? t.commissionRate  ?? null,
+        commissionAmount: appt.commissionAmount            ?? t.commissionAmount ?? null,
+        appointmentId:    t.appointmentId                  ?? appt._id.toString(),
+      };
+    });
 
     return {
       balance: wallet.balance,
@@ -87,9 +137,9 @@ export class WalletService {
         monthlyUsed: +monthlyUsed.toFixed(2),
         monthlyRemaining,
       },
-      transactions: wallet.transactions
+      transactions: enriched
         .slice()
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+        .sort((a, b) => new Date((b as any).createdAt).getTime() - new Date((a as any).createdAt).getTime()),
     };
   }
 
