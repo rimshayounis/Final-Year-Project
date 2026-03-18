@@ -28,7 +28,14 @@
     },
     "plugins": [
       "expo-audio",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.fyp.healthapp",
+          "enableGooglePay": false
+        }
+      ]
     ]
   }
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { StripeProvider } from '@stripe/stripe-react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -74,6 +75,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function App() {
   return (
     <SafeAreaProvider>
+      <StripeProvider publishableKey="pk_test_51TCBMfR4G6lL4JOFxa4zONwnxiuq8c59n03D2gyzirdMdlhhv0Ntk9a2I9aw2PUHRDmPjPAvngQzp8PndA5IQxMh003DjzSFS1">
       <NavigationContainer>
         <Stack.Navigator
           initialRouteName="Splash"
@@ -102,6 +104,7 @@ export default function App() {
           <Stack.Screen name="Wallet"               component={WalletScreen} />
         </Stack.Navigator>
       </NavigationContainer>
+      </StripeProvider>
     </SafeAreaProvider>
   );
 }
