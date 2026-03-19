@@ -9,6 +9,9 @@ const navItems = [
   { href: '/dashboard/users/patients', label: 'Patients', icon: '🧑' },
   { href: '/dashboard/users/doctors', label: 'Doctors', icon: '👨‍⚕️' },
   { href: '/dashboard/appointments', label: 'Appointments', icon: '📅' },
+  { href: '/dashboard/posts', label: 'Posts', icon: '📝' },
+  { href: '/dashboard/payments', label: 'Payments', icon: '💰' },
+  { href: '/dashboard/subscriptions', label: 'Subscriptions', icon: '🎯' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -31,6 +34,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const initials = user?.fullName?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'AD';
+
+  const isActive = (href: string) => {
+    if (href === '/dashboard') return pathname === '/dashboard';
+    return pathname.startsWith(href);
+  };
 
   return (
     <div className="layout">
@@ -61,11 +69,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link
               key={item.href}
               href={item.href}
-              className={`nav-item ${pathname === item.href ? 'active' : ''}`}
+              className={`nav-item ${isActive(item.href) ? 'active' : ''}`}
             >
               <span className="nav-icon">{item.icon}</span>
               {!collapsed && <span className="nav-label">{item.label}</span>}
-              {!collapsed && pathname === item.href && <span className="nav-dot" />}
+              {!collapsed && isActive(item.href) && <span className="nav-dot" />}
             </Link>
           ))}
         </nav>
@@ -84,7 +92,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <header className="topbar">
           <div className="topbar-left">
             <div className="page-title">
-              {navItems.find(n => n.href === pathname)?.label || 'Dashboard'}
+              {navItems.find(n => isActive(n.href))?.label || 'Dashboard'}
             </div>
           </div>
           <div className="topbar-right">
@@ -128,6 +136,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           padding: 24px 0;
           transition: width 0.25s ease;
           position: sticky; top: 0; height: 100vh;
+          overflow-y: auto; overflow-x: hidden;
         }
         .sidebar.collapsed { width: 72px; }
 
