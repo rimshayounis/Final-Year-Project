@@ -229,6 +229,7 @@ export default function FeedScreen({
   const [verifiedDropdown, setVerifiedDropdown] = useState<string | null>(null);
   const [slotsRemaining, setSlotsRemaining] = useState<number | null>(null);
   const [doctorPlan, setDoctorPlan] = useState<string>("free_trial");
+  const [doctorSpecialization, setDoctorSpecialization] = useState<string>("");
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   const categories = [
@@ -285,6 +286,11 @@ export default function FeedScreen({
     try {
       const drRes = await apiClient.get(`/doctors/${id}`);
       const plan = drRes.data?.doctor?.subscriptionPlan ?? "free_trial";
+      const spec =
+        drRes.data?.doctor?.doctorProfile?.specialization ??
+        drRes.data?.doctor?.specialization ??
+        "";
+      setDoctorSpecialization(spec);
       setDoctorPlan(plan);
       if (plan === "free_trial") {
         setSlotsRemaining(0);
@@ -776,50 +782,59 @@ export default function FeedScreen({
               </View>
             </View>
           </View>
-          {role === "doctor" && !isOwnPost && item.status === "pending" ? (
-            <View style={s.reviewBtns}>
-              {doctorPlan === "free_trial" ? (
-                <View style={s.slotsExhausted}>
-                  <Ionicons name="card-outline" size={12} color="#E53E3E" />
-                  <Text style={[s.slotsExhaustedText, { color: "#E53E3E" }]}>
-                    Buy subscription to verify post
-                  </Text>
-                </View>
-              ) : slotsRemaining === 0 ? (
-                <View style={s.slotsExhausted}>
-                  <Ionicons name="lock-closed" size={12} color="#F6A623" />
-                  <Text style={s.slotsExhaustedText}>
-                    Verification limit reached for this month
-                  </Text>
-                </View>
-              ) : (
-                <>
-                  <TouchableOpacity
-                    style={s.approveBtn}
-                    onPress={() => handleApprove(item)}
-                    disabled={isReviewing}
-                  >
-                    {isReviewing ? (
-                      <ActivityIndicator size="small" color="#FFF" />
-                    ) : (
-                      <>
-                        <Ionicons name="checkmark-circle" size={13} color="#FFF" />
-                        <Text style={s.approveBtnText}>{"Approve"}</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={s.rejectBtn}
-                    onPress={() => handleReject(item)}
-                    disabled={isReviewing}
-                  >
-                    <Ionicons name="close-circle" size={13} color="#E53E3E" />
-                    <Text style={s.rejectBtnText}>{"Reject"}</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          ) : null}
+          {(() => {
+            if (role !== "doctor" || isOwnPost || item.status !== "pending") return null;
+            const isMentalHealth = item.category?.toLowerCase() === "mental health";
+            const isPsych = doctorSpecialization.trim().toLowerCase() === "psychologist";
+            // Mental Health posts → only psychologists can review
+            // Other category posts → only non-psychologists can review
+            const canReview = (isMentalHealth && isPsych) || (!isMentalHealth && !isPsych);
+            if (!canReview) return null;
+            return (
+              <View style={s.reviewBtns}>
+                {doctorPlan === "free_trial" ? (
+                  <View style={s.slotsExhausted}>
+                    <Ionicons name="card-outline" size={12} color="#E53E3E" />
+                    <Text style={[s.slotsExhaustedText, { color: "#E53E3E" }]}>
+                      Buy subscription to verify post
+                    </Text>
+                  </View>
+                ) : slotsRemaining === 0 ? (
+                  <View style={s.slotsExhausted}>
+                    <Ionicons name="lock-closed" size={12} color="#F6A623" />
+                    <Text style={s.slotsExhaustedText}>
+                      Verification limit reached for this month
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={s.approveBtn}
+                      onPress={() => handleApprove(item)}
+                      disabled={isReviewing}
+                    >
+                      {isReviewing ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <>
+                          <Ionicons name="checkmark-circle" size={13} color="#FFF" />
+                          <Text style={s.approveBtnText}>{"Approve"}</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={s.rejectBtn}
+                      onPress={() => handleReject(item)}
+                      disabled={isReviewing}
+                    >
+                      <Ionicons name="close-circle" size={13} color="#E53E3E" />
+                      <Text style={s.rejectBtnText}>{"Reject"}</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            );
+          })()}
         </View>
 
         <View style={s.catChip}>

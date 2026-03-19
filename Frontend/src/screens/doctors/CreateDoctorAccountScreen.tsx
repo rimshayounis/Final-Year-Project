@@ -37,13 +37,16 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
     fullName: '',
     email: '',
     password: '',
-    licenseNumber: '',
     specialization: '',
+    licenseNumber: '',
   });
 
   const [certificates, setCertificates] = useState<CertificateFile[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // License number is disabled when specialization is "psychologist" (any case)
+  const isPsychologist = formData.specialization.trim().toLowerCase() === 'psychologist';
 
   /* ------------------ INPUT HANDLER ------------------ */
   const handleChange = (field: keyof typeof formData, value: string) => {
@@ -74,7 +77,6 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
       }));
 
       setCertificates(prev => [...prev, ...files]);
-
       Alert.alert('Success', `${files.length} certificate(s) uploaded.`);
     } catch (error) {
       console.error('Certificate upload error:', error);
@@ -93,11 +95,11 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
     if (formData.password.length < 6)
       return Alert.alert('Error', 'Password must be at least 6 characters'), false;
 
-    if (!formData.licenseNumber.trim())
-      return Alert.alert('Error', 'License number is required'), false;
-
     if (!formData.specialization.trim())
       return Alert.alert('Error', 'Specialization is required'), false;
+
+    if (!isPsychologist && !formData.licenseNumber.trim())
+      return Alert.alert('Error', 'License number is required'), false;
 
     if (certificates.length === 0)
       return Alert.alert('Error', 'Upload at least one certificate'), false;
@@ -117,8 +119,8 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
       body.append('fullName', formData.fullName.trim());
       body.append('email', formData.email.trim().toLowerCase());
       body.append('password', formData.password);
-      body.append('licenseNumber', formData.licenseNumber.trim());
       body.append('specialization', formData.specialization.trim());
+      body.append('licenseNumber', formData.licenseNumber.trim());
 
       certificates.forEach(cert => {
         body.append('certificates', {
@@ -130,27 +132,27 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
         } as any);
       });
 
-   const response = await doctorAPI.register(body);
+      const response = await doctorAPI.register(body);
 
-if (response.data.success) {
-  const doctorId = response.data.doctor._id; // adjust according to your API response
-  const doctorName = formData.fullName;
+      if (response.data.success) {
+        const doctorId = response.data.doctor._id;
+        const doctorName = formData.fullName;
 
-  Alert.alert(
-    'Registration Successful',
-    'Account created! Please choose a subscription plan to continue.',
-    [
-      {
-        text: 'OK',
-        onPress: () =>
-          navigation.replace('DoctorSubscription', {
-            doctorId,
-            doctorName,
-          }),
-      },
-    ]
-  );
-}
+        Alert.alert(
+          'Registration Successful',
+          'Account created! Please choose a subscription plan to continue.',
+          [
+            {
+              text: 'OK',
+              onPress: () =>
+                navigation.replace('DoctorSubscription', {
+                  doctorId,
+                  doctorName,
+                }),
+            },
+          ]
+        );
+      }
     } catch (error: any) {
       console.error('Doctor registration error:', error);
       Alert.alert(
@@ -164,30 +166,35 @@ if (response.data.success) {
 
   /* ------------------ UI ------------------ */
   return (
+    // SafeAreaView is blue so the status-bar area matches the header
     <SafeAreaView style={styles.container} edges={['top']}>
+
+      {/* Sticky header — outside ScrollView so it never scrolls away */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Create Doctor Account</Text>
+      </View>
+
+      {/* KeyboardAvoidingView + ScrollView both grey so keyboard area is never blue */}
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
+            style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.header}>
-              <TouchableOpacity onPress={() => navigation.goBack()}>
-                <MaterialIcons name="arrow-back" size={24} color="#fff" />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>Create Doctor Account</Text>
-            </View>
-
             <View style={styles.form}>
               {renderInput('Full Name', 'fullName', formData.fullName)}
               {renderInput('Email', 'email', formData.email, 'email-address')}
               {renderPasswordInput()}
-              {renderInput('License Number', 'licenseNumber', formData.licenseNumber)}
               {renderInput('Specialization', 'specialization', formData.specialization)}
+              {renderInput('License Number', 'licenseNumber', formData.licenseNumber, 'default', isPsychologist)}
 
               <TouchableOpacity style={styles.uploadBtn} onPress={handleUploadCertificates}>
                 <MaterialIcons name="upload-file" size={22} color="#6B7FED" />
@@ -221,16 +228,18 @@ if (response.data.success) {
     label: string,
     field: keyof typeof formData,
     value: string,
-    keyboardType: any = 'default'
+    keyboardType: any = 'default',
+    disabled: boolean = false
   ) {
     return (
       <View style={styles.inputGroup}>
         <Text style={styles.label}>{label}</Text>
         <TextInput
-          style={styles.input}
-          value={value}
+          style={[styles.input, disabled && styles.inputDisabled]}
+          value={disabled ? '' : value}
           keyboardType={keyboardType}
           autoCapitalize="none"
+          editable={!disabled}
           onChangeText={text => handleChange(field, text)}
         />
       </View>
@@ -263,20 +272,31 @@ if (response.data.success) {
 
 /* ------------------ STYLES ------------------ */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
-  scrollContent: { paddingBottom: 80 },
+  // SafeAreaView background = blue so the status-bar area is blue
+  container: { flex: 1, backgroundColor: '#6B7FED' },
+
+  // Sticky header — one row with arrow + title side by side
   header: {
     backgroundColor: '#6B7FED',
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    marginTop: 12,
   },
+
+  // Grey backgrounds so keyboard area is never blue
+  keyboardView: { flex: 1, backgroundColor: '#F5F5F5' },
+  scrollView: { backgroundColor: '#F5F5F5' },
+  scrollContent: { paddingBottom: 80 },
+
   form: { padding: 24 },
   inputGroup: { marginBottom: 16 },
   label: { fontWeight: '600', marginBottom: 6 },
@@ -285,6 +305,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     height: 50,
+  },
+  inputDisabled: {
+    backgroundColor: '#E8E8E8',
+    color: '#999',
   },
   passwordContainer: {
     flexDirection: 'row',
