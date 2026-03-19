@@ -10,11 +10,10 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
 
   // CORS — allow Next.js frontend
-  app.enableCors({
-    origin: 'http://localhost:3000',
-    credentials: true,
-  });
-
+app.enableCors({
+  origin: ['http://localhost:3000', 'http://localhost:3002'],
+  credentials: true,
+});
   // Swagger API docs
   const config = new DocumentBuilder()
     .setTitle('TruHeal Admin API')
