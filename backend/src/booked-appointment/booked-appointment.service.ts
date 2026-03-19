@@ -263,15 +263,6 @@ export class BookedAppointmentService {
       );
 
       if (now >= apptEnd) {
-<<<<<<< HEAD
-        appt.status = 'completed';
-        appt.completedAt = now;
-        await appt.save();
-        this.doctorModel
-          .updateOne({ _id: appt.doctorId }, { $inc: { completedCount: 1 } })
-          .exec()
-          .catch(() => { /* silent */ });
-=======
         // ── FIX: only complete if payment is already held or not required ──
         // If paymentStatus is still 'pending_payment', patient never paid
         // so we should NOT auto-complete the appointment
@@ -284,7 +275,7 @@ export class BookedAppointmentService {
           await appt.save();
         }
         // If pending_payment → leave as confirmed, patient still needs to pay
->>>>>>> d8f51637b9a8144e30dc1580dc4a1b71488f1f5c
+
       }
     }
   }
