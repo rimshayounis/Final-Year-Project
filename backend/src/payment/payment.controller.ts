@@ -43,4 +43,8 @@ export class PaymentController {
   getTransactions() {
     return this.paymentService.getAllTransactions();
   }
+  @Get('admin/held')
+getHeldPayments() {
+  return this.paymentService.getHeldPayments();
+}
 }

@@ -90,11 +90,12 @@ export class BookedAppointmentService {
     };
   }
 
-  // Get all appointments for a doctor
+  // Get all appointments for a doctor — FIX: populate doctorId too
   async getDoctorAppointments(doctorId: string): Promise<any> {
     const appointments = await this.bookedAppointmentModel
       .find({ doctorId: new Types.ObjectId(doctorId) })
       .populate('userId', 'fullName email profileImage')
+      .populate('doctorId', 'fullName email')   // ← FIXED: now shows doctor name
       .sort({ date: -1, time: -1 })
       .exec();
 
@@ -155,7 +156,7 @@ export class BookedAppointmentService {
       }
     }
 
-    // ── SET completedAt when status becomes completed ──
+    // Set completedAt when status becomes completed
     if (dto.status === 'completed') {
       appointment.completedAt = new Date();
     }
@@ -243,17 +244,16 @@ export class BookedAppointmentService {
     };
   }
 
-  // ── AUTO-COMPLETE: called by the scheduler every minute ──
+  // AUTO-COMPLETE: called by the scheduler every minute
+  // FIX: only auto-complete if payment is held or not required
   async autoCompleteExpired(): Promise<void> {
     const now = new Date();
 
-    // Find all confirmed appointments where date+time+duration has passed
     const confirmed = await this.bookedAppointmentModel
       .find({ status: 'confirmed' })
       .exec();
 
     for (const appt of confirmed) {
-      // Build a JS Date from the stored "YYYY-MM-DD" + "HH:MM" strings
       const [hours, minutes] = appt.time.split(':').map(Number);
       const apptStart = new Date(appt.date);
       apptStart.setHours(hours, minutes, 0, 0);
@@ -263,6 +263,7 @@ export class BookedAppointmentService {
       );
 
       if (now >= apptEnd) {
+<<<<<<< HEAD
         appt.status = 'completed';
         appt.completedAt = now;
         await appt.save();
@@ -270,6 +271,20 @@ export class BookedAppointmentService {
           .updateOne({ _id: appt.doctorId }, { $inc: { completedCount: 1 } })
           .exec()
           .catch(() => { /* silent */ });
+=======
+        // ── FIX: only complete if payment is already held or not required ──
+        // If paymentStatus is still 'pending_payment', patient never paid
+        // so we should NOT auto-complete the appointment
+        if (
+          appt.paymentStatus === 'payment_held' ||
+          appt.paymentStatus === 'not_required'
+        ) {
+          appt.status = 'completed';
+          appt.completedAt = now;
+          await appt.save();
+        }
+        // If pending_payment → leave as confirmed, patient still needs to pay
+>>>>>>> d8f51637b9a8144e30dc1580dc4a1b71488f1f5c
       }
     }
   }

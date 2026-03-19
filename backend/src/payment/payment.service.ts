@@ -409,4 +409,14 @@ export class PaymentService {
   async getAllTransactions(): Promise<any> {
     return this.transactionModel.find().sort({ createdAt: -1 }).exec();
   }
+  async getHeldPayments(): Promise<any> {
+  const held = await this.appointmentModel
+    .find({ paymentStatus: 'payment_held' })
+    .populate('userId', 'fullName email')
+    .populate('doctorId', 'fullName email')
+    .sort({ createdAt: -1 })
+    .exec();
+  const totalHeld = held.reduce((sum, a) => sum + (a.heldAmount || 0), 0);
+  return { totalHeld, count: held.length, appointments: held };
+}
 }
