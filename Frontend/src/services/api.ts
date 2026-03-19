@@ -235,6 +235,9 @@ export const appointmentAPI = {
   getDoctorAvailability: (doctorId: string) =>
     apiClient.get(`/appointment-availability/doctor/${doctorId}`),
 
+  getOwnAvailability: (doctorId: string) =>
+    apiClient.get(`/appointment-availability/doctor/${doctorId}/own`),
+
   getAvailableSlots: (doctorId: string, startDate?: string, endDate?: string) => {
     const params: any = { doctorId };
     if (startDate) params.startDate = startDate;

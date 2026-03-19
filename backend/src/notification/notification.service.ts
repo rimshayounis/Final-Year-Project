@@ -58,7 +58,7 @@ export class NotificationService {
       );
     }
 
-    if (settings?.appNotifEnabled) {
+    if (settings?.pushEnabled) {
       const pushToken = (doctor as any).expoPushToken;
       if (pushToken) {
         await this.sendPushNotification(pushToken, details).catch((e) =>
@@ -139,7 +139,7 @@ export class NotificationService {
         .select('expoPushToken notificationSettings')
         .exec();
       token       = (doctor as any)?.expoPushToken ?? null;
-      pushEnabled = (doctor as any)?.notificationSettings?.appNotifEnabled ?? false;
+      pushEnabled = (doctor as any)?.notificationSettings?.pushEnabled ?? false;
     }
 
     if (!pushEnabled || !token) return;

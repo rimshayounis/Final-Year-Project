@@ -42,6 +42,7 @@ export class AppointmentAvailability {
   @Prop({ default: true })
   isActive: boolean;
 
+  // TODO: redundant with Mongoose auto-generated `updatedAt` (timestamps: true). Remove after migrating frontend to use `updatedAt`.
   @Prop({ default: Date.now })
   lastUpdated: Date;
 }

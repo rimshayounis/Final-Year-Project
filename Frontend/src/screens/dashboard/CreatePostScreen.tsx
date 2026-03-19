@@ -30,18 +30,18 @@ type CreatePostScreenProps = {
 };
 
 const BACKGROUND_COLORS = [
-  "#6B7FED",
-  "#FF6B6B",
-  "#4ECDC4",
-  "#FFE66D",
-  "#A8E6CF",
-  "#FF8B94",
-  "#C7CEEA",
-  "#FFDAB9",
-  "#98D8C8",
-  "#F7DC6F",
-  "#BB8FCE",
-  "#85C1E2",
+  { color: "#6B7FED", label: "Indigo"   },
+  { color: "#FF6B6B", label: "Coral"    },
+  { color: "#4ECDC4", label: "Teal"     },
+  { color: "#FFE66D", label: "Yellow"   },
+  { color: "#A8E6CF", label: "Mint"     },
+  { color: "#FF8B94", label: "Pink"     },
+  { color: "#C7CEEA", label: "Lavender" },
+  { color: "#FFDAB9", label: "Peach"    },
+  { color: "#98D8C8", label: "Seafoam"  },
+  { color: "#F7DC6F", label: "Gold"     },
+  { color: "#BB8FCE", label: "Plum"     },
+  { color: "#85C1E2", label: "Sky"      },
 ];
 
 export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
@@ -51,7 +51,6 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
   const [description, setDescription] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [showColorModal, setShowColorModal] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [selectedColor, setSelectedColor] = useState("");
   const [loading, setLoading] = useState(false);
@@ -71,10 +70,6 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
     setShowCategoryModal(false);
   };
 
-  const handleColorSelect = (color: string) => {
-    setSelectedColor(color === selectedColor ? "" : color);
-    setShowColorModal(false);
-  };
 
   const handlePickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -93,6 +88,7 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
         type: "image",
       }));
       setMediaFiles((prev) => [...prev, ...newMedia]);
+      setSelectedColor("");
     }
   };
 
@@ -111,6 +107,7 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
         ...prev,
         { uri: result.assets[0].uri, type: "image" },
       ]);
+      setSelectedColor("");
     }
   };
 
@@ -174,7 +171,7 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#6B7FED" }}
+      style={{ flex: 1, backgroundColor: "#FFF" }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
@@ -197,50 +194,70 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
 
           {/* Description */}
           <View style={styles.inputGroup}>
-            <View style={styles.descriptionHeader}>
-              <Text style={styles.label}>Description</Text>
-              <TouchableOpacity
-                style={styles.colorPickerButton}
-                onPress={() => setShowColorModal(true)}
-              >
-                {selectedColor ? (
-                  <View
-                    style={[
-                      styles.colorDot,
-                      { backgroundColor: selectedColor },
-                    ]}
-                  />
-                ) : (
-                  <MaterialIcons name="palette" size={20} color="#6B7FED" />
-                )}
-                <Text style={styles.colorPickerText}>
-                  {selectedColor ? "Change" : "Background"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View
-              style={[
-                styles.descriptionContainer,
-                selectedColor ? { backgroundColor: selectedColor } : {},
-              ]}
-            >
+            <Text style={styles.label}>Description</Text>
+
+            {/* Live preview textarea */}
+            <View style={[
+              styles.descriptionContainer,
+              selectedColor ? { backgroundColor: selectedColor } : {},
+            ]}>
               <TextInput
                 style={[
                   styles.input,
                   styles.textArea,
-                  selectedColor
-                    ? { backgroundColor: "transparent", color: "#FFF" }
-                    : {},
+                  selectedColor ? { backgroundColor: "transparent", color: "#FFF" } : {},
                 ]}
                 placeholder="Enter description"
-                placeholderTextColor={
-                  selectedColor ? "rgba(255,255,255,0.7)" : "#999"
-                }
+                placeholderTextColor={selectedColor ? "rgba(255,255,255,0.7)" : "#999"}
                 multiline
                 value={description}
                 onChangeText={setDescription}
               />
             </View>
+
+            {/* Inline color strip — hidden when media is attached */}
+            {mediaFiles.length === 0 && <View style={styles.colorStripWrap}>
+              <View style={styles.colorStripHeader}>
+                <MaterialIcons name="palette" size={15} color="#6B7FED" />
+                <Text style={styles.colorStripLabel}>Background color</Text>
+                {selectedColor ? (
+                  <TouchableOpacity onPress={() => setSelectedColor("")} style={styles.clearColorBtn}>
+                    <Text style={styles.clearColorText}>Clear</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.colorStrip}>
+                {/* None swatch */}
+                <TouchableOpacity
+                  onPress={() => setSelectedColor("")}
+                  style={[styles.swatch, styles.swatchNone, !selectedColor && styles.swatchSelected]}
+                >
+                  <MaterialIcons name="block" size={18} color={!selectedColor ? "#6B7FED" : "#CCC"} />
+                </TouchableOpacity>
+
+                {/* Color swatches */}
+                {BACKGROUND_COLORS.map((item) => (
+                  <TouchableOpacity
+                    key={item.color}
+                    onPress={() => setSelectedColor(selectedColor === item.color ? "" : item.color)}
+                    style={[
+                      styles.swatch,
+                      { backgroundColor: item.color },
+                      selectedColor === item.color && styles.swatchSelected,
+                    ]}
+                  >
+                    {selectedColor === item.color && (
+                      <MaterialIcons name="check" size={18} color="#FFF" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {selectedColor ? (
+                <Text style={styles.selectedColorLabel}>
+                  {BACKGROUND_COLORS.find(c => c.color === selectedColor)?.label} selected
+                </Text>
+              ) : null}
+            </View>}
           </View>
 
           {/* Category */}
@@ -348,73 +365,6 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
         </View>
       </Modal>
 
-      {/* COLOR MODAL */}
-      <Modal
-        visible={showColorModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowColorModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Background</Text>
-              <TouchableOpacity onPress={() => setShowColorModal(false)}>
-                <MaterialIcons name="close" size={24} color="#666" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.colorList}>
-              {/* None option */}
-              <TouchableOpacity
-                style={[
-                  styles.noneOption,
-                  !selectedColor && styles.noneOptionActive,
-                ]}
-                onPress={() => {
-                  setSelectedColor("");
-                  setShowColorModal(false);
-                }}
-              >
-                <MaterialIcons
-                  name="format-color-reset"
-                  size={20}
-                  color={!selectedColor ? "#6B7FED" : "#999"}
-                />
-                <Text
-                  style={[
-                    styles.noneOptionText,
-                    !selectedColor && { color: "#6B7FED" },
-                  ]}
-                >
-                  No Background
-                </Text>
-                {!selectedColor && (
-                  <MaterialIcons name="check" size={18} color="#6B7FED" />
-                )}
-              </TouchableOpacity>
-              <View style={styles.colorGrid}>
-                {BACKGROUND_COLORS.map((color) => (
-                  <TouchableOpacity
-                    key={color}
-                    style={[
-                      styles.colorOption,
-                      { backgroundColor: color },
-                      selectedColor === color && styles.colorOptionActive,
-                    ]}
-                    onPress={() => handleColorSelect(color)}
-                  >
-                    {selectedColor === color && (
-                      <View style={styles.checkmark}>
-                        <MaterialIcons name="check" size={20} color="#FFF" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -558,44 +508,55 @@ const styles = StyleSheet.create({
   categoryOptionActive: { backgroundColor: "#E8F0FE" },
   categoryOptionText: { fontSize: 16, color: "#2C3E50" },
   categoryOptionTextActive: { color: "#6B7FED", fontWeight: "600" },
-  colorList: { paddingHorizontal: 25, paddingTop: 10 },
-  noneOption: {
+  // Inline color strip
+  colorStripWrap: {
+    marginTop: 10,
+    backgroundColor: "#F8F9FF",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E8ECFF",
+    overflow: "hidden",
+  },
+  colorStripHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
+    gap: 6,
+    marginBottom: 10,
+  },
+  colorStripLabel: { flex: 1, fontSize: 12, fontWeight: "600", color: "#6B7FED" },
+  clearColorBtn: {
+    backgroundColor: "#FFE8E8",
     paddingHorizontal: 10,
-    borderRadius: 10,
-    marginBottom: 14,
-    backgroundColor: "#F8F8F8",
+    paddingVertical: 3,
+    borderRadius: 20,
   },
-  noneOptionActive: { backgroundColor: "#EEF0FB" },
-  noneOptionText: { flex: 1, fontSize: 15, color: "#999", fontWeight: "600" },
-  colorGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  colorOption: {
-    width: "22%",
-    aspectRatio: 1,
-    borderRadius: 12,
-    marginBottom: 15,
+  clearColorText: { fontSize: 11, fontWeight: "700", color: "#FF4444" },
+  colorStrip: { gap: 10, paddingVertical: 4, paddingHorizontal: 4 },
+  swatch: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: "transparent",
   },
-  colorOptionActive: { borderColor: "#2C3E50", borderWidth: 3 },
-  checkmark: {
-    position: "absolute",
-    top: 5,
-    right: 5,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,0.3)",
-    justifyContent: "center",
-    alignItems: "center",
+  swatchNone: {
+    backgroundColor: "#FFF",
+    borderWidth: 1.5,
+    borderColor: "#DDD",
+    borderStyle: "dashed",
+  },
+  swatchSelected: {
+    borderColor: "#2C3E50",
+    transform: [{ scale: 1.15 }],
+  },
+  selectedColorLabel: {
+    marginTop: 8,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6B7FED",
+    textAlign: "center",
   },
 });

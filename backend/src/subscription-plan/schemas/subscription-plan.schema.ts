@@ -46,8 +46,9 @@ export class SubscriptionPlanRecord {
   @Prop({ default: null })
   paymentMethod: string;
 
-  @Prop({ default: null })
-  transactionId: string;
+  /** Reference to the Transaction record for this subscription payment */
+  @Prop({ type: Types.ObjectId, ref: 'Transaction', default: null })
+  transactionId: Types.ObjectId | null;
 
   @Prop({ default: null })
   cancelledAt: Date;

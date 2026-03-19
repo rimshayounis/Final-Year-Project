@@ -43,6 +43,7 @@ import BookAppointment from './src/screens/dashboard/BookAppointment';
 import UserSession from './src/screens/dashboard/UserSession';
 import DoctorCreateAppointmentScreen from './src/screens/doctors/DoctorCreateAppointmentScreen';
 import DoctorAppointmentDetailScreen from './src/screens/dashboard/Doctorappointmentdetailscreen';
+import DoctorProfileViewScreen from './src/screens/dashboard/DoctorProfileViewScreen';
 import PatientChatScreen from './src/screens/chat/PatientChatScreen';
 import DoctorChatScreen from './src/screens/chat/DoctorChatScreen';
 import SettingsScreen from './src/screens/dashboard/SettingsScreen';
@@ -72,6 +73,7 @@ export type RootStackParamList = {
   Wallet: { doctorId: string };
   BankDetails: { doctorId: string };
   NotificationSettings: { doctorId: string };
+  DoctorProfileView: { doctorId: string; userId: string };
   DoctorAppointmentDetail: {
     doctor: {
       _id: string;
@@ -137,6 +139,7 @@ export default function App() {
           <Stack.Screen name="userSession"          component={UserSession} />
           <Stack.Screen name="CreateAppointment"    component={DoctorCreateAppointmentScreen} />
           <Stack.Screen name="DoctorAppointmentDetail" component={DoctorAppointmentDetailScreen} />
+          <Stack.Screen name="DoctorProfileView"       component={DoctorProfileViewScreen} />
           <Stack.Screen name="DoctorChat"           component={DoctorChatScreen} />
           <Stack.Screen name="PatientChat"          component={PatientChatScreen} />
           <Stack.Screen name="Settings"             component={SettingsScreen} />

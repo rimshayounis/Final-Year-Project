@@ -56,7 +56,7 @@ export class AppointmentAvailabilityService {
     return await availability.save();
   }
 
-  // Get doctor's availability settings
+  // Get doctor's availability settings (active only — for patient booking)
   async getDoctorAvailability(doctorId: string): Promise<AppointmentAvailability> {
     const availability = await this.availabilityModel
       .findOne({ doctorId: new Types.ObjectId(doctorId), isActive: true })
@@ -69,6 +69,13 @@ export class AppointmentAvailabilityService {
     }
 
     return availability;
+  }
+
+  // Get doctor's own availability (regardless of isActive — for doctor's schedule tab)
+  async getOwnAvailability(doctorId: string): Promise<AppointmentAvailability | null> {
+    return await this.availabilityModel
+      .findOne({ doctorId: new Types.ObjectId(doctorId) })
+      .exec();
   }
 
   // Get available time slots for booking
@@ -139,7 +146,12 @@ export class AppointmentAvailabilityService {
       this.validateTimeSlots(updateDto.specificDates);
     }
 
-    Object.assign(availability, updateDto);
+    // Only assign fields that are explicitly provided (not undefined)
+    for (const key of Object.keys(updateDto) as (keyof typeof updateDto)[]) {
+      if (updateDto[key] !== undefined) {
+        (availability as any)[key] = updateDto[key];
+      }
+    }
     availability.lastUpdated = new Date();
     return await availability.save();
   }
@@ -157,12 +169,14 @@ export class AppointmentAvailabilityService {
     }
   }
 
-  // Get all doctors with availability
-  async getAllDoctorsWithAvailability(): Promise<AppointmentAvailability[]> {
-    return await this.availabilityModel
+  // Get all doctors with availability (includes subscriptionPlan + completedCount)
+  async getAllDoctorsWithAvailability(): Promise<any[]> {
+    const records = await this.availabilityModel
       .find({ isActive: true })
-      .populate('doctorId', 'fullName email profileImage doctorProfile')
+      .populate('doctorId', 'fullName email profileImage doctorProfile subscriptionPlan completedCount')
       .exec();
+
+    return records.map(r => r.toObject());
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────

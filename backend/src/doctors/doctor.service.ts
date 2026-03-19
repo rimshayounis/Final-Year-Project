@@ -222,14 +222,14 @@ export class DoctorsService {
 
   async updateNotificationSettings(doctorId: string, settings: {
     emailEnabled?: boolean;
-    appNotifEnabled?: boolean;
+    pushEnabled?: boolean;
   }): Promise<any> {
     const doctor = await this.doctorModel.findById(doctorId).exec();
     if (!doctor) throw new NotFoundException('Doctor not found');
 
     const ns = doctor.notificationSettings ?? {} as any;
-    if (settings.emailEnabled    !== undefined) ns.emailEnabled    = settings.emailEnabled;
-    if (settings.appNotifEnabled !== undefined) ns.appNotifEnabled = settings.appNotifEnabled;
+    if (settings.emailEnabled !== undefined) ns.emailEnabled = settings.emailEnabled;
+    if (settings.pushEnabled  !== undefined) ns.pushEnabled  = settings.pushEnabled;
 
     doctor.notificationSettings = ns;
     doctor.markModified('notificationSettings');

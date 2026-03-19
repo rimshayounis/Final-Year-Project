@@ -40,10 +40,15 @@ export class ChatService {
 
     const saved = await msg.save();
 
+    // Determine which side receives the unread increment
+    const conv = await this.conversationModel.findById(dto.conversationId).lean();
+    const senderIsPatient = conv?.patientId?.toString() === dto.senderId;
+    const unreadField = senderIsPatient ? 'doctorUnreadCount' : 'patientUnreadCount';
+
     await this.conversationModel.findByIdAndUpdate(dto.conversationId, {
       lastMessage:   dto.text || dto.fileType || 'File',
       lastMessageAt: new Date(),
-      $inc: { unreadCount: 1 },
+      $inc: { [unreadField]: 1 },
     });
 
     return saved;
@@ -119,17 +124,18 @@ export class ChatService {
     await this.messageModel.findByIdAndUpdate(messageId, { reactions });
   }
 
-  async getOrCreateConversation(userAId: string, userBId: string): Promise<ConversationDocument> {
-    const a = new Types.ObjectId(userAId);
-    const b = new Types.ObjectId(userBId);
+  async getOrCreateConversation(patientId: string, doctorId: string): Promise<ConversationDocument> {
+    const pId = new Types.ObjectId(patientId);
+    const dId = new Types.ObjectId(doctorId);
 
     let conv = await this.conversationModel
-      .findOne({ participants: { $all: [a, b] } })
+      .findOne({ patientId: pId, doctorId: dId })
       .exec();
 
     if (!conv) {
       conv = new this.conversationModel({
-        participants:  [a, b],
+        patientId:     pId,
+        doctorId:      dId,
         lastMessage:   '',
         lastMessageAt: new Date(),
       });
@@ -141,9 +147,20 @@ export class ChatService {
 
   async getUserConversations(userId: string) {
     return this.conversationModel
-      .find({ participants: new Types.ObjectId(userId) })
+      .find({ patientId: new Types.ObjectId(userId) })
       .sort({ lastMessageAt: -1 })
-      .populate('participants', 'fullName userType profilePicture')
+      .populate('patientId', 'fullName')
+      .populate('doctorId', 'fullName')
+      .lean()
+      .exec();
+  }
+
+  async getDoctorConversations(doctorId: string) {
+    return this.conversationModel
+      .find({ doctorId: new Types.ObjectId(doctorId) })
+      .sort({ lastMessageAt: -1 })
+      .populate('patientId', 'fullName')
+      .populate('doctorId', 'fullName')
       .lean()
       .exec();
   }
