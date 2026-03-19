@@ -9,12 +9,13 @@ export type ConversationDocument = Conversation & Document;
 
 @Schema({ timestamps: true })
 export class Conversation {
-  @Prop({
-    type: [{ type: Types.ObjectId, ref: 'User' }],
-    required: true,
-    validate: (v: Types.ObjectId[]) => v.length === 2,
-  })
-  participants: Types.ObjectId[];
+  /** The patient (User) side of the conversation */
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  patientId: Types.ObjectId;
+
+  /** The doctor (Doctor) side of the conversation */
+  @Prop({ type: Types.ObjectId, ref: 'Doctor', required: true })
+  doctorId: Types.ObjectId;
 
   @Prop({ default: '' })
   lastMessage: string;
@@ -22,11 +23,16 @@ export class Conversation {
   @Prop({ default: () => new Date() })
   lastMessageAt: Date;
 
+  /** Unread messages for the patient side */
   @Prop({ default: 0 })
-  unreadCount: number;
+  patientUnreadCount: number;
+
+  /** Unread messages for the doctor side */
+  @Prop({ default: 0 })
+  doctorUnreadCount: number;
 }
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);
 
-// Ensure one conversation per pair of users
-ConversationSchema.index({ participants: 1 }, { unique: false });
+// One conversation per patient-doctor pair
+ConversationSchema.index({ patientId: 1, doctorId: 1 }, { unique: true });

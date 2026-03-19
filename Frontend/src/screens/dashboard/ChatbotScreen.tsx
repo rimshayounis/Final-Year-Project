@@ -267,14 +267,14 @@ export default function ChatbotScreen({ id, role }: ChatbotScreenProps) {
   /* ================= UI ================= */
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
 
-      {/* HEADER */}
-      <View style={styles.header}>
+      {/* HEADER — extends behind status bar */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Text style={styles.headerTitle}>Chatbot</Text>
         <TouchableOpacity style={styles.menuButton} onPress={handleClearChat}>
           <MaterialIcons name="delete-outline" size={24} color="#FFF" />
@@ -383,81 +383,81 @@ export default function ChatbotScreen({ id, role }: ChatbotScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container:        { flex: 1, backgroundColor: '#F0F2FF' },
+
+  // Header
   header: {
     backgroundColor: '#6B7FED',
-    paddingBottom: 15,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
+    paddingBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
-  menuButton: { padding: 5 },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#6B7FED',
-    marginTop: 8,
-  },
+  headerTitle:  { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  menuButton:   { padding: 6 },
+
+  // Loading
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
+  loadingText:      { fontSize: 14, color: '#6B7FED' },
+
+  // Messages
   messagesContainer: { flex: 1 },
-  messagesContent: { padding: 20, paddingBottom: 10 },
-  botAvatarContainer: {
-    alignItems: 'center',
-    marginVertical: 20,
-    position: 'relative',
-  },
-  botAvatar: { fontSize: 80 },
-  sparkle: { fontSize: 24, position: 'absolute', top: -5, right: '35%' },
-  messageWrapper: { flexDirection: 'row', marginBottom: 15, alignItems: 'flex-end' },
+  messagesContent:   { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+
+  // Bot avatar (top of chat)
+  botAvatarContainer: { alignItems: 'center', marginBottom: 16 },
+  botAvatar:          { fontSize: 48 },
+  sparkle:            { fontSize: 16, position: 'absolute', top: -2, right: '37%' },
+
+  // Message rows
+  messageWrapper:     { flexDirection: 'row', marginBottom: 10, alignItems: 'flex-end' },
   userMessageWrapper: { justifyContent: 'flex-end' },
-  botMessageWrapper: { justifyContent: 'flex-start' },
-  messageBubble: { maxWidth: '75%', borderRadius: 20, padding: 12, paddingHorizontal: 16 },
-  userMessage: { backgroundColor: '#6B7FED', borderBottomRightRadius: 5 },
-  botMessage: { backgroundColor: '#FFF', borderBottomLeftRadius: 5, elevation: 1 },
-  messageText: { fontSize: 15, lineHeight: 20 },
-  userMessageText: { color: '#FFF' },
-  botMessageText: { color: '#2C3E50' },
-  messageImage: { width: '100%', height: 200, borderRadius: 10, marginBottom: 8 },
-  copyButton: { padding: 8, marginLeft: 8 },
+  botMessageWrapper:  { justifyContent: 'flex-start', gap: 6 },
+
+  // Bubbles
+  messageBubble:    { maxWidth: '78%', borderRadius: 18, padding: 10, paddingHorizontal: 14 },
+  userMessage:      { backgroundColor: '#6B7FED', borderBottomRightRadius: 4 },
+  botMessage:       { backgroundColor: '#FFF', borderBottomLeftRadius: 4, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  messageText:      { fontSize: 14, lineHeight: 20 },
+  userMessageText:  { color: '#FFF' },
+  botMessageText:   { color: '#2C3E50' },
+  messageImage:     { width: '100%', height: 160, borderRadius: 10, marginBottom: 6 },
+
+  // Copy button inline with bot bubble
+  copyButton: { padding: 4 },
+
+  // Input area
   inputContainer: {
     flexDirection: 'row',
-    padding: 15,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
     backgroundColor: '#FFF',
     alignItems: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: '#EAECF5',
   },
   mediaButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#6B7FED',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 8,
   },
   inputWrapper: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    marginRight: 10,
-    minHeight: 45,
+    backgroundColor: '#F0F2FF',
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    minHeight: 40,
     justifyContent: 'center',
   },
-  input: { fontSize: 15, color: '#2C3E50' },
-  sendButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: '#6B7FED',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: { backgroundColor: '#CCC' },
+  input:              { fontSize: 14, color: '#2C3E50', maxHeight: 100 },
+  sendButton:         { width: 40, height: 40, borderRadius: 20, backgroundColor: '#6B7FED', justifyContent: 'center', alignItems: 'center' },
+  sendButtonDisabled: { backgroundColor: '#C5CAE9' },
 });

@@ -61,7 +61,7 @@ export class SubscriptionPlanService {
       status: 'active',
       pricePKR: config.pricePKR,
       paymentMethod: dto.paymentMethod ?? null,
-      transactionId: dto.transactionId ?? null,
+      transactionId: dto.transactionId ? new Types.ObjectId(dto.transactionId) : null,
     });
 
     const saved = await subscription.save();

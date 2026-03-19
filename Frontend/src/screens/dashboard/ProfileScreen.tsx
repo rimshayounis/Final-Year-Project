@@ -160,6 +160,12 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [approvedByDoctorCount, setApprovedByDoctorCount] = useState<number>(0);
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
+  // Sync completedCount from doctor document whenever profile loads
+  useEffect(() => {
+    if (role === 'doctor' && userProfile?.completedCount !== undefined) {
+      setAppointmentCount(userProfile.completedCount);
+    }
+  }, [userProfile?.completedCount]);
   const [pointsSummary, setPointsSummary] = useState<{
     totalPoints: number;
     cashValue: number;
@@ -208,6 +214,8 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
   const [editPostLoading, setEditPostLoading] = useState(false);
 
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [doctorIsActive, setDoctorIsActive] = useState<boolean>(true);
 
   /* ── Fetch profile ── */
   const fetchProfile = async () => {
@@ -271,13 +279,8 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
     }
   };
 
-  const fetchAppointmentCount = async () => {
-    try {
-      const res = await apiClient.get(`/booked-appointments/doctor/${id}`);
-      setAppointmentCount(res.data?.count ?? 0);
-    } catch {
-      // silent
-    }
+  const fetchAppointmentCount = () => {
+    // no-op — count is derived from userProfile below
   };
 
   const fetchPointsSummary = async () => {
@@ -297,6 +300,15 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
       setVerificationSlots(slotsRes.data?.data ?? null);
     } catch {
       // silent
+    }
+  };
+
+  const fetchDoctorActiveStatus = async () => {
+    try {
+      const res = await apiClient.get(`/appointment-availability/doctor/${id}`);
+      setDoctorIsActive(res.data?.data?.isActive ?? false);
+    } catch {
+      setDoctorIsActive(false);
     }
   };
 
@@ -340,6 +352,7 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
         fetchAppointmentCount();
         fetchPointsSummary();
         if (!onBookAppointment) fetchVerificationSlots();
+        if (onBookAppointment) fetchDoctorActiveStatus();
       }
 
       return () => {};
@@ -355,6 +368,7 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
       fetchAppointmentCount();
       fetchPointsSummary();
       if (!onBookAppointment) fetchVerificationSlots();
+      if (onBookAppointment) fetchDoctorActiveStatus();
     }
   };
 
@@ -924,8 +938,8 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
           </View>
         )}
 
-        {/* Book Appointment — only shown to users viewing a doctor profile */}
-        {onBookAppointment ? (
+        {/* Book Appointment — only shown when doctor is active and has availability */}
+        {onBookAppointment && doctorIsActive ? (
           <TouchableOpacity
             style={styles.bookBtn}
             onPress={() =>
@@ -1105,18 +1119,22 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
 
         {item.mediaUrls?.length > 0 ? (
           <View style={styles.mediaContainer}>
-            {item.mediaUrls.map((url, i) => {
-              const imgUri = url.startsWith("http") ? url : baseUrl + url;
-              return (
-                <Image
-                  key={String(i)}
-                  source={{ uri: imgUri }}
-                  style={styles.mediaImage}
-                  resizeMode="cover"
-                  onError={() => console.log("Image load failed:", imgUri)}
-                />
-              );
-            })}
+            {item.mediaUrls
+              .filter((url) => !failedImages.has(url))
+              .map((url, i) => {
+                const imgUri = url.startsWith("http") ? url : baseUrl + url;
+                return (
+                  <Image
+                    key={String(i)}
+                    source={{ uri: imgUri }}
+                    style={styles.mediaImage}
+                    resizeMode="cover"
+                    onError={() =>
+                      setFailedImages((prev) => new Set([...prev, url]))
+                    }
+                  />
+                );
+              })}
           </View>
         ) : null}
 
@@ -2023,12 +2041,13 @@ const styles = StyleSheet.create({
   // Colored post — square with centered text
   coloredPost: {
     width: COLORED_POST_SIZE,
-    height: COLORED_POST_SIZE * 0.75,
+    minHeight: 120,
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 10,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
   },
   coloredPostTitle: {
     fontSize: 22,

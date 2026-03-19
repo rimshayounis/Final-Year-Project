@@ -1,230 +1,223 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  StatusBar,
-  TextInput,
-  useColorScheme,
-  Dimensions,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  ActivityIndicator, Alert, StatusBar, TextInput, Image,
+  Modal, Animated, KeyboardAvoidingView, Platform, useColorScheme, Dimensions,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { appointmentAPI } from '../../services/api';
+import apiClient, { appointmentAPI, API_URL } from '../../services/api';
 
 const { width } = Dimensions.get('window');
-const isTablet = width >= 768;
 
 const lightTheme = {
-  headerBg: '#6B7FED',
-  screenBg: '#EEF0FB',
-  cardBg: '#FFFFFF',
-  accent: '#6B7FED',
-  accentLight: '#E8F0FE',
-  textPrimary: '#1A1F36',
+  headerBg:      '#6B7FED',
+  screenBg:      '#EEF0FB',
+  cardBg:        '#FFFFFF',
+  accent:        '#6B7FED',
+  accentLight:   '#E8F0FE',
+  textPrimary:   '#1A1F36',
   textSecondary: '#666',
-  textMuted: '#999',
-  border: '#E8E8F0',
-  success: '#4CAF50',
-  chipBg: 'rgba(255,255,255,0.2)',
-  chipText: '#FFFFFF',
-  searchBg: 'rgba(255,255,255,0.2)',
+  textMuted:     '#999',
+  border:        '#E8E8F0',
+  chipBg:        'rgba(255,255,255,0.2)',
 };
 
 const darkTheme = {
-  headerBg: '#3D4A8F',
-  screenBg: '#0F1117',
-  cardBg: '#1C1F2A',
-  accent: '#8B9FFF',
-  accentLight: '#1E2340',
-  textPrimary: '#F0F4FF',
+  headerBg:      '#3D4A8F',
+  screenBg:      '#0F1117',
+  cardBg:        '#1C1F2A',
+  accent:        '#8B9FFF',
+  accentLight:   '#1E2340',
+  textPrimary:   '#F0F4FF',
   textSecondary: '#A0A8C0',
-  textMuted: '#6B7280',
-  border: '#2E3245',
-  success: '#66BB6A',
-  chipBg: 'rgba(255,255,255,0.15)',
-  chipText: '#FFFFFF',
-  searchBg: 'rgba(255,255,255,0.12)',
+  textMuted:     '#6B7280',
+  border:        '#2E3245',
+  chipBg:        'rgba(255,255,255,0.15)',
 };
 
-// Emoji map for common specializations
-const CATEGORY_ICONS: Record<string, string> = {
-  Cancer: '🎗️',
-  Urology: '🫘',
-  Cardiology: '❤️',
-  Pediatrics: '👶',
-  Pediatrician: '👶',
-  Neurology: '🧠',
-  Dermatology: '🩹',
-  Orthopedics: '🦴',
-  Gynecology: '👩',
-  Psychiatry: '🧘',
-  ENT: '👂',
-  Ophthalmology: '👁️',
-  Dentistry: '🦷',
-  General: '🏥',
-  'General Physician': '🏥',
-  Surgery: '🔪',
-  Radiology: '📡',
-  Endocrinology: '💊',
-  Gastroenterology: '🫁',
-  Nephrology: '🫀',
-  Pulmonology: '🌬️',
-  Rheumatology: '🦵',
-  Oncology: '🎗️',
-  'Cancer & Heart': '❤️',
+const SESSION_OPTIONS = [0, 15, 20, 30, 45, 60]; // 0 = All
+const TIME_PERIODS = ['All', 'Morning', 'Afternoon', 'Evening'];
+
+const getTimePeriod = (slot: string): string => {
+  const [hStr] = slot.split(':');
+  const h = parseInt(hStr, 10);
+  if (h >= 6  && h < 12) return 'Morning';
+  if (h >= 12 && h < 17) return 'Afternoon';
+  if (h >= 17 && h < 21) return 'Evening';
+  return 'Other';
 };
 
-const getCategoryIcon = (category: string): string => {
-  if (CATEGORY_ICONS[category]) return CATEGORY_ICONS[category];
-  // Fuzzy match
-  const lower = category.toLowerCase();
-  if (lower.includes('heart') || lower.includes('cardio')) return '❤️';
-  if (lower.includes('cancer') || lower.includes('onco')) return '🎗️';
-  if (lower.includes('child') || lower.includes('pedia')) return '👶';
-  if (lower.includes('brain') || lower.includes('neuro')) return '🧠';
-  if (lower.includes('bone') || lower.includes('ortho')) return '🦴';
-  if (lower.includes('skin') || lower.includes('derm')) return '🩹';
-  if (lower.includes('eye') || lower.includes('ophthal')) return '👁️';
-  if (lower.includes('ear') || lower.includes('ent')) return '👂';
-  if (lower.includes('tooth') || lower.includes('dent')) return '🦷';
-  if (lower.includes('urol')) return '🫘';
-  return '🏥';
-};
+type SubscriptionPlan = 'free_trial' | 'basic' | 'professional' | 'premium';
+const PLAN_RANK: Record<SubscriptionPlan, number> = { premium: 4, professional: 3, basic: 2, free_trial: 1 };
+const isPremiumPlan = (plan?: SubscriptionPlan) => plan === 'premium';
 
 interface Doctor {
-  _id: string;
-  fullName: string;
-  specialization: string;
-  email: string;
-  profileImage?: string;
-  consultationFee?: number;
-  sessionDuration?: number;
+  _id:               string;
+  fullName:          string;
+  specialization:    string;
+  email:             string;
+  profileImage?:     string;
+  consultationFee?:  number;
+  sessionDuration?:  number;
+  subscriptionPlan?: SubscriptionPlan;
+  completedCount:    number;
+  specificDates?:    { date: string; timeSlots: { start: string; end: string }[] }[];
 }
 
-interface AvailableSlot {
-  date: string;
-  dayName: string;
-  slots: string[];
-  fee: number;
+interface Filters {
+  minFee:      string;
+  maxFee:      string;
+  sessionDur:  number;   // 0 = any
+  timePeriod:  string;   // 'All' | 'Morning' | 'Afternoon' | 'Evening'
 }
+
+const DEFAULT_FILTERS: Filters = { minFee: '', maxFee: '', sessionDur: 0, timePeriod: 'All' };
 
 export default function BookAppointmentScreen() {
-  const insets = useSafeAreaInsets();
-  const route = useRoute<any>();
+  const insets     = useSafeAreaInsets();
+  const route      = useRoute<any>();
   const navigation = useNavigation<any>();
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const t = isDark ? darkTheme : lightTheme;
+  const t = colorScheme === 'dark' ? darkTheme : lightTheme;
 
-  const userId = route.params?.userId || '507f1f77bcf86cd799439011';
+  const userId = route.params?.userId || '';
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [isLoading,        setIsLoading]        = useState(true);
+  const [doctors,          setDoctors]          = useState<Doctor[]>([]);
+  const [filteredDoctors,  setFilteredDoctors]  = useState<Doctor[]>([]);
+  const [categories,       setCategories]       = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery,      setSearchQuery]      = useState('');
+  const [searchOpen,       setSearchOpen]       = useState(false);
+  const [filterVisible,    setFilterVisible]    = useState(false);
+  const [filters,          setFilters]          = useState<Filters>(DEFAULT_FILTERS);
+  const [pendingFilters,   setPendingFilters]   = useState<Filters>(DEFAULT_FILTERS);
 
-  useEffect(() => {
-    loadDoctors();
-  }, []);
+  const searchWidth = useRef(new Animated.Value(0)).current;
 
-  // Re-filter whenever category, search, or doctors list changes
-  useEffect(() => {
-    filterDoctors();
-  }, [selectedCategory, searchQuery, doctors]);
+  const openSearch = () => {
+    setSearchOpen(true);
+    Animated.timing(searchWidth, { toValue: width - 120, duration: 220, useNativeDriver: false }).start();
+  };
+  const closeSearch = () => {
+    setSearchQuery('');
+    Animated.timing(searchWidth, { toValue: 0, duration: 180, useNativeDriver: false }).start(() => setSearchOpen(false));
+  };
+
+  useEffect(() => { loadDoctors(); }, []);
+  useEffect(() => { filterDoctors(); }, [selectedCategory, searchQuery, doctors, filters]);
 
   const loadDoctors = async () => {
     try {
       setIsLoading(true);
       const response = await appointmentAPI.getAllDoctorsWithAvailability();
+      if (response.data?.success) {
+        const baseUrl = API_URL.replace('/api', '');
+        const doctorsData: Doctor[] = await Promise.all(
+          response.data.data
+            .filter((item: any) => item.doctorId)
+            .map(async (item: any) => {
+              const raw = item.doctorId.doctorProfile?.specialization || 'General';
+              const specialization = raw.trim().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
-      if (response.data && response.data.success) {
-        const doctorsData: Doctor[] = response.data.data
-          .filter((item: any) => item.doctorId) // skip items with no doctor ref
-          .map((item: any) => {
-            const raw = item.doctorId.doctorProfile?.specialization || 'General';
-            const specialization = raw.trim().split(" ").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-            return {
-              _id: item.doctorId._id,
-              fullName: item.doctorId.fullName || 'Unknown Doctor',
-              specialization,
-              email: item.doctorId.email || '',
-              profileImage: item.doctorId.profileImage,
-              consultationFee: item.consultationFee,
-              sessionDuration: item.sessionDuration,
-            };
-          });
+              let profileImage: string | undefined;
+              try {
+                const pr = await apiClient.get(`/profiles/doctor/${item.doctorId._id}`);
+                const pd = pr.data?.data;
+                if (pd?.profileImage) {
+                  profileImage = pd.profileImage.startsWith('http') ? pd.profileImage : baseUrl + pd.profileImage;
+                }
+              } catch { /* no profile */ }
+
+              return {
+                _id:              item.doctorId._id,
+                fullName:         item.doctorId.fullName || 'Unknown Doctor',
+                specialization,
+                email:            item.doctorId.email || '',
+                profileImage,
+                consultationFee:  item.consultationFee,
+                sessionDuration:  item.sessionDuration,
+                subscriptionPlan: item.doctorId.subscriptionPlan as SubscriptionPlan | undefined,
+                completedCount:   item.doctorId.completedCount ?? 0,
+                specificDates:    item.specificDates,
+              };
+            })
+        );
+
+        // Sort: premium/professional first (by plan rank desc), then by completedCount desc
+        doctorsData.sort((a, b) => {
+          const planDiff = (PLAN_RANK[b.subscriptionPlan ?? 'free_trial'] ?? 1) -
+                           (PLAN_RANK[a.subscriptionPlan ?? 'free_trial'] ?? 1);
+          if (planDiff !== 0) return planDiff;
+          return b.completedCount - a.completedCount;
+        });
 
         setDoctors(doctorsData);
-
-        // Build unique specialization categories (already normalized)
-        const uniqueSpecs = Array.from(
-          new Set(doctorsData.map((d) => d.specialization).filter(Boolean))
-        ).sort();
-
-        setCategories(['All', ...uniqueSpecs]);
+        const specs = Array.from(new Set(doctorsData.map(d => d.specialization).filter(Boolean))).sort();
+        setCategories(['All', ...specs]);
       }
-    } catch (error: any) {
-      console.error('Load doctors error:', error);
-      Alert.alert('Error', error.message || 'Failed to load doctors');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to load doctors');
     } finally {
       setIsLoading(false);
     }
   };
 
   const filterDoctors = () => {
-    let filtered = [...doctors];
+    let list = [...doctors];
 
-    // Filter by specialization category (from doctor's signup data)
-    if (selectedCategory !== 'All') {
-      filtered = filtered.filter(
-        (d) => d.specialization === selectedCategory
-      );
-    }
+    // Category filter
+    if (selectedCategory !== 'All') list = list.filter(d => d.specialization === selectedCategory);
 
-    // Filter by search query
+    // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (d) =>
-          (d.fullName ?? '').toLowerCase().includes(q) ||
-          (d.specialization ?? '').toLowerCase().includes(q)
-      );
+      list = list.filter(d => d.fullName.toLowerCase().includes(q) || d.specialization.toLowerCase().includes(q));
     }
 
-    setFilteredDoctors(filtered);
+    // Min fee
+    if (filters.minFee !== '') list = list.filter(d => (d.consultationFee ?? 0) >= parseInt(filters.minFee, 10));
+    // Max fee
+    if (filters.maxFee !== '') list = list.filter(d => (d.consultationFee ?? Infinity) <= parseInt(filters.maxFee, 10));
+    // Session duration
+    if (filters.sessionDur > 0) list = list.filter(d => d.sessionDuration === filters.sessionDur);
+    // Time period
+    if (filters.timePeriod !== 'All') {
+      list = list.filter(d => {
+        const slots = (d.specificDates ?? []).flatMap(sd => sd.timeSlots.map(ts => ts.start));
+        return slots.some(s => getTimePeriod(s) === filters.timePeriod);
+      });
+    }
+
+    setFilteredDoctors(list);
   };
 
-  const handleDoctorPress = (doctor: Doctor) => {
-    // Navigate to the appointment detail/booking screen (to be built separately)
-    navigation.navigate('DoctorAppointmentDetail', { doctor, userId });
-  };
+  const applyFilters = () => { setFilters(pendingFilters); setFilterVisible(false); };
+  const resetFilters = () => { setPendingFilters(DEFAULT_FILTERS); setFilters(DEFAULT_FILTERS); setFilterVisible(false); };
+
+  const hasActiveFilters = filters.minFee !== '' || filters.maxFee !== '' || filters.sessionDur > 0 || filters.timePeriod !== 'All';
 
   const getInitials = (name: string) =>
-    name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+  const handleBookPress = (doctor: Doctor) =>
+    navigation.navigate('DoctorAppointmentDetail', { doctor, userId });
+
+  const handleProfilePress = (doctor: Doctor) =>
+    navigation.navigate('DoctorProfileView', { doctorId: doctor._id, userId });
 
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: t.screenBg }]}>
         <StatusBar barStyle="light-content" />
-        <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: t.headerBg }]}>
+        <View style={[styles.simpleHeader, { paddingTop: insets.top + 10, backgroundColor: t.headerBg }]}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+            <MaterialIcons name="arrow-back" size={24} color="#FFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Book Appointment</Text>
-          <View style={styles.placeholder} />
+          <Text style={styles.simpleHeaderTitle}>Book Appointment</Text>
+          <View style={{ width: 24 }} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={t.accent} />
@@ -238,73 +231,59 @@ export default function BookAppointmentScreen() {
     <View style={[styles.container, { backgroundColor: t.screenBg }]}>
       <StatusBar barStyle="light-content" />
 
-      {/* ── Curved Blue Header ── */}
-      <View style={[styles.headerSection, { paddingTop: insets.top, backgroundColor: t.headerBg }]}>
-        {/* Top row */}
+      {/* ── Blue Header ── */}
+      <View style={[styles.headerSection, { paddingTop: insets.top + 6, backgroundColor: t.headerBg }]}>
+        {/* Top row: back | [subtitle OR search input] | search-icon | filter-icon */}
         <View style={styles.headerTopRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greetingTitle}>Hey,</Text>
-            <Text style={styles.greetingSubtitle}>Find your favorite doctor!</Text>
-          </View>
-          <TouchableOpacity style={styles.notifBtn}>
-            <MaterialIcons name="notifications" size={26} color="#FFFFFF" />
-            <View style={styles.notifDot} />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
+            <MaterialIcons name="arrow-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+
+          {/* Middle: subtitle or inline search */}
+          {searchOpen ? (
+            <View style={styles.searchInputWrap}>
+              <TextInput
+                autoFocus
+                style={styles.searchInput}
+                placeholder="Search doctor..."
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+          ) : (
+            <Text style={styles.headerSubtitle}>Find your favorite doctor</Text>
+          )}
+
+          {/* Right icons — always visible */}
+          <TouchableOpacity style={styles.iconBtn} onPress={searchOpen ? closeSearch : openSearch}>
+            <MaterialIcons name={searchOpen ? 'close' : 'search'} size={24} color="#FFF" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => { setPendingFilters(filters); setFilterVisible(true); }}>
+            <MaterialIcons name="tune" size={24} color="#FFF" />
+            {hasActiveFilters && <View style={styles.filterDot} />}
           </TouchableOpacity>
         </View>
 
-        {/* Search Bar */}
-        <View style={[styles.searchBar, { backgroundColor: t.searchBg }]}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search doctor"
-            placeholderTextColor="rgba(255,255,255,0.7)"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          <View style={styles.searchIconBox}>
-            <MaterialIcons name="search" size={22} color={t.headerBg} />
-          </View>
-        </View>
-
-        {/* Categories Row */}
-        <View style={styles.categoriesHeader}>
+        {/* Categories */}
+        <View style={styles.categoriesRow}>
           <Text style={styles.categoriesLabel}>Categories</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAll}>See All</Text>
-          </TouchableOpacity>
         </View>
-
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoriesScroll}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoriesContent}
         >
-          {categories
-            .filter((c) => c !== 'All')
-            .map((category, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.categoryChip,
-                  { backgroundColor: selectedCategory === category ? '#FFFFFF' : t.chipBg },
-                ]}
-                onPress={() =>
-                  setSelectedCategory(selectedCategory === category ? 'All' : category)
-                }
-              >
-                <Text style={styles.categoryEmoji}>{getCategoryIcon(category)}</Text>
-                <Text
-                  style={[
-                    styles.categoryText,
-                    { color: selectedCategory === category ? t.headerBg : '#FFFFFF' },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {category}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          {categories.filter(c => c !== 'All').map((cat, i) => (
+            <TouchableOpacity
+              key={i}
+              style={[styles.categoryChip, { backgroundColor: selectedCategory === cat ? '#FFF' : t.chipBg }]}
+              onPress={() => setSelectedCategory(selectedCategory === cat ? 'All' : cat)}
+            >
+              <Text style={[styles.categoryText, { color: selectedCategory === cat ? t.headerBg : '#FFF' }]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       </View>
 
@@ -314,249 +293,241 @@ export default function BookAppointmentScreen() {
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.listHeader}>
-          <Text style={[styles.topDoctorTitle, { color: t.textPrimary }]}>Top Doctor</Text>
-          <TouchableOpacity onPress={() => setSelectedCategory('All')}>
-            <Text style={[styles.seeAllDark, { color: t.accent }]}>See All</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.topDoctorTitle, { color: t.textPrimary }]}>
+          {filteredDoctors.length} Doctor{filteredDoctors.length !== 1 ? 's' : ''} Found
+        </Text>
 
         {filteredDoctors.length === 0 ? (
           <View style={styles.emptyContainer}>
             <MaterialIcons name="person-off" size={60} color={t.textMuted} />
             <Text style={[styles.emptyText, { color: t.textSecondary }]}>No doctors found</Text>
-            <Text style={[styles.emptySubtext, { color: t.textMuted }]}>
-              Try adjusting your search or category
-            </Text>
+            <Text style={[styles.emptySubtext, { color: t.textMuted }]}>Try adjusting filters or category</Text>
           </View>
         ) : (
-          filteredDoctors.map((doctor) => (
-            <TouchableOpacity
-              key={doctor._id}
-              style={[styles.doctorCard, { backgroundColor: t.cardBg, borderColor: t.border }]}
-              onPress={() => handleDoctorPress(doctor)}
-              activeOpacity={0.85}
-            >
-              {/* Avatar */}
-              <View style={[styles.avatarContainer, { backgroundColor: t.accentLight }]}>
-                {doctor.profileImage ? (
-                  <Text style={[styles.avatarInitials, { color: t.accent }]}>
-                    {getInitials(doctor.fullName)}
-                  </Text>
-                ) : (
-                  <Text style={styles.avatarEmoji}>
-                    {getCategoryIcon(doctor.specialization)}
-                  </Text>
+          filteredDoctors.map(doctor => {
+            const isPremium    = isPremiumPlan(doctor.subscriptionPlan);
+            const isRecommended = doctor.completedCount >= 30;
+            return (
+              <View key={doctor._id} style={[
+                styles.doctorCard,
+                { backgroundColor: t.cardBg, borderColor: t.border },
+              ]}>
+                {/* Recommended badge */}
+                {isRecommended && (
+                  <View style={styles.recommendedBadge}>
+                    <MaterialIcons name="verified" size={11} color="#FFF" />
+                    <Text style={styles.recommendedText}>Recommended</Text>
+                    <Text style={styles.recommendedCount}>{doctor.completedCount} sessions</Text>
+                  </View>
                 )}
-              </View>
 
-              {/* Info */}
-              <View style={styles.doctorInfo}>
-                <Text style={[styles.doctorName, { color: t.textPrimary }]} numberOfLines={1}>
-                  {doctor.fullName}
-                </Text>
-                <Text style={[styles.doctorSpec, { color: t.textSecondary }]} numberOfLines={1}>
-                  {doctor.specialization}
-                </Text>
-              </View>
+                <View style={styles.cardBody}>
+                  {/* Avatar — click to view profile */}
+                  <TouchableOpacity onPress={() => handleProfilePress(doctor)} activeOpacity={0.85} style={styles.avatarWrap}>
+                    <View style={[styles.avatarContainer, { backgroundColor: t.accentLight }]}>
+                      {doctor.profileImage ? (
+                        <Image source={{ uri: doctor.profileImage }} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={[styles.avatarInitials, { color: t.accent }]}>{getInitials(doctor.fullName)}</Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
 
-              {/* Arrow */}
-              <MaterialIcons name="chevron-right" size={22} color={t.textMuted} />
-            </TouchableOpacity>
-          ))
+                  {/* Info — click name to view profile */}
+                  <View style={styles.doctorInfo}>
+                    <TouchableOpacity onPress={() => handleProfilePress(doctor)} style={styles.nameRow}>
+                      <Text style={[styles.doctorName, { color: t.textPrimary }]} numberOfLines={1}>
+                        Dr. {doctor.fullName}
+                      </Text>
+                      {/* Blue verified tick — premium only, inline with name */}
+                      {isPremium && (
+                        <MaterialIcons name="verified" size={15} color="#1DA1F2" style={{ marginLeft: 4 }} />
+                      )}
+                    </TouchableOpacity>
+                    <Text style={[styles.doctorSpec, { color: t.textSecondary }]} numberOfLines={1}>
+                      {doctor.specialization}
+                    </Text>
+                    <View style={styles.doctorMeta}>
+                      {doctor.consultationFee != null && (
+                        <View style={[styles.metaChip, { backgroundColor: t.accentLight }]}>
+                          <MaterialIcons name="payments" size={11} color={t.accent} />
+                          <Text style={[styles.metaChipText, { color: t.accent }]}>PKR {doctor.consultationFee}</Text>
+                        </View>
+                      )}
+                      {doctor.sessionDuration != null && (
+                        <View style={[styles.metaChip, { backgroundColor: t.accentLight }]}>
+                          <MaterialIcons name="timer" size={11} color={t.accent} />
+                          <Text style={[styles.metaChipText, { color: t.accent }]}>{doctor.sessionDuration} min</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Book button */}
+                  <TouchableOpacity style={styles.bookBtn} onPress={() => handleBookPress(doctor)}>
+                    <Text style={styles.bookBtnText}>Book</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })
         )}
       </ScrollView>
+
+      {/* ── Filter Modal ── */}
+      <Modal visible={filterVisible} transparent animationType="slide" onRequestClose={() => setFilterVisible(false)}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setFilterVisible(false)} />
+        <View style={[styles.filterSheet, { backgroundColor: t.cardBg }]}>
+          <View style={styles.filterSheetHandle} />
+          <Text style={[styles.filterTitle, { color: t.textPrimary }]}>Filter Doctors</Text>
+
+          {/* Fee range */}
+          <Text style={[styles.filterLabel, { color: t.textSecondary }]}>Consultation Fee (PKR)</Text>
+          <View style={styles.feeRow}>
+            <TextInput
+              style={[styles.feeInput, { color: t.textPrimary, borderColor: t.border, backgroundColor: t.screenBg }]}
+              placeholder="Min"
+              placeholderTextColor={t.textMuted}
+              keyboardType="numeric"
+              value={pendingFilters.minFee}
+              onChangeText={v => setPendingFilters(p => ({ ...p, minFee: v }))}
+            />
+            <Text style={[styles.feeSep, { color: t.textMuted }]}>—</Text>
+            <TextInput
+              style={[styles.feeInput, { color: t.textPrimary, borderColor: t.border, backgroundColor: t.screenBg }]}
+              placeholder="Max"
+              placeholderTextColor={t.textMuted}
+              keyboardType="numeric"
+              value={pendingFilters.maxFee}
+              onChangeText={v => setPendingFilters(p => ({ ...p, maxFee: v }))}
+            />
+          </View>
+
+          {/* Session duration */}
+          <Text style={[styles.filterLabel, { color: t.textSecondary }]}>Session Duration</Text>
+          <View style={styles.chipRow}>
+            {SESSION_OPTIONS.map(d => (
+              <TouchableOpacity
+                key={d}
+                style={[styles.filterChip, pendingFilters.sessionDur === d && styles.filterChipActive]}
+                onPress={() => setPendingFilters(p => ({ ...p, sessionDur: d }))}
+              >
+                <Text style={[styles.filterChipText, pendingFilters.sessionDur === d && styles.filterChipTextActive]}>
+                  {d === 0 ? 'Any' : `${d} min`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Time period */}
+          <Text style={[styles.filterLabel, { color: t.textSecondary }]}>Time Slot</Text>
+          <View style={styles.chipRow}>
+            {TIME_PERIODS.map(tp => (
+              <TouchableOpacity
+                key={tp}
+                style={[styles.filterChip, pendingFilters.timePeriod === tp && styles.filterChipActive]}
+                onPress={() => setPendingFilters(p => ({ ...p, timePeriod: tp }))}
+              >
+                <Text style={[styles.filterChipText, pendingFilters.timePeriod === tp && styles.filterChipTextActive]}>
+                  {tp}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Buttons */}
+          <View style={styles.filterBtns}>
+            <TouchableOpacity style={styles.resetBtn} onPress={resetFilters}>
+              <Text style={styles.resetBtnText}>Reset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.applyBtn} onPress={applyFilters}>
+              <Text style={styles.applyBtnText}>Apply</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
 
-const HEADER_CURVE = 32;
+const HEADER_CURVE = 28;
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container:          { flex: 1 },
+  simpleHeader:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingBottom: 14 },
+  simpleHeaderTitle:  { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  loadingContainer:   { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText:        { marginTop: 12, fontSize: 15 },
 
-  // ── Header ──
-  headerSection: {
-    borderBottomLeftRadius: HEADER_CURVE,
-    borderBottomRightRadius: HEADER_CURVE,
-    paddingHorizontal: 22,
-    paddingBottom: 0,
-    elevation: 8,
-    shadowColor: '#4A5BC9',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 14,
-    marginBottom: 18,
-  },
-  greetingTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-  },
-  greetingSubtitle: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.82)',
-    marginTop: 2,
-    fontWeight: '400',
-  },
-  notifBtn: {
-    marginTop: 4,
-    position: 'relative',
-  },
-  notifDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#FF4444',
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    borderWidth: 1.5,
-    borderColor: '#6B7FED',
-  },
-
-  // Search
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    paddingLeft: 18,
-    paddingRight: 6,
-    height: 52,
-    marginBottom: 22,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#FFFFFF',
-    fontWeight: '400',
-  },
-  searchIconBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // Header
+  headerSection:      { borderBottomLeftRadius: HEADER_CURVE, borderBottomRightRadius: HEADER_CURVE, paddingHorizontal: 18, paddingBottom: 0, elevation: 8, shadowColor: '#4A5BC9', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12 },
+  headerTopRow:       { flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 8 },
+  headerSubtitle:     { flex: 1, fontSize: 15, color: 'rgba(255,255,255,0.9)', fontWeight: '600', marginHorizontal: 6 },
+  iconBtn:            { padding: 6 },
+  searchInputWrap:    { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginHorizontal: 6 },
+  searchInput:        { flex: 1, fontSize: 14, color: '#FFF', paddingVertical: 0 },
+  filterDot:          { position: 'absolute', top: 4, right: 4, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF4444' },
 
   // Categories
-  categoriesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  categoriesLabel: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  seeAll: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
-  },
-  categoriesScroll: {},
-  categoryChip: {
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginRight: 12,
-    alignItems: 'center',
-    minWidth: 90,
-  },
-  categoryEmoji: {
-    fontSize: 26,
-    marginBottom: 6,
-  },
-  categoryText: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
+  categoriesRow:      { marginBottom: 10 },
+  categoriesLabel:    { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  categoriesContent:  { paddingBottom: 16, gap: 8 },
+  categoryChip:       { borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
+  categoryText:       { fontSize: 13, fontWeight: '600' },
 
-  // ── Doctor List ──
-  listScroll: { flex: 1 },
-  listContent: { paddingHorizontal: 20, paddingTop: 24 },
-  listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  topDoctorTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  seeAllDark: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  // List
+  listScroll:         { flex: 1 },
+  listContent:        { paddingHorizontal: 18, paddingTop: 20 },
+  topDoctorTitle:     { fontSize: 18, fontWeight: '800', marginBottom: 14, letterSpacing: -0.3 },
 
-  doctorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-  },
-  avatarContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  avatarEmoji: {
-    fontSize: 30,
-  },
-  avatarInitials: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  doctorInfo: { flex: 1 },
-  doctorName: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-    letterSpacing: -0.2,
-  },
-  doctorSpec: {
-    fontSize: 13,
-    fontWeight: '400',
-  },
+  // Doctor card
+  doctorCard:         { padding: 14, borderRadius: 18, borderWidth: 1, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
+  premiumCard:        { borderWidth: 1.5, elevation: 4, shadowOpacity: 0.12 },
+  recommendedBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#16A34A', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, marginBottom: 10 },
+  recommendedText:    { fontSize: 11, fontWeight: '700', color: '#FFF' },
+  recommendedCount:   { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.85)' },
+  cardBody:           { flexDirection: 'row', alignItems: 'center' },
+  avatarWrap:         { position: 'relative', marginRight: 14 },
+  avatarContainer:    { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  avatarImage:        { width: 60, height: 60, borderRadius: 30 },
+  avatarInitials:     { fontSize: 20, fontWeight: '800' },
+  verifiedTick:       { position: 'absolute', bottom: -2, right: -2, backgroundColor: '#FFF', borderRadius: 8, width: 18, height: 18, justifyContent: 'center', alignItems: 'center' },
+  nameRow:            { flexDirection: 'row', alignItems: 'center' },
+  doctorInfo:         { flex: 1 },
+  doctorName:         { fontSize: 15, fontWeight: '700', marginBottom: 2, letterSpacing: -0.2 },
+  doctorSpec:         { fontSize: 12, fontWeight: '400', marginBottom: 6 },
+  doctorMeta:         { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  metaChip:           { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 },
+  metaChipText:       { fontSize: 11, fontWeight: '600' },
+  bookBtn:            { backgroundColor: '#6B7FED', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  bookBtnText:        { color: '#FFF', fontSize: 13, fontWeight: '700' },
 
-  // ── Misc ──
-  header: {
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-  placeholder: { width: 24 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, fontSize: 15 },
-  emptyContainer: {
-    paddingTop: 60,
-    alignItems: 'center',
-  },
-  emptyText: { fontSize: 18, fontWeight: '600', marginTop: 16 },
-  emptySubtext: { fontSize: 13, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 },
+  emptyContainer:     { paddingTop: 60, alignItems: 'center' },
+  emptyText:          { fontSize: 18, fontWeight: '600', marginTop: 16 },
+  emptySubtext:       { fontSize: 13, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 },
+
+  // Filter sheet
+  modalOverlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  filterSheet:        { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, gap: 4 },
+  filterSheetHandle:  { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 16 },
+  filterTitle:        { fontSize: 18, fontWeight: '800', marginBottom: 16 },
+  filterLabel:        { fontSize: 13, fontWeight: '600', marginTop: 12, marginBottom: 8 },
+  feeRow:             { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  feeInput:           { flex: 1, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14 },
+  feeSep:             { fontSize: 16, fontWeight: '600' },
+  chipRow:            { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filterChip:         { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F0F2FF', borderWidth: 1.5, borderColor: '#E8ECFF' },
+  filterChipActive:   { backgroundColor: '#6B7FED', borderColor: '#6B7FED' },
+  filterChipText:     { fontSize: 13, fontWeight: '600', color: '#555' },
+  filterChipTextActive: { color: '#FFF' },
+  filterBtns:         { flexDirection: 'row', gap: 12, marginTop: 24 },
+  resetBtn:           { flex: 1, paddingVertical: 14, borderRadius: 20, borderWidth: 1.5, borderColor: '#6B7FED', alignItems: 'center' },
+  resetBtnText:       { fontSize: 15, fontWeight: '700', color: '#6B7FED' },
+  applyBtn:           { flex: 1, paddingVertical: 14, borderRadius: 20, backgroundColor: '#6B7FED', alignItems: 'center' },
+  applyBtnText:       { fontSize: 15, fontWeight: '700', color: '#FFF' },
 });

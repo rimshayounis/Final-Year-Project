@@ -229,6 +229,7 @@ export default function FeedScreen({
   const [verifiedDropdown, setVerifiedDropdown] = useState<string | null>(null);
   const [slotsRemaining, setSlotsRemaining] = useState<number | null>(null);
   const [doctorPlan, setDoctorPlan] = useState<string>("free_trial");
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   const categories = [
     "All",
@@ -731,7 +732,10 @@ export default function FeedScreen({
       typeof item.userId === "object" ? (item.userId as PostAuthor) : null;
     const authorId = author?._id ?? "";
     const resolvedName = authorNames[authorId] || author?.fullName || "";
-    const authorName = resolvedName ? resolvedName.toUpperCase() : "...";
+    const isDoc = doctorIds.has(authorId);
+    const authorName = resolvedName
+      ? (isDoc ? "Dr. " : "") + resolvedName.charAt(0).toUpperCase() + resolvedName.slice(1).toLowerCase()
+      : "...";
     const authorInitial = resolvedName
       ? resolvedName.charAt(0).toUpperCase()
       : "?";
@@ -739,7 +743,6 @@ export default function FeedScreen({
     const baseUrl = API_URL.replace("/api", "");
     const isOwnPost = authorId === id;
     const isReviewing = actionLoading === item._id + "_review";
-    const isDoc = doctorIds.has(authorId);
 
     return (
       <View style={s.postCard}>
@@ -854,17 +857,22 @@ export default function FeedScreen({
 
         {hasMedia ? (
           <View style={s.mediaContainer}>
-            {item.mediaUrls.map((url, i) => {
-              const uri = url.startsWith("http") ? url : baseUrl + url;
-              return (
-                <Image
-                  key={String(i)}
-                  source={{ uri }}
-                  style={s.mediaImage}
-                  resizeMode="cover"
-                />
-              );
-            })}
+            {item.mediaUrls
+              .filter((url) => !failedImages.has(url))
+              .map((url, i) => {
+                const uri = url.startsWith("http") ? url : baseUrl + url;
+                return (
+                  <Image
+                    key={String(i)}
+                    source={{ uri }}
+                    style={s.mediaImage}
+                    resizeMode="cover"
+                    onError={() =>
+                      setFailedImages((prev) => new Set([...prev, url]))
+                    }
+                  />
+                );
+              })}
           </View>
         ) : null}
 
@@ -1413,12 +1421,13 @@ const s = StyleSheet.create({
   seeMore: { color: "#6B7FED", fontWeight: "600", fontSize: 13, marginTop: 4 },
   coloredPost: {
     width: width - 32,
-    height: (width - 32) * 0.65,
+    minHeight: 120,
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 10,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
   },
   coloredPostText: {
     fontSize: 18,

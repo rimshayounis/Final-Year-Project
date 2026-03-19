@@ -32,12 +32,13 @@ export class ChatController {
   @HttpCode(HttpStatus.OK)
   async getOrCreate(@Body() body: { doctorId: string; patientId: string }) {
     const conv = await this.chatService.getOrCreateConversation(
-      body.doctorId,
       body.patientId,
+      body.doctorId,
     );
     return {
       _id:           conv._id.toString(),
-      participants:  (conv.participants as any[]).map(p => p.toString()),
+      patientId:     conv.patientId.toString(),
+      doctorId:      conv.doctorId.toString(),
       lastMessage:   conv.lastMessage,
       lastMessageAt: (conv as any).lastMessageAt,
     };

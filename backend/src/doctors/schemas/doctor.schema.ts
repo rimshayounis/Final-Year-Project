@@ -26,8 +26,8 @@ export class DoctorProfile {
 // Notification Settings Sub-Schema
 @Schema({ _id: false })
 export class NotificationSettings {
-  @Prop({ default: false }) emailEnabled:    boolean;
-  @Prop({ default: true  }) appNotifEnabled: boolean;
+  @Prop({ default: false }) emailEnabled: boolean;
+  @Prop({ default: true  }) pushEnabled:  boolean;
 }
 
 // Bank Details Sub-Schema
@@ -71,12 +71,15 @@ export class Doctor {
 
   @Prop({
     type: NotificationSettings,
-    default: () => ({ emailEnabled: false, appNotifEnabled: true }),
+    default: () => ({ emailEnabled: false, pushEnabled: true }),
   })
   notificationSettings: NotificationSettings;
 
   @Prop({ type: String, default: null })
   expoPushToken: string | null;
+
+  @Prop({ default: 0, min: 0 })
+  completedCount: number;
 }
 
 export const DoctorSchema = SchemaFactory.createForClass(Doctor);

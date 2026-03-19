@@ -8,10 +8,11 @@ export class Message {
   @Prop({ type: Types.ObjectId, ref: 'Conversation', required: true, index: true })
   conversationId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  // Sender/receiver can be either a User or a Doctor — no single ref
+  @Prop({ type: Types.ObjectId, required: true })
   senderId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: Types.ObjectId, required: true })
   receiverId: Types.ObjectId;
 
   @Prop({ default: null })

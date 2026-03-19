@@ -163,6 +163,14 @@ export class BookedAppointmentService {
 
     const updated = await appointment.save();
 
+    // Increment persisted completedCount on doctor doc
+    if (dto.status === 'completed') {
+      this.doctorModel
+        .updateOne({ _id: appointment.doctorId }, { $inc: { completedCount: 1 } })
+        .exec()
+        .catch(() => { /* silent */ });
+    }
+
     // Award monthly booking points + bonus slots when appointment is completed
     if (dto.status === 'completed') {
       const yearMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
@@ -267,6 +275,7 @@ export class BookedAppointmentService {
           await appt.save();
         }
         // If pending_payment → leave as confirmed, patient still needs to pay
+
       }
     }
   }

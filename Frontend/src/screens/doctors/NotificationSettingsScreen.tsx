@@ -25,7 +25,7 @@ type Route = RouteProp<RootStackParamList, "NotificationSettings">;
 
 interface Settings {
   emailEnabled:    boolean;
-  appNotifEnabled: boolean;
+  pushEnabled: boolean;
 }
 
 // Configure how notifications appear when the app is in foreground
@@ -75,7 +75,7 @@ export default function NotificationSettingsScreen() {
 
   const [settings, setSettings] = useState<Settings>({
     emailEnabled:    false,
-    appNotifEnabled: true,
+    pushEnabled: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
@@ -101,7 +101,7 @@ export default function NotificationSettingsScreen() {
       setSettings(updated);
 
       // When app notifications are enabled, register for push and save the token
-      if (patch.appNotifEnabled === true) {
+      if (patch.pushEnabled === true) {
         try {
           const token = await registerForPushNotifications();
           if (token) {
@@ -114,7 +114,7 @@ export default function NotificationSettingsScreen() {
       }
 
       // When app notifications are disabled, clear the stored token
-      if (patch.appNotifEnabled === false) {
+      if (patch.pushEnabled === false) {
         try {
           await apiClient.patch(`/doctors/${doctorId}/push-token`, { token: null });
         } catch (e) {
@@ -173,15 +173,15 @@ export default function NotificationSettingsScreen() {
               sublabel="Receive OS banner alerts when a patient books"
               right={
                 <Switch
-                  value={settings.appNotifEnabled}
-                  onValueChange={(v) => toggle("appNotifEnabled", v)}
+                  value={settings.pushEnabled}
+                  onValueChange={(v) => toggle("pushEnabled", v)}
                   trackColor={{ false: "#DDE", true: "#6B7FED" }}
                   thumbColor="#FFF"
                 />
               }
             />
           </View>
-          {settings.appNotifEnabled && (
+          {settings.pushEnabled && (
             <View style={s.infoBox}>
               <Ionicons name="checkmark-circle-outline" size={16} color="#6B7FED" />
               <Text style={[s.infoTxt, { color: "#6B7FED" }]}>

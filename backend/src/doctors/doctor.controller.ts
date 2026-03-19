@@ -137,7 +137,7 @@ export class DoctorsController {
   @Patch(':doctorId/notification-settings')
   async updateNotificationSettings(
     @Param('doctorId') doctorId: string,
-    @Body() body: { emailEnabled?: boolean; appNotifEnabled?: boolean },
+    @Body() body: { emailEnabled?: boolean; pushEnabled?: boolean },
   ) {
     return this.doctorsService.updateNotificationSettings(doctorId, body);
   }

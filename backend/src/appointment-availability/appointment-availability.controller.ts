@@ -42,8 +42,14 @@ async getAvailableSlots(@Query() query: GetAvailableSlotsDto) {
   };
 }
 
-  // Get doctor's availability
- // Get doctor's availability (first-time safe)
+  // Get doctor's OWN availability (regardless of isActive — for schedule tab)
+  @Get('doctor/:doctorId/own')
+  async getOwnAvailability(@Param('doctorId') doctorId: string) {
+    const availability = await this.availabilityService.getOwnAvailability(doctorId);
+    return { success: true, data: availability };
+  }
+
+  // Get doctor's availability (first-time safe)
 @Get('doctor/:doctorId')
 async getDoctorAvailability(@Param('doctorId') doctorId: string) {
   let availability;

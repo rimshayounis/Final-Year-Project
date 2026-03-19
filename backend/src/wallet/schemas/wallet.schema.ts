@@ -42,7 +42,7 @@ export class WalletTransaction {
   @Prop({ type: String, default: null }) appointmentId?:   string | null;
 }
 
-@Schema({ timestamps: true, collection: 'user_wallet' })
+@Schema({ timestamps: true, collection: 'doctor_wallet' })
 export class Wallet {
   @Prop({ type: Types.ObjectId, ref: 'Doctor', required: true, unique: true })
   doctorId: Types.ObjectId;

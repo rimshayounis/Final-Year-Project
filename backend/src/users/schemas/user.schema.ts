@@ -57,8 +57,9 @@ export class User {
   @Prop({ required: true })
   gender: string;
 
-    @Prop({ required: true })
-    userType: string;
+  // TODO: redundant — this collection IS the user type. Remove once auth JWT no longer embeds this field.
+  @Prop({ required: true })
+  userType: string;
 
 
   @Prop({ type: HealthProfile, required: false })
