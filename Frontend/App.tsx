@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
-// Show banner + play sound even when app is in foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert:  true,
@@ -13,8 +12,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Create the Android sound-enabled channel at module load time
-// (must exist before any push arrives, not just when user registers)
 if (Platform.OS === 'android') {
   Notifications.setNotificationChannelAsync('default', {
     name: 'TruHeal Notifications',
@@ -26,6 +23,7 @@ if (Platform.OS === 'android') {
     showBadge: true,
   });
 }
+
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -56,6 +54,11 @@ import TermsOfServiceScreen from './src/screens/settings/TermsOfServiceScreen';
 import HelpFAQScreen from './src/screens/settings/HelpFAQScreen';
 import ContactSupportScreen from './src/screens/settings/ContactSupportScreen';
 
+// ── New forgot-password screens ────────────────────────────────────────────
+import ForgotPasswordScreen  from './src/screens/ForgotPasswordScreen';
+import OTPVerificationScreen from './src/screens/OtpVerification';
+import ResetPasswordScreen   from './src/screens/ResetPasswordScreen';
+
 export type RootStackParamList = {
   Splash: undefined;
   LoginType: undefined;
@@ -66,10 +69,7 @@ export type RootStackParamList = {
   DoctorUnverified: { doctorId: string; doctorName: string; selectedPlan?: string };
   HealthProfile: { userId: string };
   EmergencyContact: { userId: string };
-  Dashboard: {
-    id: string;
-    role: 'user' | 'doctor';
-  };
+  Dashboard: { id: string; role: 'user' | 'doctor' };
   BookAppointments: undefined;
   userSession: undefined;
   CreateAppointment: { doctorId: string };
@@ -84,40 +84,30 @@ export type RootStackParamList = {
   DoctorProfileView: { doctorId: string; userId: string };
   DoctorAppointmentDetail: {
     doctor: {
-      _id: string;
-      fullName: string;
-      specialization: string;
-      email: string;
-      profileImage?: string;
-      consultationFee?: number;
-      sessionDuration?: number;
-      avgRating?: number;
-      ratingCount?: number;
+      _id: string; fullName: string; specialization: string;
+      email: string; profileImage?: string; consultationFee?: number;
+      sessionDuration?: number; avgRating?: number; ratingCount?: number;
     };
     userId: string;
   };
-
-  // ── Chat screens ────────────────────────────────────────────────────────────
   DoctorChat: {
-    patientId: string;
-    patientName: string;
-    patientAvatar?: string;
-    conversationId: string;
+    patientId: string; patientName: string;
+    patientAvatar?: string; conversationId: string;
   };
   PatientChat: {
-    doctorId: string;
-    doctorName: string;
-    doctorAvatar?: string;
-    doctorSpecialty?: string;
-    conversationId: string;
+    doctorId: string; doctorName: string; doctorAvatar?: string;
+    doctorSpecialty?: string; conversationId: string;
   };
+  // ── Forgot password screens ──────────────────────────────────────────────
+  ForgotPassword:  { userType: 'user' | 'doctor' };
+  OTPVerification: { email: string; userType: 'user' | 'doctor' };
+  ResetPassword:   { email: string; otpCode: string; userType: 'user' | 'doctor' };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   useEffect(() => {
-    // Listen for notifications received while app is foregrounded
     const sub = Notifications.addNotificationReceivedListener((notification) => {
       console.log('[Push] Received:', notification.request.content.title);
     });
@@ -127,41 +117,42 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StripeProvider publishableKey="pk_test_51TCBMfR4G6lL4JOFxa4zONwnxiuq8c59n03D2gyzirdMdlhhv0Ntk9a2I9aw2PUHRDmPjPAvngQzp8PndA5IQxMh003DjzSFS1">
-      <NavigationContainer>
-        <Stack.Navigator
-          initialRouteName="Splash"
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
-          }}
-        >
-          <Stack.Screen name="Splash"               component={SplashScreen} />
-          <Stack.Screen name="LoginType"            component={LoginTypeScreen} />
-          <Stack.Screen name="Login"                component={LoginScreen} />
-          <Stack.Screen name="CreateAccount"        component={CreateAccountScreen} />
-          <Stack.Screen name="CreateDoctorAccount"  component={CreateDoctorAccountScreen} />
-          <Stack.Screen name="DoctorSubscription"   component={SubscriptionScreen} />
-          <Stack.Screen name="DoctorUnverified"     component={DoctorPendingScreen} />
-          <Stack.Screen name="HealthProfile"        component={HealthProfileScreen} />
-          <Stack.Screen name="EmergencyContact"     component={EmergencyContactScreen} />
-          <Stack.Screen name="Dashboard"            component={UserDashboardScreen} />
-          <Stack.Screen name="BookAppointments"     component={BookAppointment} />
-          <Stack.Screen name="userSession"          component={UserSession} />
-          <Stack.Screen name="CreateAppointment"    component={DoctorCreateAppointmentScreen} />
-          <Stack.Screen name="DoctorAppointmentDetail" component={DoctorAppointmentDetailScreen} />
-          <Stack.Screen name="DoctorProfileView"       component={DoctorProfileViewScreen} />
-          <Stack.Screen name="DoctorChat"           component={DoctorChatScreen} />
-          <Stack.Screen name="PatientChat"          component={PatientChatScreen} />
-          <Stack.Screen name="Settings"             component={SettingsScreen} />
-          <Stack.Screen name="Wallet"               component={WalletScreen} />
-          <Stack.Screen name="BankDetails"             component={BankDetailsScreen} />
-          <Stack.Screen name="NotificationSettings"  component={NotificationSettingsScreen} />
-          <Stack.Screen name="PrivacyPolicy"         component={PrivacyPolicyScreen} />
-          <Stack.Screen name="TermsOfService"        component={TermsOfServiceScreen} />
-          <Stack.Screen name="HelpFAQ"               component={HelpFAQScreen} />
-          <Stack.Screen name="ContactSupport"        component={ContactSupportScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
+        <NavigationContainer>
+          <Stack.Navigator
+            initialRouteName="Splash"
+            screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
+          >
+            <Stack.Screen name="Splash"               component={SplashScreen} />
+            <Stack.Screen name="LoginType"            component={LoginTypeScreen} />
+            <Stack.Screen name="Login"                component={LoginScreen} />
+            <Stack.Screen name="CreateAccount"        component={CreateAccountScreen} />
+            <Stack.Screen name="CreateDoctorAccount"  component={CreateDoctorAccountScreen} />
+            <Stack.Screen name="DoctorSubscription"   component={SubscriptionScreen} />
+            <Stack.Screen name="DoctorUnverified"     component={DoctorPendingScreen} />
+            <Stack.Screen name="HealthProfile"        component={HealthProfileScreen} />
+            <Stack.Screen name="EmergencyContact"     component={EmergencyContactScreen} />
+            <Stack.Screen name="Dashboard"            component={UserDashboardScreen} />
+            <Stack.Screen name="BookAppointments"     component={BookAppointment} />
+            <Stack.Screen name="userSession"          component={UserSession} />
+            <Stack.Screen name="CreateAppointment"    component={DoctorCreateAppointmentScreen} />
+            <Stack.Screen name="DoctorAppointmentDetail" component={DoctorAppointmentDetailScreen} />
+            <Stack.Screen name="DoctorProfileView"    component={DoctorProfileViewScreen} />
+            <Stack.Screen name="DoctorChat"           component={DoctorChatScreen} />
+            <Stack.Screen name="PatientChat"          component={PatientChatScreen} />
+            <Stack.Screen name="Settings"             component={SettingsScreen} />
+            <Stack.Screen name="Wallet"               component={WalletScreen} />
+            <Stack.Screen name="BankDetails"          component={BankDetailsScreen} />
+            <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+            <Stack.Screen name="PrivacyPolicy"        component={PrivacyPolicyScreen} />
+            <Stack.Screen name="TermsOfService"       component={TermsOfServiceScreen} />
+            <Stack.Screen name="HelpFAQ"              component={HelpFAQScreen} />
+            <Stack.Screen name="ContactSupport"       component={ContactSupportScreen} />
+            {/* ── Forgot password flow ─────────────────────────────────── */}
+            <Stack.Screen name="ForgotPassword"       component={ForgotPasswordScreen} />
+            <Stack.Screen name="OTPVerification"      component={OTPVerificationScreen} />
+            <Stack.Screen name="ResetPassword"        component={ResetPasswordScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
       </StripeProvider>
     </SafeAreaProvider>
   );

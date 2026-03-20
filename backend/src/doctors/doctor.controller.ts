@@ -17,7 +17,13 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { DoctorsService } from './doctor.service';
-import { RegisterDoctorDto, LoginDoctorDto } from './dto/doctor.dto';
+import {
+  RegisterDoctorDto,
+  LoginDoctorDto,
+  ForgotPasswordDto,
+  VerifyOtpDto,
+  ResetPasswordDto,
+} from './dto/doctor.dto';
 
 @Controller('doctors')
 export class DoctorsController {
@@ -30,27 +36,18 @@ export class DoctorsController {
       storage: diskStorage({
         destination: './uploads/certificates',
         filename: (req, file, cb) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          cb(null, `certificate-${uniqueSuffix}${ext}`);
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `certificate-${uniqueSuffix}${extname(file.originalname)}`);
         },
       }),
       fileFilter: (req, file, cb) => {
         if (file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
           cb(null, true);
         } else {
-          cb(
-            new BadRequestException(
-              'Only image files (JPG, JPEG, PNG, GIF, WEBP) are allowed!',
-            ),
-            false,
-          );
+          cb(new BadRequestException('Only image files are allowed!'), false);
         }
       },
-      limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB max file size per image
-      },
+      limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )
   async register(
@@ -58,11 +55,7 @@ export class DoctorsController {
     @UploadedFiles() files: Express.Multer.File[],
   ) {
     const certificatePaths = files?.map((file) => file.path) || [];
-
-    return this.doctorsService.register({
-      ...registerDoctorDto,
-      certificates: certificatePaths,
-    });
+    return this.doctorsService.register({ ...registerDoctorDto, certificates: certificatePaths });
   }
 
   @Post('login')
@@ -70,6 +63,28 @@ export class DoctorsController {
   async login(@Body() loginDoctorDto: LoginDoctorDto) {
     return this.doctorsService.login(loginDoctorDto);
   }
+
+  // ── Forgot Password flow ───────────────────────────────────────────────────
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.doctorsService.forgotPassword(dto);
+  }
+
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.doctorsService.verifyOtp(dto);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.doctorsService.resetPassword(dto);
+  }
+
+  // ── CRUD ───────────────────────────────────────────────────────────────────
 
   @Get(':doctorId')
   async getDoctorById(@Param('doctorId') doctorId: string) {
@@ -87,10 +102,7 @@ export class DoctorsController {
   }
 
   @Put(':doctorId')
-  async updateDoctor(
-    @Param('doctorId') doctorId: string,
-    @Body() updateData: any,
-  ) {
+  async updateDoctor(@Param('doctorId') doctorId: string, @Body() updateData: any) {
     return this.doctorsService.updateDoctor(doctorId, updateData);
   }
 
@@ -104,8 +116,6 @@ export class DoctorsController {
     return this.doctorsService.deleteDoctor(doctorId);
   }
 
-  // ── Bank Details ───────────────────────────────────────────────────────────
-
   @Get(':doctorId/bank-details')
   async getBankDetails(@Param('doctorId') doctorId: string) {
     return this.doctorsService.getBankDetails(doctorId);
@@ -116,9 +126,7 @@ export class DoctorsController {
     @Param('doctorId') doctorId: string,
     @Body() body: { password: string; bankName: string; accountName: string; accountNumber: string },
   ) {
-    return this.doctorsService.saveBankDetails(
-      doctorId, body.password, body.bankName, body.accountName, body.accountNumber,
-    );
+    return this.doctorsService.saveBankDetails(doctorId, body.password, body.bankName, body.accountName, body.accountNumber);
   }
 
   @Delete(':doctorId/bank-details')

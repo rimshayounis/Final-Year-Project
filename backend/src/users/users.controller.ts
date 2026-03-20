@@ -1,4 +1,3 @@
-
 import {
   Controller,
   Get,
@@ -11,13 +10,15 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-
 import { UsersService } from './users.service';
 import {
   RegisterUserDto,
   CreateHealthProfileDto,
   CreateEmergencyContactsDto,
   LoginDto,
+  ForgotPasswordDto,
+  VerifyOtpDto,
+  ResetPasswordDto,
 } from './dto/user.dto';
 
 @Controller('users')
@@ -36,6 +37,28 @@ export class UsersController {
     return this.usersService.login(loginDto);
   }
 
+  // ── Forgot Password flow ───────────────────────────────────────────────────
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.usersService.forgotPassword(dto);
+  }
+
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.usersService.verifyOtp(dto);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.usersService.resetPassword(dto);
+  }
+
+  // ── Health Profile & Emergency Contacts ───────────────────────────────────
+
   @Post(':userId/health-profile')
   @HttpCode(HttpStatus.CREATED)
   async createHealthProfile(
@@ -51,11 +74,10 @@ export class UsersController {
     @Param('userId') userId: string,
     @Body() emergencyContactsDto: CreateEmergencyContactsDto,
   ) {
-    return this.usersService.createEmergencyContacts(
-      userId,
-      emergencyContactsDto,
-    );
+    return this.usersService.createEmergencyContacts(userId, emergencyContactsDto);
   }
+
+  // ── CRUD ───────────────────────────────────────────────────────────────────
 
   @Get(':userId')
   async getUserById(@Param('userId') userId: string) {

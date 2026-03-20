@@ -76,14 +76,14 @@ export default function PatientsPage() {
 
   // Fetch all patients
   useEffect(() => {
-    fetch(`${BASE_URL}/users`)
-      .then(r => r.json())
-      .then(data => {
-        const users: Patient[] = data.users || [];
-        const patients = users.filter(u => u.userType?.toLowerCase() === 'user' || u.userType?.toLowerCase() === 'patient');
-        setPatients(patients);
-        setFiltered(patients);
-      })
+     fetch(`${BASE_URL}/users`)
+    .then(r => r.json())
+    .then(data => {
+    const allUsers: Patient[] = Array.isArray(data) ? data : (data.users || data.data || []);
+    const patients = allUsers.filter(u => u.userType?.toLowerCase() === 'user' || u.userType?.toLowerCase() === 'patient');
+    setPatients(patients);
+    setFiltered(patients);
+  })
       .catch(() => showToast('Failed to load patients', 'error'))
       .finally(() => setLoading(false));
   }, []);

@@ -1,235 +1,212 @@
-
 import {
   Injectable,
-  ConflictException,
   NotFoundException,
-  UnauthorizedException,
+  BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
+import { MailService } from '../mail/mail.service';
 import {
   RegisterUserDto,
+  LoginDto,
   CreateHealthProfileDto,
   CreateEmergencyContactsDto,
-  LoginDto,
+  ForgotPasswordDto,
+  VerifyOtpDto,
+  ResetPasswordDto,
 } from './dto/user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private readonly mailService: MailService,
+  ) {}
 
-  async register(registerUserDto: RegisterUserDto): Promise<any> {
-    const existingUser = await this.userModel.findOne({
-      email: registerUserDto.email,
-    });
+  // ── Register ───────────────────────────────────────────────────────────────
+  async register(dto: RegisterUserDto) {
+    const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    if (existing) throw new ConflictException('Email already registered');
 
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
-    }
-
-    const hashedPassword = await bcrypt.hash(registerUserDto.password, 10);
-
-    const newUser = new this.userModel({
-      ...registerUserDto,
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const user = new this.userModel({
+      ...dto,
+      email: dto.email.toLowerCase(),
       password: hashedPassword,
     });
-
-    const savedUser = await newUser.save();
-    const userObject: any = savedUser.toObject();
-    delete userObject.password;
-
-    return {
-      success: true,
-      message: 'User registered successfully',
-      user: userObject,
-    };
+    const saved = await user.save();
+    const { password, otpCode, otpExpiry, ...result } = saved.toObject();
+    return { success: true, user: result };
   }
 
-  async login(loginDto: LoginDto): Promise<any> {
-    const user = await this.userModel.findOne({
-      email: loginDto.email,
-    });
+  // ── Login ──────────────────────────────────────────────────────────────────
+  async login(dto: LoginDto) {
+    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    if (!user) throw new NotFoundException('No account found with this email');
 
-    if (!user) {
-      throw new NotFoundException('Invalid credentials');
-    }
+    const isMatch = await bcrypt.compare(dto.password, user.password);
+    if (!isMatch) throw new BadRequestException('Incorrect password');
 
-    const isPasswordValid = await bcrypt.compare(
-      loginDto.password,
-      user.password,
+    const { password, otpCode, otpExpiry, ...result } = user.toObject();
+    return { success: true, user: result };
+  }
+
+  // ── Forgot Password — Step 1: Send OTP ────────────────────────────────────
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    if (!user) throw new NotFoundException('No account found with this email');
+
+    const otpCode  = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min from now
+
+    await this.userModel.updateOne(
+      { _id: user._id },
+      { otpCode, otpExpiry },
     );
 
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+    await this.mailService.sendOtpEmail(user.email, otpCode, user.fullName);
+
+    return { success: true, message: 'OTP sent to your email' };
+  }
+
+  // ── Forgot Password — Step 2: Verify OTP ──────────────────────────────────
+  async verifyOtp(dto: VerifyOtpDto) {
+    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    if (!user) throw new NotFoundException('No account found with this email');
+
+    if (!user.otpCode || !user.otpExpiry) {
+      throw new BadRequestException('No OTP requested. Please request a new one');
     }
 
-    const userObject: any = user.toObject();
-    delete userObject.password;
-
-    return {
-      success: true,
-      message: 'Login successful',
-      user: userObject,
-    };
-  }
-
-  async createHealthProfile(
-    userId: string,
-    healthProfileDto: CreateHealthProfileDto,
-  ): Promise<any> {
-    const user = await this.userModel.findById(userId);
-
-    if (!user) {
-      throw new NotFoundException('User not found');
+    if (new Date() > user.otpExpiry) {
+      await this.userModel.updateOne({ _id: user._id }, { otpCode: null, otpExpiry: null });
+      throw new BadRequestException('OTP has expired. Please request a new one');
     }
 
-    user.healthProfile = healthProfileDto as any;
-    await user.save();
-
-    return {
-      success: true,
-      message: 'Health profile created successfully',
-      healthProfile: user.healthProfile,
-    };
-  }
-
-  async createEmergencyContacts(
-    userId: string,
-    emergencyContactsDto: CreateEmergencyContactsDto,
-  ): Promise<any> {
-    const user = await this.userModel.findById(userId);
-
-    if (!user) {
-      throw new NotFoundException('User not found');
+    if (user.otpCode !== dto.otpCode) {
+      throw new BadRequestException('Invalid OTP. Please check and try again');
     }
 
-    user.emergencyContacts = emergencyContactsDto.contacts;
-    await user.save();
-
-    return {
-      success: true,
-      message: 'Emergency contacts created successfully',
-      emergencyContacts: user.emergencyContacts,
-    };
+    return { success: true, message: 'OTP verified successfully' };
   }
 
-  async getUserById(userId: string): Promise<any> {
-    const user = await this.userModel.findById(userId).select('-password');
+  // ── Forgot Password — Step 3: Reset Password ──────────────────────────────
+  async resetPassword(dto: ResetPasswordDto) {
+    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    if (!user) throw new NotFoundException('No account found with this email');
 
-    if (!user) {
-      throw new NotFoundException('User not found');
+    if (!user.otpCode || !user.otpExpiry) {
+      throw new BadRequestException('No OTP requested. Please request a new one');
     }
 
-    return {
-      success: true,
-      user,
-    };
-  }
-
-  async getAllUsers(): Promise<any> {
-    const users = await this.userModel.find().select('-password');
-
-    return {
-      success: true,
-      count: users.length,
-      users,
-    };
-  }
-
-  async updateUser(userId: string, updateData: Partial<User>): Promise<any> {
-    const user = await this.userModel
-      .findByIdAndUpdate(userId, updateData, { new: true })
-      .select('-password');
-
-    if (!user) {
-      throw new NotFoundException('User not found');
+    if (new Date() > user.otpExpiry) {
+      await this.userModel.updateOne({ _id: user._id }, { otpCode: null, otpExpiry: null });
+      throw new BadRequestException('OTP has expired. Please request a new one');
     }
 
-    return {
-      success: true,
-      message: 'User updated successfully',
-      user,
-    };
+    if (user.otpCode !== dto.otpCode) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+    await this.userModel.updateOne(
+      { _id: user._id },
+      { password: hashedPassword, otpCode: null, otpExpiry: null },
+    );
+
+    return { success: true, message: 'Password reset successfully' };
   }
 
-  async deleteUser(userId: string): Promise<any> {
+  // ── Health Profile ─────────────────────────────────────────────────────────
+  async createHealthProfile(userId: string, dto: CreateHealthProfileDto) {
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      { healthProfile: dto },
+      { new: true },
+    );
+    if (!user) throw new NotFoundException('User not found');
+    return { success: true, user };
+  }
+
+  // ── Emergency Contacts ─────────────────────────────────────────────────────
+  async createEmergencyContacts(userId: string, dto: CreateEmergencyContactsDto) {
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      { emergencyContacts: dto.contacts },
+      { new: true },
+    );
+    if (!user) throw new NotFoundException('User not found');
+    return { success: true, user };
+  }
+
+  // ── CRUD ───────────────────────────────────────────────────────────────────
+  async getUserById(userId: string) {
+    const user = await this.userModel.findById(userId).select('-password -otpCode -otpExpiry');
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  async getAllUsers() {
+  const users = await this.userModel.find().select('-password -otpCode -otpExpiry');
+  return { users };
+}
+
+  async updateUser(userId: string, updateData: any) {
+    const user = await this.userModel.findByIdAndUpdate(userId, updateData, { new: true })
+      .select('-password -otpCode -otpExpiry');
+    if (!user) throw new NotFoundException('User not found');
+    return { success: true, user };
+  }
+
+  async deleteUser(userId: string) {
     const user = await this.userModel.findByIdAndDelete(userId);
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    return {
-      success: true,
-      message: 'User deleted successfully',
-    };
+    if (!user) throw new NotFoundException('User not found');
+    return { success: true, message: 'User deleted' };
   }
 
-  async changePassword(
-    userId: string,
-    oldPassword: string,
-    newPassword: string,
-  ): Promise<any> {
+  async changePassword(userId: string, oldPassword: string, newPassword: string) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new NotFoundException('User not found');
-
-    const valid = await bcrypt.compare(oldPassword, user.password);
-    if (!valid) throw new UnauthorizedException('Current password is incorrect');
-
-    if (newPassword.length < 8)
-      throw new ConflictException('New password must be at least 8 characters');
-
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) throw new BadRequestException('Current password is incorrect');
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
-    return { success: true, message: 'Password updated successfully' };
+    return { success: true, message: 'Password changed successfully' };
   }
 
-  async changeEmail(
-    userId: string,
-    password: string,
-    newEmail: string,
-  ): Promise<any> {
+  async changeEmail(userId: string, password: string, newEmail: string) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new NotFoundException('User not found');
-
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) throw new UnauthorizedException('Password is incorrect');
-
-    const taken = await this.userModel.findOne({ email: newEmail });
-    if (taken) throw new ConflictException('Email is already in use');
-
-    user.email = newEmail;
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) throw new BadRequestException('Incorrect password');
+    const existing = await this.userModel.findOne({ email: newEmail.toLowerCase() });
+    if (existing) throw new ConflictException('Email already in use');
+    user.email = newEmail.toLowerCase();
     await user.save();
     return { success: true, message: 'Email updated successfully' };
   }
 
-  async getNotificationSettings(userId: string): Promise<any> {
-    const user = await this.userModel.findById(userId).select('notificationSettings').exec();
+  async getNotificationSettings(userId: string) {
+    const user = await this.userModel.findById(userId).select('notificationSettings');
     if (!user) throw new NotFoundException('User not found');
-    return { success: true, data: user.notificationSettings };
+    return user.notificationSettings;
   }
 
-  async updateNotificationSettings(userId: string, settings: { pushEnabled?: boolean; emailEnabled?: boolean }): Promise<any> {
-    const user = await this.userModel.findById(userId).exec();
+  async updateNotificationSettings(userId: string, settings: { pushEnabled?: boolean; emailEnabled?: boolean }) {
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      { $set: { 'notificationSettings.pushEnabled': settings.pushEnabled, 'notificationSettings.emailEnabled': settings.emailEnabled } },
+      { new: true },
+    ).select('notificationSettings');
     if (!user) throw new NotFoundException('User not found');
-
-    const ns = user.notificationSettings ?? {} as any;
-    if (settings.pushEnabled  !== undefined) ns.pushEnabled  = settings.pushEnabled;
-    if (settings.emailEnabled !== undefined) ns.emailEnabled = settings.emailEnabled;
-
-    user.notificationSettings = ns;
-    user.markModified('notificationSettings');
-    await user.save();
-    return { success: true, data: user.notificationSettings };
+    return user.notificationSettings;
   }
 
-  async savePushToken(userId: string, token: string | null): Promise<any> {
-    const user = await this.userModel.findById(userId).exec();
-    if (!user) throw new NotFoundException('User not found');
-    user.expoPushToken = token;
-    await user.save();
-    return { success: true, message: 'Push token saved' };
+  async savePushToken(userId: string, token: string | null) {
+    await this.userModel.updateOne({ _id: userId }, { expoPushToken: token });
+    return { success: true };
   }
 }

@@ -1,4 +1,3 @@
-
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
@@ -10,36 +9,21 @@ export class UserNotificationSettings {
   @Prop({ default: false }) emailEnabled: boolean;
 }
 
-// Health Profile Schema (only for users)
 @Schema({ _id: false })
 export class HealthProfile {
-  @Prop({ required: false })
-  sleepDuration: number;
-
-  @Prop({ required: false })
-  stressLevel: string;
-
-  @Prop({ required: false })
-  dietPreference: string;
-
-  @Prop({ required: false })
-  additionalNotes?: string;
+  @Prop({ required: false }) sleepDuration: number;
+  @Prop({ required: false }) stressLevel: string;
+  @Prop({ required: false }) dietPreference: string;
+  @Prop({ required: false }) additionalNotes?: string;
 }
 
-// Emergency Contact Schema
 @Schema({ _id: false })
 export class EmergencyContact {
-  @Prop({ required: true })
-  fullName: string;
-
-  @Prop({ required: true })
-  phoneNumber: string;
-
-  @Prop({ required: true })
-  relationship: string;
+  @Prop({ required: true }) fullName: string;
+  @Prop({ required: true }) phoneNumber: string;
+  @Prop({ required: true }) relationship: string;
 }
 
-// User Schema (regular users only)
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true })
@@ -57,19 +41,13 @@ export class User {
   @Prop({ required: true })
   gender: string;
 
-  // TODO: redundant — this collection IS the user type. Remove once auth JWT no longer embeds this field.
   @Prop({ required: true })
   userType: string;
-
 
   @Prop({ type: HealthProfile, required: false })
   healthProfile?: HealthProfile;
 
-  @Prop({
-    type: [EmergencyContact],
-    default: undefined,
-    required: false
-  })
+  @Prop({ type: [EmergencyContact], default: undefined, required: false })
   emergencyContacts?: EmergencyContact[];
 
   @Prop({
@@ -80,6 +58,13 @@ export class User {
 
   @Prop({ type: String, default: null })
   expoPushToken: string | null;
+
+  // ── OTP fields for forgot password ────────────────────────────────────────
+  @Prop({ type: String, default: null })
+  otpCode: string | null;
+
+  @Prop({ type: Date, default: null })
+  otpExpiry: Date | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

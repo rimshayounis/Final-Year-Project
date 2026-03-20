@@ -1,8 +1,6 @@
 import axios from 'axios'
-export const API_URL = 'http://192.168.137.1:3000/api';
-// ── Base socket URL (no /api suffix) ──────────────────────────────────────────
-export const SOCKET_URL = 'http://192.168.137.1:3000';
-
+export const API_URL = 'http://10.161.203.86:3000/api';
+export const SOCKET_URL = 'http://10.161.203.86:3000';
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -221,6 +219,16 @@ export const userAPI = {
 
   deleteUser: (userId: string) =>
     apiClient.delete(`/users/${userId}`),
+
+  // ── Forgot password ────────────────────────────────────────────────────────
+  forgotPassword: (email: string) =>
+    apiClient.post('/users/forgot-password', { email }),
+
+  verifyOtp: (email: string, otpCode: string) =>
+    apiClient.post('/users/verify-otp', { email, otpCode }),
+
+  resetPassword: (email: string, otpCode: string, newPassword: string) =>
+    apiClient.post('/users/reset-password', { email, otpCode, newPassword }),
 };
 
 export const doctorAPI = {
@@ -241,6 +249,16 @@ export const doctorAPI = {
 
   getVerificationStatus: (doctorId: string) =>
     apiClient.get(`/doctors/${doctorId}/verification-status`),
+
+  // ── Forgot password ────────────────────────────────────────────────────────
+  forgotPassword: (email: string) =>
+    apiClient.post('/doctors/forgot-password', { email }),
+
+  verifyOtp: (email: string, otpCode: string) =>
+    apiClient.post('/doctors/verify-otp', { email, otpCode }),
+
+  resetPassword: (email: string, otpCode: string, newPassword: string) =>
+    apiClient.post('/doctors/reset-password', { email, otpCode, newPassword }),
 };
 
 export const chatbotAPI = {
@@ -284,8 +302,6 @@ export const appointmentAPI = {
     apiClient.get('/appointment-availability/doctors'),
 };
 
-// ✅ Use fetch instead of axios for file uploads
-// axios has known issues with multipart/form-data in React Native / Expo Go
 const uploadWithFetch = async (
   url: string,
   uri: string,
@@ -297,24 +313,10 @@ const uploadWithFetch = async (
   console.log('[fetch upload] file:', { uri, name, mimeType });
 
   const form = new FormData();
+  form.append('file', { uri, name, type: mimeType } as any);
+  Object.entries(fields).forEach(([key, value]) => { form.append(key, value); });
 
-  // ✅ Append file with correct structure for React Native
-  form.append('file', {
-    uri,
-    name,
-    type: mimeType,
-  } as any);
-
-  // ✅ Append extra fields
-  Object.entries(fields).forEach(([key, value]) => {
-    form.append(key, value);
-  });
-
-  const response = await fetch(url, {
-    method: 'POST',
-    body: form,
-    // ✅ Do NOT set Content-Type — fetch sets it automatically with boundary
-  });
+  const response = await fetch(url, { method: 'POST', body: form });
 
   if (!response.ok) {
     const text = await response.text();
@@ -337,11 +339,9 @@ export const chatAPI = {
   getOrCreateConversation: (doctorId: string, patientId: string) =>
     apiClient.post('/chat/conversation', { doctorId, patientId }),
 
-  // ✅ Now uses fetch — fixes Network Error with multipart in Expo Go
   uploadFile: (
     formData: FormData,
     fileType: string,
-    // extra params extracted from formData for fetch
     fileInfo?: { uri: string; name: string; mimeType: string; conversationId: string; receiverId: string; duration?: string },
   ) => {
     if (fileInfo) {
@@ -352,7 +352,6 @@ export const chatAPI = {
         duration:       fileInfo.duration ?? '0',
       });
     }
-    // fallback to axios if no fileInfo
     return axios.post(`${API_URL}/chat/upload?fileType=${fileType}`, formData, {
       headers: { 'Accept': 'application/json' },
       timeout: 120000,

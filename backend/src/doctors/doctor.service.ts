@@ -1,284 +1,234 @@
-
 import {
   Injectable,
-  ConflictException,
   NotFoundException,
-  UnauthorizedException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { Doctor, DoctorDocument } from './schemas/doctor.schema';
-import { RegisterDoctorDto, LoginDoctorDto } from './dto/doctor.dto';
+import { MailService } from '../mail/mail.service';
+import {
+  RegisterDoctorDto,
+  LoginDoctorDto,
+  ForgotPasswordDto,
+  VerifyOtpDto,
+  ResetPasswordDto,
+} from './dto/doctor.dto';
 
 @Injectable()
 export class DoctorsService {
   constructor(
     @InjectModel(Doctor.name) private doctorModel: Model<DoctorDocument>,
+    private readonly mailService: MailService,
   ) {}
 
-  async register(registerDoctorDto: RegisterDoctorDto): Promise<any> {
-    const existingDoctor = await this.doctorModel.findOne({
-      email: registerDoctorDto.email,
-    });
+  // ── Register ───────────────────────────────────────────────────────────────
+  async register(dto: RegisterDoctorDto & { certificates?: string[] }) {
+    const existing = await this.doctorModel.findOne({ email: dto.email.toLowerCase() });
+    if (existing) throw new ConflictException('Email already registered');
 
-    if (existingDoctor) {
-      throw new ConflictException('Doctor with this email already exists');
-    }
-
-    const hashedPassword = await bcrypt.hash(registerDoctorDto.password, 10);
-
-    const newDoctor = new this.doctorModel({
-      fullName: registerDoctorDto.fullName,
-      email: registerDoctorDto.email,
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const doctor = new this.doctorModel({
+      fullName: dto.fullName,
+      email: dto.email.toLowerCase(),
       password: hashedPassword,
       doctorProfile: {
-        licenseNumber: registerDoctorDto.licenseNumber,
-        specialization: registerDoctorDto.specialization,
-        certificates: registerDoctorDto.certificates || [],
-        isVerified: false,
+        licenseNumber:  dto.licenseNumber,
+        specialization: dto.specialization,
+        certificates:   dto.certificates || [],
+        isVerified:     false,
       },
     });
 
-    const savedDoctor = await newDoctor.save();
-    const doctorObject: any = savedDoctor.toObject();
-    delete doctorObject.password;
-
-    return {
-      success: true,
-      message: 'Doctor registered successfully. Account pending verification.',
-      doctor: doctorObject,
-    };
+    const saved = await doctor.save();
+    const { password, otpCode, otpExpiry, ...result } = saved.toObject();
+    return { success: true, doctor: result };
   }
 
-  async login(loginDoctorDto: LoginDoctorDto): Promise<any> {
-    const doctor = await this.doctorModel.findOne({
-      email: loginDoctorDto.email,
-    });
+  // ── Login ──────────────────────────────────────────────────────────────────
+  async login(dto: LoginDoctorDto) {
+    const doctor = await this.doctorModel.findOne({ email: dto.email.toLowerCase() });
+    if (!doctor) throw new NotFoundException('No account found with this email');
 
-    if (!doctor) {
-      throw new NotFoundException('Invalid credentials');
-    }
+    const isMatch = await bcrypt.compare(dto.password, doctor.password);
+    if (!isMatch) throw new BadRequestException('Incorrect password');
 
-    const isPasswordValid = await bcrypt.compare(
-      loginDoctorDto.password,
-      doctor.password,
+    const { password, otpCode, otpExpiry, ...result } = doctor.toObject();
+    return { success: true, doctor: result };
+  }
+
+  // ── Forgot Password — Step 1: Send OTP ────────────────────────────────────
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const doctor = await this.doctorModel.findOne({ email: dto.email.toLowerCase() });
+    if (!doctor) throw new NotFoundException('No account found with this email');
+
+    const otpCode   = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.doctorModel.updateOne(
+      { _id: doctor._id },
+      { otpCode, otpExpiry },
     );
 
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+    await this.mailService.sendOtpEmail(doctor.email, otpCode, doctor.fullName);
+
+    return { success: true, message: 'OTP sent to your email' };
+  }
+
+  // ── Forgot Password — Step 2: Verify OTP ──────────────────────────────────
+  async verifyOtp(dto: VerifyOtpDto) {
+    const doctor = await this.doctorModel.findOne({ email: dto.email.toLowerCase() });
+    if (!doctor) throw new NotFoundException('No account found with this email');
+
+    if (!doctor.otpCode || !doctor.otpExpiry) {
+      throw new BadRequestException('No OTP requested. Please request a new one');
     }
 
-    const doctorObject: any = doctor.toObject();
-    delete doctorObject.password;
-
-    return {
-      success: true,
-      message: 'Login successful',
-      doctor: doctorObject,
-    };
-  }
-
-  async getDoctorById(doctorId: string): Promise<any> {
-    const doctor = await this.doctorModel.findById(doctorId).select('-password');
-
-    if (!doctor) {
-      throw new NotFoundException('Doctor not found');
+    if (new Date() > doctor.otpExpiry) {
+      await this.doctorModel.updateOne({ _id: doctor._id }, { otpCode: null, otpExpiry: null });
+      throw new BadRequestException('OTP has expired. Please request a new one');
     }
 
-    return {
-      success: true,
-      doctor,
-    };
-  }
-
-  async getAllDoctors(): Promise<any> {
-    const doctors = await this.doctorModel.find().select('-password');
-
-    return {
-      success: true,
-      count: doctors.length,
-      doctors,
-    };
-  }
-
-  async getVerifiedDoctors(): Promise<any> {
-    const doctors = await this.doctorModel
-      .find({ 'doctorProfile.isVerified': true })
-      .select('-password');
-
-    return {
-      success: true,
-      count: doctors.length,
-      doctors,
-    };
-  }
-
-  async updateDoctor(doctorId: string, updateData: Partial<Doctor>): Promise<any> {
-    const doctor = await this.doctorModel
-      .findByIdAndUpdate(doctorId, updateData, { new: true })
-      .select('-password');
-
-    if (!doctor) {
-      throw new NotFoundException('Doctor not found');
+    if (doctor.otpCode !== dto.otpCode) {
+      throw new BadRequestException('Invalid OTP. Please check and try again');
     }
 
-    return {
-      success: true,
-      message: 'Doctor updated successfully',
-      doctor,
-    };
+    return { success: true, message: 'OTP verified successfully' };
   }
 
-  async verifyDoctor(doctorId: string): Promise<any> {
-    const doctor = await this.doctorModel
-      .findByIdAndUpdate(
-        doctorId,
-        { 'doctorProfile.isVerified': true },
-        { new: true },
-      )
-      .select('-password');
+  // ── Forgot Password — Step 3: Reset Password ──────────────────────────────
+  async resetPassword(dto: ResetPasswordDto) {
+    const doctor = await this.doctorModel.findOne({ email: dto.email.toLowerCase() });
+    if (!doctor) throw new NotFoundException('No account found with this email');
 
-    if (!doctor) {
-      throw new NotFoundException('Doctor not found');
+    if (!doctor.otpCode || !doctor.otpExpiry) {
+      throw new BadRequestException('No OTP requested. Please request a new one');
     }
 
-    return {
-      success: true,
-      message: 'Doctor verified successfully',
-      doctor,
-    };
+    if (new Date() > doctor.otpExpiry) {
+      await this.doctorModel.updateOne({ _id: doctor._id }, { otpCode: null, otpExpiry: null });
+      throw new BadRequestException('OTP has expired. Please request a new one');
+    }
+
+    if (doctor.otpCode !== dto.otpCode) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+    await this.doctorModel.updateOne(
+      { _id: doctor._id },
+      { password: hashedPassword, otpCode: null, otpExpiry: null },
+    );
+
+    return { success: true, message: 'Password reset successfully' };
   }
 
-  async deleteDoctor(doctorId: string): Promise<any> {
+  // ── CRUD ───────────────────────────────────────────────────────────────────
+  async getDoctorById(doctorId: string) {
+    const doctor = await this.doctorModel.findById(doctorId).select('-password -otpCode -otpExpiry');
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    return doctor;
+  }
+
+  async getAllDoctors() {
+  const doctors = await this.doctorModel.find().select('-password -otpCode -otpExpiry');
+  return { doctors };
+}
+
+  async getVerifiedDoctors() {
+    return this.doctorModel.find({ 'doctorProfile.isVerified': true }).select('-password -otpCode -otpExpiry');
+  }
+
+  async updateDoctor(doctorId: string, updateData: any) {
+    const doctor = await this.doctorModel.findByIdAndUpdate(doctorId, updateData, { new: true })
+      .select('-password -otpCode -otpExpiry');
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    return { success: true, doctor };
+  }
+
+  async verifyDoctor(doctorId: string) {
+    const doctor = await this.doctorModel.findByIdAndUpdate(
+      doctorId,
+      { 'doctorProfile.isVerified': true },
+      { new: true },
+    ).select('-password -otpCode -otpExpiry');
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    return { success: true, doctor };
+  }
+
+  async deleteDoctor(doctorId: string) {
     const doctor = await this.doctorModel.findByIdAndDelete(doctorId);
-
-    if (!doctor) {
-      throw new NotFoundException('Doctor not found');
-    }
-
-    return {
-      success: true,
-      message: 'Doctor deleted successfully',
-    };
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    return { success: true, message: 'Doctor deleted' };
   }
 
-  // ── Bank Details ───────────────────────────────────────────────────────────
-
-  async getBankDetails(doctorId: string): Promise<any> {
-    const doctor = await this.doctorModel
-      .findById(doctorId)
-      .select('bankDetails')
-      .exec();
+  async getBankDetails(doctorId: string) {
+    const doctor = await this.doctorModel.findById(doctorId).select('bankDetails');
     if (!doctor) throw new NotFoundException('Doctor not found');
-    return { success: true, data: doctor.bankDetails ?? null };
+    return doctor.bankDetails;
   }
 
-  async saveBankDetails(
-    doctorId: string,
-    password: string,
-    bankName: string,
-    accountName: string,
-    accountNumber: string,
-  ): Promise<any> {
-    const doctor = await this.doctorModel.findById(doctorId).exec();
+  async saveBankDetails(doctorId: string, password: string, bankName: string, accountName: string, accountNumber: string) {
+    const doctor = await this.doctorModel.findById(doctorId);
     if (!doctor) throw new NotFoundException('Doctor not found');
-
-    const valid = await bcrypt.compare(password, doctor.password);
-    if (!valid) throw new UnauthorizedException('Incorrect password');
-
-    if (!bankName || !accountName || !accountNumber) {
-      throw new BadRequestException('All bank detail fields are required');
-    }
-
+    const isMatch = await bcrypt.compare(password, doctor.password);
+    if (!isMatch) throw new BadRequestException('Incorrect password');
     doctor.bankDetails = { bankName, accountName, accountNumber, addedAt: new Date() };
     await doctor.save();
-
-    return { success: true, message: 'Bank details saved successfully', data: doctor.bankDetails };
+    return { success: true, bankDetails: doctor.bankDetails };
   }
 
-  async deleteBankDetails(doctorId: string, password: string): Promise<any> {
-    const doctor = await this.doctorModel.findById(doctorId).exec();
+  async deleteBankDetails(doctorId: string, password: string) {
+    const doctor = await this.doctorModel.findById(doctorId);
     if (!doctor) throw new NotFoundException('Doctor not found');
-
-    const valid = await bcrypt.compare(password, doctor.password);
-    if (!valid) throw new UnauthorizedException('Incorrect password');
-
+    const isMatch = await bcrypt.compare(password, doctor.password);
+    if (!isMatch) throw new BadRequestException('Incorrect password');
     doctor.bankDetails = null;
     await doctor.save();
-
-    return { success: true, message: 'Bank details removed successfully' };
+    return { success: true, message: 'Bank details removed' };
   }
 
-  async getNotificationSettings(doctorId: string): Promise<any> {
-    const doctor = await this.doctorModel
-      .findById(doctorId)
-      .select('notificationSettings')
-      .exec();
+  async getNotificationSettings(doctorId: string) {
+    const doctor = await this.doctorModel.findById(doctorId).select('notificationSettings');
     if (!doctor) throw new NotFoundException('Doctor not found');
-    return { success: true, data: doctor.notificationSettings };
+    return doctor.notificationSettings;
   }
 
-  async updateNotificationSettings(doctorId: string, settings: {
-    emailEnabled?: boolean;
-    pushEnabled?: boolean;
-  }): Promise<any> {
-    const doctor = await this.doctorModel.findById(doctorId).exec();
+  async updateNotificationSettings(doctorId: string, settings: { emailEnabled?: boolean; pushEnabled?: boolean }) {
+    const doctor = await this.doctorModel.findByIdAndUpdate(
+      doctorId,
+      { $set: { 'notificationSettings.emailEnabled': settings.emailEnabled, 'notificationSettings.pushEnabled': settings.pushEnabled } },
+      { new: true },
+    ).select('notificationSettings');
     if (!doctor) throw new NotFoundException('Doctor not found');
-
-    const ns = doctor.notificationSettings ?? {} as any;
-    if (settings.emailEnabled !== undefined) ns.emailEnabled = settings.emailEnabled;
-    if (settings.pushEnabled  !== undefined) ns.pushEnabled  = settings.pushEnabled;
-
-    doctor.notificationSettings = ns;
-    doctor.markModified('notificationSettings');
-    await doctor.save();
-    return { success: true, data: doctor.notificationSettings };
+    return doctor.notificationSettings;
   }
 
-  async savePushToken(doctorId: string, token: string | null): Promise<any> {
-    const doctor = await this.doctorModel.findById(doctorId).exec();
-    if (!doctor) throw new NotFoundException('Doctor not found');
-    doctor.expoPushToken = token;
-    await doctor.save();
-    return { success: true, message: 'Push token saved' };
+  async savePushToken(doctorId: string, token: string | null) {
+    await this.doctorModel.updateOne({ _id: doctorId }, { expoPushToken: token });
+    return { success: true };
   }
 
-  async changePassword(
-    doctorId: string,
-    oldPassword: string,
-    newPassword: string,
-  ): Promise<any> {
-    const doctor = await this.doctorModel.findById(doctorId).exec();
+  async changePassword(doctorId: string, oldPassword: string, newPassword: string) {
+    const doctor = await this.doctorModel.findById(doctorId);
     if (!doctor) throw new NotFoundException('Doctor not found');
-
-    const valid = await bcrypt.compare(oldPassword, doctor.password);
-    if (!valid) throw new UnauthorizedException('Current password is incorrect');
-
-    if (newPassword.length < 8)
-      throw new BadRequestException('New password must be at least 8 characters');
-
+    const isMatch = await bcrypt.compare(oldPassword, doctor.password);
+    if (!isMatch) throw new BadRequestException('Current password is incorrect');
     doctor.password = await bcrypt.hash(newPassword, 10);
     await doctor.save();
-    return { success: true, message: 'Password updated successfully' };
+    return { success: true, message: 'Password changed successfully' };
   }
 
-  async changeEmail(
-    doctorId: string,
-    password: string,
-    newEmail: string,
-  ): Promise<any> {
-    const doctor = await this.doctorModel.findById(doctorId).exec();
+  async changeEmail(doctorId: string, password: string, newEmail: string) {
+    const doctor = await this.doctorModel.findById(doctorId);
     if (!doctor) throw new NotFoundException('Doctor not found');
-
-    const valid = await bcrypt.compare(password, doctor.password);
-    if (!valid) throw new UnauthorizedException('Password is incorrect');
-
-    const taken = await this.doctorModel.findOne({ email: newEmail }).exec();
-    if (taken) throw new ConflictException('Email is already in use');
-
-    doctor.email = newEmail;
+    const isMatch = await bcrypt.compare(password, doctor.password);
+    if (!isMatch) throw new BadRequestException('Incorrect password');
+    const existing = await this.doctorModel.findOne({ email: newEmail.toLowerCase() });
+    if (existing) throw new ConflictException('Email already in use');
+    doctor.email = newEmail.toLowerCase();
     await doctor.save();
     return { success: true, message: 'Email updated successfully' };
   }

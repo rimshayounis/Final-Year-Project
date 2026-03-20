@@ -1,46 +1,42 @@
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
-import { IsString, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
-
-// ✅ NEW - Doctor-specific registration DTO
 export class RegisterDoctorDto {
-  @IsString()
-  @IsNotEmpty()
-  fullName: string;
-
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-
-  @IsString()
-  @IsNotEmpty()
-  licenseNumber: string;
-
-  @IsString()
-  @IsNotEmpty()
-  specialization: string;
-
-  @IsArray()
-  @IsOptional()
-
-  certificates?: string[]; // Array of certificate URLs/paths
-
+  @IsNotEmpty() @IsString()  fullName:       string;
+  @IsNotEmpty() @IsEmail()   email:          string;
+  @IsNotEmpty() @IsString()  @MinLength(6) password: string;
+  @IsNotEmpty() @IsString()  licenseNumber:  string;
+  @IsNotEmpty() @IsString()  specialization: string;
+  @IsOptional() certificates?: string[];
 }
 
 export class LoginDoctorDto {
-  @IsEmail()
-  @IsNotEmpty()
+  @IsNotEmpty() @IsEmail()   email:    string;
+  @IsNotEmpty() @IsString()  password: string;
+  @IsOptional() @IsString()  userType?: string;
+}
+
+// ── Forgot Password DTOs ───────────────────────────────────────────────────
+
+export class ForgotPasswordDto {
+  @IsNotEmpty() @IsEmail()
+  email: string;
+}
+
+export class VerifyOtpDto {
+  @IsNotEmpty() @IsEmail()
   email: string;
 
-  @IsString()
-  @IsNotEmpty()
-  password: string;
+  @IsNotEmpty() @IsString()
+  otpCode: string;
+}
 
-  @IsEnum(['user', 'doctor'])
-  @IsNotEmpty()
-  userType: 'user' | 'doctor';
+export class ResetPasswordDto {
+  @IsNotEmpty() @IsEmail()
+  email: string;
+
+  @IsNotEmpty() @IsString()
+  otpCode: string;
+
+  @IsNotEmpty() @IsString() @MinLength(6)
+  newPassword: string;
 }

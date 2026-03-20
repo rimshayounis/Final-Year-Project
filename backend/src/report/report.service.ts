@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Report, ReportDocument } from './schemas/report.schema';
@@ -44,5 +44,19 @@ export class ReportService {
       .find({ reportedId: new Types.ObjectId(reportedId) })
       .sort({ createdAt: -1 })
       .exec();
+  }
+
+  // ── NEW ──
+  async markReviewed(id: string): Promise<ReportDocument> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid report id');
+    }
+    const report = await this.reportModel.findByIdAndUpdate(
+      id,
+      { status: 'reviewed' },
+      { new: true },
+    );
+    if (!report) throw new NotFoundException('Report not found');
+    return report;
   }
 }

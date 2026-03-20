@@ -8,7 +8,6 @@ import { ChatbotModule } from './chatbot/chatbot.module';
 import { AppointmentAvailabilityModule } from './appointment-availability/appointment-availability.module';
 import { BookedAppointmentModule } from './booked-appointment/booked-appointment.module';
 import { ChatModule } from './chat/chat.module';
-
 import { UserProfileModule } from './user-profile/user-profile.module';
 import { PointsRewardModule } from './points-reward/points-reward.module';
 import { SubscriptionPlanModule } from './subscription-plan/subscription-plan.module';
@@ -18,7 +17,7 @@ import { NotificationModule } from './notification/notification.module';
 import { ReportModule } from './report/report.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { SupportRequestModule } from './support-request/support-request.module';
-
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -26,6 +25,7 @@ import { SupportRequestModule } from './support-request/support-request.module';
     MongooseModule.forRoot(
       process.env.MONGODB_URI || 'mongodb://localhost:27017/truheal-link'
     ),
+    MailModule,
     UsersModule,
     DoctorsModule,
     PostsModule,

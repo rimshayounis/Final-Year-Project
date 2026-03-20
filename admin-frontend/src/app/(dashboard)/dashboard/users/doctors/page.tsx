@@ -58,12 +58,13 @@ export default function DoctorsPage() {
   // Fetch all doctors
   useEffect(() => {
     fetch(`${BASE_URL}/doctors`)
-      .then(r => r.json())
-      .then(data => {
-        const list: Doctor[] = data.doctors || [];
-        setDoctors(list);
-        setFiltered(list);
-      })
+  .then(r => r.json())
+  .then(data => {
+    const list: Doctor[] = Array.isArray(data) ? data : (data.doctors || data.data || []);
+    setDoctors(list);
+    setFiltered(list);
+  })
+      
       .catch(() => showToast('Failed to load doctors', 'error'))
       .finally(() => setLoading(false));
   }, []);

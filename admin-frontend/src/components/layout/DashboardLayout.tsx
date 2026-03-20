@@ -15,14 +15,26 @@ const navItems = [
   { href: '/dashboard/points-rewards', label: 'Points & Rewards', icon: '⭐' },
 ];
 
+const moderationItems = [
+  { href: '/dashboard/reports',  label: 'Post Reports',    icon: '🚨', badge: 'reports'  },
+  { href: '/dashboard/feedback', label: 'Doctor Feedback', icon: '⭐', badge: 'feedback' },
+  { href: '/dashboard/support',  label: 'Support Queries', icon: '💬', badge: 'support'  },
+];
+
 interface AdminNotif {
   id: string;
   title: string;
   message: string;
-  type: 'doctor' | 'appointment' | 'payment';
+  type: 'doctor' | 'appointment' | 'payment' | 'report' | 'feedback' | 'support';
   time: string;
   read: boolean;
   href: string;
+}
+
+interface BadgeCounts {
+  reports: number;
+  feedback: number;
+  support: number;
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -30,24 +42,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [user, setUser]           = useState<any>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [badges, setBadges]       = useState<BadgeCounts>({ reports: 0, feedback: 0, support: 0 });
 
-  // Search
   const [searchQuery, setSearchQuery]     = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showResults, setShowResults]     = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Notifications
   const [notifications, setNotifications]   = useState<AdminNotif[]>([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const notifRef   = useRef<HTMLDivElement>(null);
   const notifIdRef = useRef(0);
-
-  // KEY FIX: useRef instead of useState to avoid stale closure in setInterval
   const lastDataRef = useRef<any>(null);
 
-  // Load saved baseline from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem('admin_notif_baseline');
@@ -63,7 +71,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return `${Math.floor(diff / 3600)}h ago`;
   };
 
-  // Close notification panel on outside click
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node))
@@ -73,7 +80,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  // Close search on outside click
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node))
@@ -83,21 +89,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  // Poll for notifications every 5 seconds
   const pollNotifications = async () => {
     try {
       const BASE = 'http://localhost:3000/api';
 
-      const [doctorsRes, walletRes] = await Promise.allSettled([
+      const [doctorsRes, walletRes, reportsRes] = await Promise.allSettled([
         fetch(`${BASE}/doctors`).then(r => r.json()),
         fetch(`${BASE}/payment/admin/wallet`).then(r => r.json()),
+        fetch(`${BASE}/reports`).then(r => r.json()),
       ]);
 
-      const doctors = doctorsRes.status === 'fulfilled' ? doctorsRes.value.doctors || [] : [];
-      const wallet  = walletRes.status  === 'fulfilled' ? (walletRes.value.data || walletRes.value) : {};
-      const now     = new Date();
+      const doctorsRaw = doctorsRes.status === 'fulfilled' ? doctorsRes.value : [];
+      const doctors: any[] = Array.isArray(doctorsRaw) ? doctorsRaw : (doctorsRaw.doctors || []);
 
-      // Fetch appointments
+      const wallet = walletRes.status === 'fulfilled' ? (walletRes.value.data || walletRes.value) : {};
+
+      const reportsRaw = reportsRes.status === 'fulfilled' ? reportsRes.value : [];
+      const reports: any[] = Array.isArray(reportsRaw) ? reportsRaw : (reportsRaw.data || []);
+      const pendingReports = reports.filter((r: any) => r.status === 'pending').length;
+
+      setBadges(prev => ({ ...prev, reports: pendingReports }));
+
+      const now = new Date();
+
       const aptResults = await Promise.allSettled(
         doctors.slice(0, 10).map((d: any) =>
           fetch(`${BASE}/booked-appointments/doctor/${d._id}`)
@@ -114,74 +128,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         totalCommission: wallet.totalCommission || 0,
         totalApts:       allApts.length,
         completedApts:   allApts.filter((a: any) => a.status === 'completed').length,
+        pendingReports,
       };
 
-      // First load — save baseline only, NO notifications
       if (!lastDataRef.current) {
         lastDataRef.current = currData;
         localStorage.setItem('admin_notif_baseline', JSON.stringify(currData));
         return;
       }
 
-      // Only notify on REAL changes
       const newNotifs: AdminNotif[] = [];
 
       if (currData.totalDoctors > lastDataRef.current.totalDoctors) {
         const diff = currData.totalDoctors - lastDataRef.current.totalDoctors;
-        newNotifs.push({
-          id: makeId(),
-          title: '🆕 New Doctor Registered',
-          message: `${diff} new doctor${diff > 1 ? 's' : ''} waiting for approval`,
-          type: 'doctor',
-          time: timeAgo(now),
-          read: false,
-          href: '/dashboard/users/doctors',
-        });
+        newNotifs.push({ id: makeId(), title: '🆕 New Doctor Registered', message: `${diff} new doctor${diff > 1 ? 's' : ''} waiting for approval`, type: 'doctor', time: timeAgo(now), read: false, href: '/dashboard/users/doctors' });
       }
-
       if (currData.totalCommission > lastDataRef.current.totalCommission) {
         const diff = currData.totalCommission - lastDataRef.current.totalCommission;
-        newNotifs.push({
-          id: makeId(),
-          title: '💰 Commission Received',
-          message: `PKR ${diff.toLocaleString()} new commission earned`,
-          type: 'payment',
-          time: timeAgo(now),
-          read: false,
-          href: '/dashboard/payments',
-        });
+        newNotifs.push({ id: makeId(), title: '💰 Commission Received', message: `PKR ${diff.toLocaleString()} new commission earned`, type: 'payment', time: timeAgo(now), read: false, href: '/dashboard/payments' });
       }
-
       if (currData.totalApts > lastDataRef.current.totalApts) {
         const diff = currData.totalApts - lastDataRef.current.totalApts;
-        newNotifs.push({
-          id: makeId(),
-          title: '📅 New Appointment Booked',
-          message: `${diff} new appointment${diff > 1 ? 's' : ''} booked`,
-          type: 'appointment',
-          time: timeAgo(now),
-          read: false,
-          href: '/dashboard/appointments',
-        });
+        newNotifs.push({ id: makeId(), title: '📅 New Appointment Booked', message: `${diff} new appointment${diff > 1 ? 's' : ''} booked`, type: 'appointment', time: timeAgo(now), read: false, href: '/dashboard/appointments' });
       }
-
       if (currData.completedApts > lastDataRef.current.completedApts) {
         const diff = currData.completedApts - lastDataRef.current.completedApts;
-        newNotifs.push({
-          id: makeId(),
-          title: '✅ Appointment Completed',
-          message: `${diff} appointment${diff > 1 ? 's' : ''} successfully completed`,
-          type: 'appointment',
-          time: timeAgo(now),
-          read: false,
-          href: '/dashboard/appointments',
-        });
+        newNotifs.push({ id: makeId(), title: '✅ Appointment Completed', message: `${diff} appointment${diff > 1 ? 's' : ''} successfully completed`, type: 'appointment', time: timeAgo(now), read: false, href: '/dashboard/appointments' });
+      }
+      if (currData.pendingReports > (lastDataRef.current.pendingReports || 0)) {
+        const diff = currData.pendingReports - (lastDataRef.current.pendingReports || 0);
+        newNotifs.push({ id: makeId(), title: '🚨 New Report Filed', message: `${diff} new post report${diff > 1 ? 's' : ''} require review`, type: 'report', time: timeAgo(now), read: false, href: '/dashboard/reports' });
       }
 
-      // Save updated baseline
       lastDataRef.current = currData;
       localStorage.setItem('admin_notif_baseline', JSON.stringify(currData));
-
       if (newNotifs.length > 0) {
         setNotifications(prev => [...newNotifs, ...prev].slice(0, 30));
       }
@@ -196,7 +176,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => clearInterval(interval);
   }, []);
 
-  // Search
   useEffect(() => {
     if (!searchQuery.trim()) { setSearchResults([]); setShowResults(false); return; }
     const timer = setTimeout(async () => {
@@ -209,14 +188,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ]);
         const q = searchQuery.toLowerCase();
         const results: any[] = [];
+
         if (usersRes.status === 'fulfilled') {
-          (usersRes.value.users || [])
+          const usersRaw = usersRes.value;
+          const usersList = Array.isArray(usersRaw) ? usersRaw : (usersRaw.users || usersRaw.data || []);
+          usersList
             .filter((u: any) => u.fullName?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
             .slice(0, 3)
             .forEach((u: any) => results.push({ type: 'patient', label: u.fullName, sub: u.email, href: '/dashboard/users/patients', icon: '🧑' }));
         }
         if (doctorsRes.status === 'fulfilled') {
-          (doctorsRes.value.doctors || [])
+          const doctorsRaw = doctorsRes.value;
+          const doctorsList = Array.isArray(doctorsRaw) ? doctorsRaw : (doctorsRaw.doctors || doctorsRaw.data || []);
+          doctorsList
             .filter((d: any) => d.fullName?.toLowerCase().includes(q) || d.email?.toLowerCase().includes(q) || d.doctorProfile?.specialization?.toLowerCase().includes(q))
             .slice(0, 3)
             .forEach((d: any) => results.push({ type: 'doctor', label: `Dr. ${d.fullName}`, sub: d.doctorProfile?.specialization || d.email, href: '/dashboard/users/doctors', icon: '👨‍⚕️' }));
@@ -235,7 +219,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Auth check
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
     if (!token) { router.push('/login'); return; }
@@ -260,11 +243,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     doctor:      { bg: '#ede9fe', color: '#6d28d9' },
     appointment: { bg: '#dbeafe', color: '#1d4ed8' },
     payment:     { bg: '#d1fae5', color: '#059669' },
+    report:      { bg: '#fee2e2', color: '#dc2626' },
+    feedback:    { bg: '#fef3c7', color: '#d97706' },
+    support:     { bg: '#e0f2fe', color: '#0284c7' },
+  };
+
+  const getPageTitle = () => {
+    if (pathname.includes('settings')) return 'Settings';
+    if (pathname.includes('reports'))  return 'Post Reports';
+    if (pathname.includes('feedback')) return 'Doctor Feedback';
+    if (pathname.includes('support'))  return 'Support Queries';
+    return [...navItems, ...moderationItems].find(n => isActive(n.href))?.label || 'Dashboard';
   };
 
   return (
     <div className="layout">
-      {/* Sidebar */}
       <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-top">
           <div className="brand">
@@ -288,41 +281,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <nav className="nav">
           {navItems.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`nav-item ${isActive(item.href) ? 'active' : ''}`}
-            >
+            <Link key={item.href} href={item.href} className={`nav-item ${isActive(item.href) ? 'active' : ''}`}>
               <span className="nav-icon">{item.icon}</span>
               {!collapsed && <span className="nav-label">{item.label}</span>}
               {!collapsed && isActive(item.href) && <span className="nav-dot" />}
             </Link>
           ))}
+
+          {!collapsed && <div className="nav-divider">Moderation</div>}
+          {collapsed && <div className="nav-divider-collapsed" />}
+
+          {moderationItems.map(item => {
+            const count = badges[item.badge as keyof BadgeCounts] || 0;
+            return (
+              <Link key={item.href} href={item.href} className={`nav-item ${isActive(item.href) ? 'active' : ''}`}>
+                <span className="nav-icon">{item.icon}</span>
+                {!collapsed && <span className="nav-label">{item.label}</span>}
+                {count > 0 && <span className="nav-badge">{collapsed ? '' : count}</span>}
+                {collapsed && count > 0 && <span className="nav-badge-dot" />}
+                {!collapsed && isActive(item.href) && count === 0 && <span className="nav-dot" />}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="sidebar-bottom">
-          <Link
-            href="/dashboard/settings"
-            className={`nav-item ${isActive('/dashboard/settings') ? 'active' : ''}`}
-          >
+          <Link href="/dashboard/settings" className={`nav-item ${isActive('/dashboard/settings') ? 'active' : ''}`}>
             <span className="nav-icon">⚙️</span>
             {!collapsed && <span className="nav-label">Settings</span>}
             {!collapsed && isActive('/dashboard/settings') && <span className="nav-dot" />}
           </Link>
+          <button className="logout-btn" onClick={handleLogout}>
+            <span className="nav-icon">🚪</span>
+            {!collapsed && <span>Logout</span>}
+          </button>
         </div>
       </aside>
 
-      {/* Main */}
       <div className="main">
         <header className="topbar">
           <div className="topbar-left">
-            <div className="page-title">
-              {pathname.includes('settings') ? 'Settings' : navItems.find(n => isActive(n.href))?.label || 'Dashboard'}
-            </div>
+            <div className="page-title">{getPageTitle()}</div>
           </div>
           <div className="topbar-right">
 
-            {/* Search */}
             <div className="search-container" ref={searchRef}>
               <div className="search-box">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -346,12 +348,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <>
                       <div className="search-count">{searchResults.length} result{searchResults.length > 1 ? 's' : ''} found</div>
                       {searchResults.map((r, i) => (
-                        <Link
-                          key={i}
-                          href={r.href}
-                          className="search-result-item"
-                          onClick={() => { setShowResults(false); setSearchQuery(''); }}
-                        >
+                        <Link key={i} href={r.href} className="search-result-item" onClick={() => { setShowResults(false); setSearchQuery(''); }}>
                           <span className="search-result-icon">{r.icon}</span>
                           <div className="search-result-info">
                             <div className="search-result-label">{r.label}</div>
@@ -366,13 +363,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </div>
 
-            {/* Notification Bell */}
             <div className="notif-wrap" ref={notifRef}>
               <button className="notif-bell" onClick={() => setShowNotifPanel(v => !v)}>
                 🔔
-                {unreadCount > 0 && (
-                  <span className="notif-count">{unreadCount > 9 ? '9+' : unreadCount}</span>
-                )}
+                {unreadCount > 0 && <span className="notif-count">{unreadCount > 9 ? '9+' : unreadCount}</span>}
               </button>
 
               {showNotifPanel && (
@@ -380,15 +374,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <div className="notif-panel-header">
                     <h3>Notifications</h3>
                     <div className="notif-header-actions">
-                      {unreadCount > 0 && (
-                        <button className="notif-action-btn" onClick={markAllRead}>Mark all read</button>
-                      )}
-                      {notifications.length > 0 && (
-                        <button className="notif-action-btn red" onClick={clearAll}>Clear all</button>
-                      )}
+                      {unreadCount > 0 && <button className="notif-action-btn" onClick={markAllRead}>Mark all read</button>}
+                      {notifications.length > 0 && <button className="notif-action-btn red" onClick={clearAll}>Clear all</button>}
                     </div>
                   </div>
-
                   <div className="notif-list">
                     {notifications.length === 0 ? (
                       <div className="notif-empty">
@@ -398,14 +387,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       </div>
                     ) : (
                       notifications.map(n => (
-                        <Link
-                          key={n.id}
-                          href={n.href}
-                          className={`notif-item ${!n.read ? 'unread' : ''}`}
-                          onClick={() => { markRead(n.id); setShowNotifPanel(false); }}
-                        >
+                        <Link key={n.id} href={n.href} className={`notif-item ${!n.read ? 'unread' : ''}`} onClick={() => { markRead(n.id); setShowNotifPanel(false); }}>
                           <div className="notif-dot-wrap">
-                            <div className="notif-type-dot" style={{ background: notifColors[n.type].color }} />
+                            <div className="notif-type-dot" style={{ background: notifColors[n.type]?.color }} />
                             {!n.read && <div className="notif-unread-ring" />}
                           </div>
                           <div className="notif-item-content">
@@ -413,14 +397,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <div className="notif-item-msg">{n.message}</div>
                             <div className="notif-item-time">{n.time}</div>
                           </div>
-                          <div className="notif-type-chip" style={{ background: notifColors[n.type].bg, color: notifColors[n.type].color }}>
+                          <div className="notif-type-chip" style={{ background: notifColors[n.type]?.bg, color: notifColors[n.type]?.color }}>
                             {n.type}
                           </div>
                         </Link>
                       ))
                     )}
                   </div>
-
                   <div className="notif-panel-footer">
                     <span>{unreadCount} unread · {notifications.length} total</span>
                     <span className="notif-refresh">Refreshes every 5s</span>
@@ -429,7 +412,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </div>
 
-            {/* User Chip */}
             <div className="user-chip">
               <div className="chip-avatar">{initials}</div>
               <span>{user?.username || 'Admin'}</span>
@@ -437,16 +419,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="content">
-          {children}
-        </main>
+        <main className="content">{children}</main>
       </div>
 
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         .layout { display: flex; min-height: 100vh; font-family: 'Segoe UI', system-ui, sans-serif; background: #f3f4f8; }
-
-        /* SIDEBAR */
         .sidebar { width: 240px; flex-shrink: 0; background: #1e1b4b; display: flex; flex-direction: column; padding: 24px 0; transition: width 0.25s ease; position: sticky; top: 0; height: 100vh; overflow-y: auto; overflow-x: hidden; }
         .sidebar.collapsed { width: 72px; }
         .sidebar-top { display: flex; align-items: center; justify-content: space-between; padding: 0 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); }
@@ -461,15 +439,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .admin-name { font-size: 13px; font-weight: 600; color: #fff; }
         .admin-role { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 2px; }
         .nav { flex: 1; padding: 12px 10px; display: flex; flex-direction: column; gap: 3px; }
+        .nav-divider { padding: 14px 12px 6px; font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.8px; }
+        .nav-divider-collapsed { height: 1px; background: rgba(255,255,255,0.08); margin: 10px 12px; }
         .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: rgba(255,255,255,0.55); font-size: 14px; font-weight: 500; transition: background 0.15s, color 0.15s; position: relative; }
         .nav-item:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
         .nav-item.active { background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(79,70,229,0.2)); color: #c7d2fe; border: 1px solid rgba(99,102,241,0.3); }
         .nav-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
         .nav-label { flex: 1; }
         .nav-dot { width: 6px; height: 6px; background: #6366f1; border-radius: 50%; }
-        .sidebar-bottom { padding: 16px 10px 0; border-top: 1px solid rgba(255,255,255,0.08); }
-
-        /* MAIN */
+        .nav-badge { min-width: 20px; height: 20px; padding: 0 6px; background: #ef4444; color: #fff; border-radius: 10px; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+        .nav-badge-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; border: 2px solid #1e1b4b; }
+        .sidebar-bottom { padding: 16px 10px 0; border-top: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 3px; }
+        .logout-btn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: none; background: none; color: rgba(255,255,255,0.55); font-size: 14px; font-weight: 500; cursor: pointer; width: 100%; transition: background 0.15s, color 0.15s; }
+        .logout-btn:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
         .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         .topbar { height: 64px; background: #fff; border-bottom: 1px solid #e8e8f0; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; position: sticky; top: 0; z-index: 10; }
         .page-title { font-size: 18px; font-weight: 700; color: #111; letter-spacing: -0.3px; }
@@ -477,8 +459,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .user-chip { display: flex; align-items: center; gap: 8px; background: #f3f4f8; border: 1px solid #e5e5e5; border-radius: 10px; padding: 6px 12px; font-size: 13px; font-weight: 500; color: #333; }
         .chip-avatar { width: 28px; height: 28px; background: linear-gradient(135deg, #4f46e5, #6366f1); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; }
         .content { flex: 1; padding: 28px; }
-
-        /* SEARCH */
         .search-container { position: relative; }
         .search-box { display: flex; align-items: center; gap: 8px; background: #f3f4f8; border: 1px solid #e5e5e5; border-radius: 10px; padding: 8px 14px; color: #aaa; transition: border-color 0.15s; }
         .search-box:focus-within { border-color: #4f46e5; background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
@@ -499,15 +479,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .search-result-label { font-size: 13px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .search-result-sub { font-size: 11px; color: #888; margin-top: 1px; }
         .search-result-type { font-size: 10px; font-weight: 700; color: #4f46e5; background: #ede9fe; padding: 2px 8px; border-radius: 20px; flex-shrink: 0; text-transform: capitalize; }
-
-        /* NOTIFICATION BELL */
         .notif-wrap { position: relative; }
         .notif-bell { position: relative; background: #f3f4f8; border: 1px solid #e5e5e5; border-radius: 10px; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: all 0.15s; }
         .notif-bell:hover { background: #ede9fe; border-color: #ddd6fe; }
         .notif-count { position: absolute; top: -5px; right: -5px; background: #ef4444; color: #fff; border-radius: 50%; font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; padding: 0 4px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; animation: popIn 0.3s ease; }
         @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
-
-        /* NOTIFICATION PANEL */
         .notif-panel { position: absolute; top: calc(100% + 10px); right: 0; width: 380px; background: #fff; border-radius: 16px; border: 1px solid #f0f0f5; box-shadow: 0 20px 60px rgba(0,0,0,0.15); z-index: 500; overflow: hidden; animation: dropDown 0.2s ease; }
         @keyframes dropDown { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .notif-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid #f0f0f5; }

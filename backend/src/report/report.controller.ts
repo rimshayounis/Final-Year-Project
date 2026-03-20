@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param } from '@nestjs/common';
 import { ReportService } from './report.service';
 import { CreateReportDto } from './dto/create-report.dto';
 
@@ -22,5 +22,12 @@ export class ReportController {
   async findByReported(@Param('reportedId') reportedId: string) {
     const reports = await this.reportService.findByReported(reportedId);
     return { success: true, data: reports };
+  }
+
+  // ── NEW ──
+  @Patch(':id/review')
+  async markReviewed(@Param('id') id: string) {
+    const report = await this.reportService.markReviewed(id);
+    return { success: true, data: report };
   }
 }
