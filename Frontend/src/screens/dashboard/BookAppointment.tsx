@@ -63,6 +63,8 @@ interface Doctor {
   sessionDuration?:  number;
   subscriptionPlan?: SubscriptionPlan;
   completedCount:    number;
+  avgRating?:        number;
+  ratingCount?:      number;
   specificDates?:    { date: string; timeSlots: { start: string; end: string }[] }[];
 }
 
@@ -141,6 +143,8 @@ export default function BookAppointmentScreen() {
                 sessionDuration:  item.sessionDuration,
                 subscriptionPlan: item.doctorId.subscriptionPlan as SubscriptionPlan | undefined,
                 completedCount:   item.doctorId.completedCount ?? 0,
+                avgRating:        item.doctorId.avgRating,
+                ratingCount:      item.doctorId.ratingCount,
                 specificDates:    item.specificDates,
               };
             })
@@ -358,6 +362,14 @@ export default function BookAppointmentScreen() {
                         <View style={[styles.metaChip, { backgroundColor: t.accentLight }]}>
                           <MaterialIcons name="timer" size={11} color={t.accent} />
                           <Text style={[styles.metaChipText, { color: t.accent }]}>{doctor.sessionDuration} min</Text>
+                        </View>
+                      )}
+                      {(doctor.ratingCount ?? 0) > 0 && (
+                        <View style={[styles.metaChip, { backgroundColor: '#FFF8E7' }]}>
+                          <MaterialIcons name="star" size={11} color="#F6A623" />
+                          <Text style={[styles.metaChipText, { color: '#B07D00' }]}>
+                            {(doctor.avgRating ?? 0).toFixed(1)}
+                          </Text>
                         </View>
                       )}
                     </View>

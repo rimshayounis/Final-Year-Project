@@ -22,7 +22,7 @@ import {
 import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import apiClient, { API_URL } from "../../services/api";
+import apiClient, { API_URL, reportAPI } from "../../services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -53,6 +53,7 @@ interface Post {
   mediaUrls: string[];
   backgroundColor: string | null;
   status: "pending" | "approved" | "rejected";
+  isActive?: boolean; // false = private (owner only)
   likes: number;
   comments: number;
   shares: number;
@@ -67,6 +68,7 @@ type FeedScreenProps = {
   id: string;
   role: "user" | "doctor";
   onNavigateToDoctorProfile?: (doctorId: string) => void;
+  onNavigateToUserProfile?: (userId: string) => void;
 };
 
 /* ── Reject Modal ── */
@@ -197,6 +199,7 @@ export default function FeedScreen({
   id,
   role,
   onNavigateToDoctorProfile,
+  onNavigateToUserProfile,
 }: FeedScreenProps) {
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -231,6 +234,15 @@ export default function FeedScreen({
   const [doctorPlan, setDoctorPlan] = useState<string>("free_trial");
   const [doctorSpecialization, setDoctorSpecialization] = useState<string>("");
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [filterVisible, setFilterVisible] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Report post
+  const [reportPost,      setReportPost]      = useState<Post | null>(null);
+  const [reportReason,    setReportReason]    = useState("");
+  const [reportLoading,   setReportLoading]   = useState(false);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
 
   const categories = [
     "All",
@@ -239,7 +251,6 @@ export default function FeedScreen({
     "Nutrition",
     "Mental Health",
     "Fitness",
-    "Other",
   ];
   const STATUS_TABS = [
     { key: "All", label: "All Posts", color: "#6B7FED" },
@@ -394,6 +405,14 @@ export default function FeedScreen({
       setDoctorIds(dSet);
       setAuthorNames((prev) => ({ ...prev, ...nMap }));
       setProfileImages((prev) => ({ ...prev, ...iMap }));
+
+      // Apply category filter client-side (covers pending/All-status cases)
+      if (selectedCategory !== "All") {
+        list = list.filter(
+          (p) =>
+            p.category?.toLowerCase() === selectedCategory.toLowerCase(),
+        );
+      }
 
       const filtered =
         selectedAuthorType === "All"
@@ -596,6 +615,34 @@ export default function FeedScreen({
     ]);
   };
 
+  const handleOpenReport = (post: Post) => {
+    setReportPost(post);
+    setReportReason("");
+    setReportSubmitted(false);
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportPost) return;
+    setReportLoading(true);
+    try {
+      const postAuthor = typeof reportPost.userId === 'object' ? reportPost.userId as PostAuthor : null;
+      const reportedId = postAuthor?._id ?? (reportPost.userId as string);
+      await reportAPI.submit({
+        reporterId:    id,
+        reporterModel: role === 'doctor' ? 'Doctor' : 'User',
+        reportedId,
+        reportedModel: doctorIds.has(reportedId) ? 'Doctor' : 'User',
+        reason:        reportReason.trim() || 'Reported post',
+      });
+    } catch {
+      // silent — show success regardless
+    } finally {
+      setReportLoading(false);
+      setReportSubmitted(true);
+      setTimeout(() => setReportPost(null), 2200);
+    }
+  };
+
   const handleReject = (post: Post) => {
     setRejectTarget(post);
     setRejectModal(true);
@@ -753,7 +800,15 @@ export default function FeedScreen({
     return (
       <View style={s.postCard}>
         <View style={s.postHeader}>
-          <View style={s.postAuthorRow}>
+          <TouchableOpacity
+            style={s.postAuthorRow}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (!authorId) return;
+              if (isDoc && onNavigateToDoctorProfile) onNavigateToDoctorProfile(authorId);
+              else if (!isDoc && onNavigateToUserProfile) onNavigateToUserProfile(authorId);
+            }}
+          >
             <View style={s.postAvatar}>
               {authorImage ? (
                 <Image source={{ uri: authorImage }} style={s.postAvatarImg} />
@@ -781,7 +836,7 @@ export default function FeedScreen({
                 ) : null}
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
           {(() => {
             if (role !== "doctor" || isOwnPost || item.status !== "pending") return null;
             const isMentalHealth = item.category?.toLowerCase() === "mental health";
@@ -835,6 +890,17 @@ export default function FeedScreen({
               </View>
             );
           })()}
+
+          {/* 3-dot report button — only for other people's posts */}
+          {!isOwnPost && (
+            <TouchableOpacity
+              style={s.threeDotBtn}
+              onPress={() => handleOpenReport(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="ellipsis-vertical" size={18} color="#AAA" />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={s.catChip}>
@@ -962,100 +1028,65 @@ export default function FeedScreen({
     );
   };
 
-  /* ── List Header ── */
-  const ListHeader = () => (
-    <View style={s.filterWrap}>
-      <View style={s.segment}>
-        {[
-          { k: "All", l: "All" },
-          { k: "users", l: "Users" },
-          { k: "professionals", l: "Professionals" },
-        ].map(({ k, l }) => (
-          <TouchableOpacity
-            key={k}
-            style={[s.segItem, selectedAuthorType === k && s.segItemActive]}
-            onPress={() => {
-              setSelectedAuthorType(k);
-              if (k === "professionals") setSelectedStatus("All");
-            }}
-          >
-            <Text
-              style={[s.segText, selectedAuthorType === k && s.segTextActive]}
-            >
-              {l}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      {role === "doctor" && selectedAuthorType !== "professionals" ? (
-        <View style={s.statusRow}>
-          {STATUS_TABS.map(({ key, label, color }) => (
-            <TouchableOpacity
-              key={key}
-              style={[
-                s.statusPillBtn,
-                selectedStatus === key && {
-                  backgroundColor: color,
-                  borderColor: color,
-                },
-              ]}
-              onPress={() => setSelectedStatus(key)}
-            >
-              <Text
-                style={[
-                  s.statusPillTxt,
-                  selectedStatus === key && { color: "#FFF" },
-                ]}
-              >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
-      {role !== "doctor" || selectedStatus !== "pending" ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.catScroll}
-        >
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                s.catFilter,
-                selectedCategory === cat && s.catFilterActive,
-              ]}
-              onPress={() => setSelectedCategory(cat)}
-            >
-              <Text
-                style={[
-                  s.catFilterText,
-                  selectedCategory === cat && s.catFilterTextActive,
-                ]}
-              >
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      ) : null}
-    </View>
-  );
+  /* ── active filter count badge ── */
+  const activeFilters =
+    (selectedCategory !== "All" ? 1 : 0) +
+    (selectedStatus !== "All" ? 1 : 0) +
+    (selectedAuthorType !== "All" ? 1 : 0);
+
+  /* ── List Header — empty, all filters moved to header ── */
+  const ListHeader = () => null;
 
   return (
     <View style={s.container}>
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
       <View style={[s.topNav, { paddingTop: insets.top + 10 }]}>
-        <Text style={s.topNavTitle}>{"Health Feed"}</Text>
-        {role === "doctor" ? (
-          <View style={s.docBadge}>
-            <FontAwesome5 name="user-md" size={11} color="#FFF" />
-            <Text style={s.docBadgeText}>{"Doctor"}</Text>
+        {/* Title — hidden when search is active */}
+        {searchVisible ? (
+          <View style={s.searchInHeader}>
+            <Ionicons name="search" size={15} color="rgba(255,255,255,0.7)" />
+            <TextInput
+              style={s.searchInHeaderInput}
+              placeholder="Search by title or description..."
+              placeholderTextColor="rgba(255,255,255,0.6)"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 ? (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : (
-          <Ionicons name="newspaper-outline" size={22} color="#FFF" />
+          <Text style={s.topNavTitle}>{"Health Feed"}</Text>
         )}
+
+        {/* Right icons — always visible */}
+        <View style={s.topNavRight}>
+          <TouchableOpacity
+            style={s.navIconBtn}
+            onPress={() => {
+              setSearchVisible((v) => !v);
+              setSearchQuery("");
+            }}
+          >
+            <Ionicons name={searchVisible ? "close" : "search-outline"} size={20} color="#FFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.navIconBtn}
+            onPress={() => setFilterVisible(true)}
+          >
+            <Ionicons name="options-outline" size={20} color="#FFF" />
+            {activeFilters > 0 ? (
+              <View style={s.filterBadge}>
+                <Text style={s.filterBadgeTxt}>{activeFilters}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
@@ -1065,7 +1096,30 @@ export default function FeedScreen({
         </View>
       ) : (
         <FlatList
-          data={posts}
+          data={posts.filter((p) => {
+            // Private posts — only visible to the post author
+            const authorId =
+              typeof p.userId === "object" ? (p.userId as any)?._id : p.userId;
+            if (p.isActive === false && authorId !== id) return false;
+
+            // Non-psychologist doctors must NOT see pending Mental Health posts
+            if (
+              role === "doctor" &&
+              doctorSpecialization.trim().toLowerCase() !== "psychologist" &&
+              p.category?.toLowerCase() === "mental health" &&
+              p.status === "pending"
+            ) return false;
+
+            // Search filter — match any keyword against title or description
+            if (searchQuery.trim()) {
+              const keywords = searchQuery.trim().toLowerCase().split(/\s+/);
+              const haystack = `${p.title} ${p.description}`.toLowerCase();
+              const matches = keywords.some((kw) => haystack.includes(kw));
+              if (!matches) return false;
+            }
+
+            return true;
+          })}
           keyExtractor={(item) => item._id}
           renderItem={renderPost}
           ListHeaderComponent={<ListHeader />}
@@ -1092,6 +1146,74 @@ export default function FeedScreen({
           }
         />
       )}
+
+      {/* Report Post Modal */}
+      <Modal
+        visible={!!reportPost}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReportPost(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => !reportLoading && setReportPost(null)}>
+          <View style={s.reportOverlay} />
+        </TouchableWithoutFeedback>
+        <View style={s.reportCenterWrap} pointerEvents="box-none">
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={s.reportCard}>
+              {reportSubmitted ? (
+                <View style={s.reportSuccessWrap}>
+                  <Ionicons name="checkmark-circle" size={48} color="#00B374" />
+                  <Text style={s.reportSuccessText}>
+                    We will review your request.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <View style={s.reportCardHeader}>
+                    <Ionicons name="flag" size={18} color="#E53E3E" />
+                    <Text style={s.reportCardTitle}>Report Post</Text>
+                    <TouchableOpacity onPress={() => setReportPost(null)} style={{ marginLeft: 'auto' }}>
+                      <Ionicons name="close" size={20} color="#888" />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={s.reportCardSub}>
+                    Tell us why you're reporting this post. Our team will review it promptly.
+                  </Text>
+                  <TextInput
+                    style={s.reportInput}
+                    placeholder="Describe the issue..."
+                    placeholderTextColor="#BBB"
+                    multiline
+                    numberOfLines={4}
+                    value={reportReason}
+                    onChangeText={setReportReason}
+                    maxLength={500}
+                    textAlignVertical="top"
+                    autoFocus
+                  />
+                  <View style={s.reportBtnRow}>
+                    <TouchableOpacity
+                      style={s.reportCancelBtn}
+                      onPress={() => setReportPost(null)}
+                    >
+                      <Text style={s.reportCancelTxt}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={s.reportSubmitBtn}
+                      onPress={handleSubmitReport}
+                      disabled={reportLoading}
+                    >
+                      {reportLoading
+                        ? <ActivityIndicator size="small" color="#FFF" />
+                        : <Text style={s.reportSubmitTxt}>Submit</Text>}
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* Comment Modal */}
       <Modal
@@ -1217,6 +1339,103 @@ export default function FeedScreen({
         onConfirm={handleConfirmReject}
         loading={reviewLoading}
       />
+
+      {/* ── Filter bottom sheet ── */}
+      <Modal
+        visible={filterVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFilterVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setFilterVisible(false)}>
+          <View style={s.sheetOverlay} />
+        </TouchableWithoutFeedback>
+        <View style={s.sheet}>
+          <View style={s.sheetHandle} />
+
+          <View style={s.sheetTitleRow}>
+            <Text style={s.sheetTitle}>Filters</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setSelectedCategory("All");
+                setSelectedStatus("All");
+                setSelectedAuthorType("All");
+              }}
+            >
+              <Text style={s.sheetReset}>Reset all</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Author type */}
+          <Text style={s.sheetLabel}>Show posts by</Text>
+          <View style={s.sheetChipRow}>
+            {[
+              { k: "All", l: "Everyone" },
+              { k: "users", l: "Users" },
+              { k: "professionals", l: "Professionals" },
+            ].map(({ k, l }) => (
+              <TouchableOpacity
+                key={k}
+                style={[s.sheetChip, selectedAuthorType === k && s.sheetChipActive]}
+                onPress={() => {
+                  setSelectedAuthorType(k);
+                  if (k === "professionals") setSelectedStatus("All");
+                }}
+              >
+                <Text style={[s.sheetChipTxt, selectedAuthorType === k && s.sheetChipTxtActive]}>
+                  {l}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Status — doctor only */}
+          {role === "doctor" && selectedAuthorType !== "professionals" ? (
+            <>
+              <Text style={s.sheetLabel}>Post status</Text>
+              <View style={s.sheetChipRow}>
+                {STATUS_TABS.map(({ key, label, color }) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      s.sheetChip,
+                      selectedStatus === key && { backgroundColor: color, borderColor: color },
+                    ]}
+                    onPress={() => setSelectedStatus(key)}
+                  >
+                    <Text style={[s.sheetChipTxt, selectedStatus === key && s.sheetChipTxtActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          ) : null}
+
+          {/* Category */}
+          <Text style={s.sheetLabel}>Category</Text>
+          <View style={s.sheetChipRow}>
+            {categories.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={[s.sheetChip, selectedCategory === cat && s.sheetChipActive]}
+                onPress={() => setSelectedCategory(cat)}
+              >
+                <Text style={[s.sheetChipTxt, selectedCategory === cat && s.sheetChipTxtActive]}>
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={s.sheetApplyBtn}
+            onPress={() => setFilterVisible(false)}
+          >
+            <Text style={s.sheetApplyTxt}>Apply</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1227,15 +1446,44 @@ const s = StyleSheet.create({
     backgroundColor: "#6B7FED",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    gap: 10,
   },
   topNavTitle: {
+    flex: 1,
     fontSize: 20,
     fontWeight: "800",
     color: "#FFF",
     letterSpacing: -0.3,
+    textAlign: "left",
+  },
+  topNavRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  navIconBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  searchInHeader: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 38,
+    gap: 6,
+  },
+  searchInHeaderInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#FFF",
+    paddingVertical: 0,
   },
   docBadge: {
     flexDirection: "row",
@@ -1271,61 +1519,80 @@ const s = StyleSheet.create({
   filterWrap: {
     backgroundColor: "#FFF",
     marginBottom: 8,
-    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#EAEDF5",
+    borderBottomColor: "#ECEEF5",
   },
-  segment: {
-    flexDirection: "row",
-    margin: 14,
-    marginBottom: 10,
-    backgroundColor: "#F0F2F8",
-    borderRadius: 12,
-    padding: 3,
-  },
-  segItem: {
-    flex: 1,
-    paddingVertical: 9,
+  filterBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: "#E53E3E",
+    justifyContent: "center",
     alignItems: "center",
-    borderRadius: 10,
   },
-  segItemActive: {
+  filterBadgeTxt: { fontSize: 8, fontWeight: "800", color: "#FFF" },
+  // bottom sheet
+  sheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
+  sheet: {
     backgroundColor: "#FFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
   },
-  segText: { fontSize: 13, fontWeight: "600", color: "#888" },
-  segTextActive: { color: "#6B7FED", fontWeight: "700" },
-  statusRow: {
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#DDD",
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  sheetTitleRow: {
     flexDirection: "row",
-    paddingHorizontal: 14,
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+  sheetTitle: { fontSize: 16, fontWeight: "800", color: "#1A1D2E" },
+  sheetReset: { fontSize: 13, fontWeight: "600", color: "#E53E3E" },
+  sheetLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#888",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  sheetChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 20,
   },
-  statusPillBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#F0F2F8",
-    borderWidth: 1,
-    borderColor: "#F0F2F8",
-  },
-  statusPillTxt: { fontSize: 12, fontWeight: "700", color: "#666" },
-  catScroll: { paddingHorizontal: 14, paddingVertical: 4, gap: 8 },
-  catFilter: {
+  sheetChip: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
     backgroundColor: "#F0F2F8",
     borderWidth: 1.5,
-    borderColor: "#F0F2F8",
+    borderColor: "#E4E6EF",
   },
-  catFilterActive: { backgroundColor: "#6B7FED", borderColor: "#6B7FED" },
-  catFilterText: { fontSize: 12, fontWeight: "600", color: "#888" },
-  catFilterTextActive: { color: "#FFF" },
+  sheetChipActive: { backgroundColor: "#6B7FED", borderColor: "#6B7FED" },
+  sheetChipTxt: { fontSize: 13, fontWeight: "600", color: "#666" },
+  sheetChipTxtActive: { color: "#FFF", fontWeight: "700" },
+  sheetApplyBtn: {
+    backgroundColor: "#6B7FED",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  sheetApplyTxt: { fontSize: 15, fontWeight: "700", color: "#FFF" },
   postCard: {
     backgroundColor: "#FFF",
     marginBottom: 8,
@@ -1409,6 +1676,61 @@ const s = StyleSheet.create({
     borderColor: "#FFCDD2",
   },
   rejectBtnText: { fontSize: 11, fontWeight: "700", color: "#E53E3E" },
+
+  // 3-dot report button
+  threeDotBtn: { padding: 4, marginLeft: 4 },
+
+  // Report modal
+  reportOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  reportCenterWrap: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  reportCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 20,
+    width: '100%',
+    elevation: 10,
+  },
+  reportCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  reportCardTitle: { fontSize: 16, fontWeight: '800', color: '#1A1D2E' },
+  reportCardSub:   { fontSize: 13, color: '#888', marginBottom: 14, lineHeight: 20 },
+  reportInput: {
+    backgroundColor: '#F5F7FF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8EAF6',
+    padding: 12,
+    fontSize: 14,
+    color: '#1A1D2E',
+    minHeight: 100,
+    marginBottom: 16,
+  },
+  reportBtnRow:    { flexDirection: 'row', gap: 10 },
+  reportCancelBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12,
+    borderWidth: 1.5, borderColor: '#E0E4FF', alignItems: 'center',
+  },
+  reportCancelTxt: { fontSize: 14, fontWeight: '600', color: '#888' },
+  reportSubmitBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12,
+    backgroundColor: '#E53E3E', alignItems: 'center',
+  },
+  reportSubmitTxt: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  reportSuccessWrap: { alignItems: 'center', paddingVertical: 20, gap: 14 },
+  reportSuccessText: { fontSize: 16, fontWeight: '700', color: '#1A1D2E', textAlign: 'center' },
+
   catChip: {
     alignSelf: "flex-start",
     backgroundColor: "#EEF0FB",

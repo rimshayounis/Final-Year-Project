@@ -51,6 +51,10 @@ import SubscriptionScreen from './src/screens/doctors/SubscriptionScreen';
 import WalletScreen from './src/screens/doctors/WalletScreen';
 import BankDetailsScreen from './src/screens/doctors/BankDetailsScreen';
 import NotificationSettingsScreen from './src/screens/doctors/NotificationSettingsScreen';
+import PrivacyPolicyScreen from './src/screens/settings/PrivacyPolicyScreen';
+import TermsOfServiceScreen from './src/screens/settings/TermsOfServiceScreen';
+import HelpFAQScreen from './src/screens/settings/HelpFAQScreen';
+import ContactSupportScreen from './src/screens/settings/ContactSupportScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -73,6 +77,10 @@ export type RootStackParamList = {
   Wallet: { doctorId: string };
   BankDetails: { doctorId: string };
   NotificationSettings: { doctorId: string };
+  PrivacyPolicy: undefined;
+  TermsOfService: undefined;
+  HelpFAQ: undefined;
+  ContactSupport: { id: string; role: 'user' | 'doctor' };
   DoctorProfileView: { doctorId: string; userId: string };
   DoctorAppointmentDetail: {
     doctor: {
@@ -83,6 +91,8 @@ export type RootStackParamList = {
       profileImage?: string;
       consultationFee?: number;
       sessionDuration?: number;
+      avgRating?: number;
+      ratingCount?: number;
     };
     userId: string;
   };
@@ -146,6 +156,10 @@ export default function App() {
           <Stack.Screen name="Wallet"               component={WalletScreen} />
           <Stack.Screen name="BankDetails"             component={BankDetailsScreen} />
           <Stack.Screen name="NotificationSettings"  component={NotificationSettingsScreen} />
+          <Stack.Screen name="PrivacyPolicy"         component={PrivacyPolicyScreen} />
+          <Stack.Screen name="TermsOfService"        component={TermsOfServiceScreen} />
+          <Stack.Screen name="HelpFAQ"               component={HelpFAQScreen} />
+          <Stack.Screen name="ContactSupport"        component={ContactSupportScreen} />
         </Stack.Navigator>
       </NavigationContainer>
       </StripeProvider>

@@ -80,6 +80,12 @@ export class Doctor {
 
   @Prop({ default: 0, min: 0 })
   completedCount: number;
+
+  @Prop({ type: Number, default: 0, min: 0, max: 5 })
+  avgRating: number;
+
+  @Prop({ type: Number, default: 0, min: 0 })
+  ratingCount: number;
 }
 
 export const DoctorSchema = SchemaFactory.createForClass(Doctor);

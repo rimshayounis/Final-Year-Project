@@ -1,7 +1,7 @@
 import axios from 'axios'
-export const API_URL = 'http://10.161.203.86:3000/api';
+export const API_URL = 'http://192.168.137.1:3000/api';
 // ── Base socket URL (no /api suffix) ──────────────────────────────────────────
-export const SOCKET_URL = 'http://10.161.203.86:3000';
+export const SOCKET_URL = 'http://192.168.137.1:3000';
 
 
 const apiClient = axios.create({
@@ -81,9 +81,38 @@ export interface CreatePostData {
   mediaUrls?: string[];
 }
 
+export const reportAPI = {
+  submit: (data: {
+    reporterId: string;
+    reporterModel?: string;
+    reportedId: string;
+    reportedModel?: string;
+    reason: string;
+  }) => apiClient.post('/reports', data),
+};
+
+export const feedbackAPI = {
+  submit: (data: {
+    appointmentId: string;
+    userId: string;
+    doctorId: string;
+    rating: number;
+    description?: string;
+  }) => apiClient.post('/feedback', data),
+
+  getDoctorFeedbacks: (doctorId: string) =>
+    apiClient.get(`/feedback/doctor/${doctorId}`),
+};
+
 export const postAPI = {
   createPost: (formData: FormData) =>
     axios.post(`${API_URL}/posts`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000,
+    }),
+
+  updatePost: (postId: string, formData: FormData) =>
+    axios.patch(`${API_URL}/posts/${postId}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000,
     }),

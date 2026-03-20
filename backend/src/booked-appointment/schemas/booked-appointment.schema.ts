@@ -72,6 +72,10 @@ export class BookedAppointment {
   /** Commission rate applied (e.g. 0.20 = 20%) */
   @Prop({ type: Number, default: 0 })
   commissionRate: number;
+
+  /** True once the user has submitted feedback for this completed appointment */
+  @Prop({ type: Boolean, default: false })
+  hasFeedback: boolean;
 }
 
 export const BookedAppointmentSchema = SchemaFactory.createForClass(BookedAppointment);

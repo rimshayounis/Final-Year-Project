@@ -130,9 +130,15 @@ export class PostsController {
     @Body() updatePostDto: UpdatePostDto & { userId: string },
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    if (files?.length > 0) {
-      updatePostDto.mediaUrls = files.map((f) => `/uploads/posts/${f.filename}`);
-    }
+    // Merge existing URLs (sent from client as mediaUrls[]) with newly uploaded files
+    const existingUrls = Array.isArray(updatePostDto.mediaUrls)
+      ? updatePostDto.mediaUrls
+      : updatePostDto.mediaUrls
+        ? [updatePostDto.mediaUrls as any as string]
+        : [];
+    const newUrls = files?.length > 0 ? files.map((f) => `/uploads/posts/${f.filename}`) : [];
+    updatePostDto.mediaUrls = [...existingUrls, ...newUrls];
+
     const post = await this.postsService.update(id, updatePostDto.userId, updatePostDto);
     return { success: true, message: 'Post updated successfully', data: post };
   }

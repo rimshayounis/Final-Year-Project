@@ -79,7 +79,7 @@ export class Post {
   commentsList: Comment[];
 
   @Prop({ default: true })
-  isActive: boolean;
+  isActive: boolean; // false = private (owner only); true = public
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

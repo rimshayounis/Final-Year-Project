@@ -28,13 +28,22 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
 
   const [activeTab, setActiveTab] = useState<TabName>('Feed');
   const [viewingDoctorId, setViewingDoctorId] = useState<string | null>(null);
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
 
   const handleNavigateToDoctorProfile = useCallback((doctorId: string) => {
     setViewingDoctorId(doctorId);
   }, []);
 
+  const handleNavigateToUserProfile = useCallback((userId: string) => {
+    setViewingUserId(userId);
+  }, []);
+
   const handleBackFromDoctor = useCallback(() => {
     setViewingDoctorId(null);
+  }, []);
+
+  const handleBackFromUser = useCallback(() => {
+    setViewingUserId(null);
   }, []);
 
   const renderScreen = () => {
@@ -44,6 +53,8 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
         <ProfileScreen
           id={viewingDoctorId}
           role="doctor"
+          viewerId={id}
+          viewerRole={role}
           onBack={handleBackFromDoctor}
           onBookAppointment={
             role === 'user'
@@ -58,6 +69,16 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
       );
     }
 
+    if (viewingUserId) {
+      return (
+        <ProfileScreen
+          id={viewingUserId}
+          role="user"
+          onBack={handleBackFromUser}
+        />
+      );
+    }
+
     switch (activeTab) {
       case 'Feed':
         return (
@@ -65,6 +86,7 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
             id={id}
             role={role}
             onNavigateToDoctorProfile={handleNavigateToDoctorProfile}
+            onNavigateToUserProfile={handleNavigateToUserProfile}
           />
         );
 
@@ -82,6 +104,7 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
           <ProfileScreen
             id={id}
             role={role}
+            isOwner={true}
             onCreateAppointment={
               role === 'doctor'
                 ? () => navigation.navigate('CreateAppointment', { doctorId: id })
@@ -97,6 +120,7 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
             id={id}
             role={role}
             onNavigateToDoctorProfile={handleNavigateToDoctorProfile}
+            onNavigateToUserProfile={handleNavigateToUserProfile}
           />
         );
     }
