@@ -13,6 +13,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,6 +62,8 @@ interface Doctor {
   profileImage?: string;
   consultationFee?: number;
   sessionDuration?: number;
+  avgRating?: number;
+  ratingCount?: number;
 }
 
 interface DaySlot {
@@ -112,6 +115,7 @@ export default function DoctorAppointmentDetailScreen() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [healthConcern, setHealthConcern] = useState('');
+  const [showAllSlots, setShowAllSlots] = useState(false);
 
   useEffect(() => {
     loadSlots();
@@ -221,25 +225,24 @@ export default function DoctorAppointmentDetailScreen() {
             <MaterialIcons name="arrow-back" size={22} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Make Appointment</Text>
-          <View style={[styles.headerBtn, styles.notifBtn]}>
-            <MaterialIcons name="notifications" size={22} color="#FFF" />
-            <View style={styles.notifDot} />
-          </View>
+          <View style={styles.headerBtn} />
         </View>
 
         {/* ── Doctor Card ── */}
         <View style={[styles.doctorCard, { backgroundColor: t.cardBg }]}>
           <View style={[styles.doctorAvatar, { backgroundColor: t.accentLight }]}>
             {doctor.profileImage ? (
+              <Image source={{ uri: doctor.profileImage }} style={styles.avatarImage} />
+            ) : (
               <Text style={[styles.avatarInitials, { color: t.accent }]}>
                 {getInitials(doctor.fullName)}
               </Text>
-            ) : (
-              <Text style={styles.avatarEmoji}>{getCategoryEmoji(doctor.specialization)}</Text>
             )}
           </View>
           <View style={styles.doctorInfo}>
-            <Text style={[styles.doctorName, { color: t.textPrimary }]}>{doctor.fullName}</Text>
+            <Text style={[styles.doctorName, { color: t.textPrimary }]}>
+              {doctor.fullName.charAt(0).toUpperCase() + doctor.fullName.slice(1)}
+            </Text>
             <Text style={[styles.doctorSpec, { color: t.textSecondary }]}>{doctor.specialization}</Text>
             <View style={styles.doctorMeta}>
               <View style={styles.metaItem}>
@@ -250,6 +253,13 @@ export default function DoctorAppointmentDetailScreen() {
                 <MaterialIcons name="payments" size={13} color={t.accent} />
                 <Text style={[styles.metaText, { color: t.textSecondary }]}>PKR {consultationFee}</Text>
               </View>
+              {(doctor.ratingCount ?? 0) > 0 && (
+                <View style={styles.ratingChip}>
+                  <MaterialIcons name="star" size={13} color="#F6A623" />
+                  <Text style={styles.ratingChipText}>{(doctor.avgRating ?? 0).toFixed(1)}</Text>
+                  <Text style={styles.ratingChipCount}>({doctor.ratingCount})</Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -291,6 +301,7 @@ export default function DoctorAppointmentDetailScreen() {
                   onSelect={(date) => {
                     setSelectedDate(date);
                     setSelectedSlot(null);
+                    setShowAllSlots(false);
                   }}
                   t={t}
                 />
@@ -318,34 +329,53 @@ export default function DoctorAppointmentDetailScreen() {
                       No slots available for this date.
                     </Text>
                   ) : (
-                    <View style={styles.slotsGrid}>
-                      {selectedDaySlots.map((time, i) => {
-                        const isSelected = selectedSlot === time;
-                        return (
-                          <TouchableOpacity
-                            key={i}
-                            style={[
-                              styles.slotChip,
-                              {
-                                backgroundColor: isSelected ? t.accent : t.slotUnselectedBg,
-                                borderColor: isSelected ? t.accent : t.slotUnselectedBorder,
-                              },
-                            ]}
-                            onPress={() => setSelectedSlot(time)}
-                            activeOpacity={0.8}
-                          >
-                            <Text
+                    <>
+                      <View style={styles.slotsGrid}>
+                        {(showAllSlots ? selectedDaySlots : selectedDaySlots.slice(0, 6)).map((time, i) => {
+                          const isSelected = selectedSlot === time;
+                          return (
+                            <TouchableOpacity
+                              key={i}
                               style={[
-                                styles.slotText,
-                                { color: isSelected ? '#FFFFFF' : t.slotUnselectedText },
+                                styles.slotChip,
+                                {
+                                  backgroundColor: isSelected ? t.accent : t.slotUnselectedBg,
+                                  borderColor: isSelected ? t.accent : t.slotUnselectedBorder,
+                                },
                               ]}
+                              onPress={() => setSelectedSlot(time)}
+                              activeOpacity={0.8}
                             >
-                              {formatTime12h(time)}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                              <Text
+                                style={[
+                                  styles.slotText,
+                                  { color: isSelected ? '#FFFFFF' : t.slotUnselectedText },
+                                ]}
+                              >
+                                {formatTime12h(time)}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      {selectedDaySlots.length > 6 && (
+                        <TouchableOpacity
+                          style={styles.seeMoreBtn}
+                          onPress={() => setShowAllSlots(v => !v)}
+                        >
+                          <Text style={[styles.seeMoreText, { color: t.accent }]}>
+                            {showAllSlots
+                              ? 'Show less'
+                              : `See more (${selectedDaySlots.length - 6} more slots)`}
+                          </Text>
+                          <MaterialIcons
+                            name={showAllSlots ? 'expand-less' : 'expand-more'}
+                            size={18}
+                            color={t.accent}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -524,11 +554,6 @@ const styles = StyleSheet.create({
   },
   headerBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.3 },
-  notifBtn: { position: 'relative' },
-  notifDot: {
-    width: 9, height: 9, borderRadius: 5, backgroundColor: '#FF4444',
-    position: 'absolute', top: 2, right: 2, borderWidth: 1.5, borderColor: '#6B7FED',
-  },
   doctorCard: {
     flexDirection: 'row', alignItems: 'center',
     marginHorizontal: 20, marginTop: -30,
@@ -536,15 +561,21 @@ const styles = StyleSheet.create({
     shadowColor: '#6B7FED', shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.18, shadowRadius: 16, zIndex: 10,
   },
-  doctorAvatar: { width: 70, height: 70, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  doctorAvatar: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', marginRight: 14, overflow: 'hidden' },
   avatarEmoji: { fontSize: 34 },
   avatarInitials: { fontSize: 26, fontWeight: '800' },
+  avatarImage: { width: 70, height: 70, borderRadius: 35 },
+  seeMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, marginTop: 4 },
+  seeMoreText: { fontSize: 13, fontWeight: '700' },
   doctorInfo: { flex: 1 },
   doctorName: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3, marginBottom: 2 },
   doctorSpec: { fontSize: 13, fontWeight: '500', marginBottom: 8 },
   doctorMeta: { flexDirection: 'row', gap: 14 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 12, fontWeight: '500' },
+  ratingChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FFF8E7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+  ratingChipText: { fontSize: 12, fontWeight: '700', color: '#B07D00' },
+  ratingChipCount: { fontSize: 11, color: '#C89600' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 24 },
   sectionTitle: { fontSize: 17, fontWeight: '800', marginBottom: 14, letterSpacing: -0.3 },

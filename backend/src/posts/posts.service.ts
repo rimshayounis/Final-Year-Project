@@ -103,9 +103,11 @@ export class PostsService {
   ): Promise<{ posts: PostDocument[]; total: number; page: number; totalPages: number }> {
     const skip = (page - 1) * limit;
 
+    // Return ALL posts for the owner including private (isActive=false)
+    // Hard-deleted posts are gone from DB so no extra filter needed
     const [posts, total] = await Promise.all([
-      this.postModel.find({ userId: new Types.ObjectId(userId), isActive: true }).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
-      this.postModel.countDocuments({ userId: new Types.ObjectId(userId), isActive: true }),
+      this.postModel.find({ userId: new Types.ObjectId(userId) }).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.postModel.countDocuments({ userId: new Types.ObjectId(userId) }),
     ]);
 
     return { posts, total, page, totalPages: Math.ceil(total / limit) };
@@ -156,7 +158,28 @@ export class PostsService {
       throw new ForbiddenException('You can only edit your own posts');
     }
 
-    const updatedPost = await this.postModel.findByIdAndUpdate(id, updatePostDto, { new: true }).exec();
+    // Content edits (not visibility-only) are subject to status restrictions
+    const hasContentUpdate =
+      updatePostDto.title !== undefined ||
+      updatePostDto.description !== undefined ||
+      updatePostDto.category !== undefined ||
+      updatePostDto.mediaUrls !== undefined ||
+      updatePostDto.backgroundColor !== undefined;
+
+    if (hasContentUpdate) {
+      const isDoctor = post.userModel === 'Doctor';
+      if (!isDoctor && post.status !== 'pending') {
+        throw new ForbiddenException('You can only edit posts that are pending review');
+      }
+      if (isDoctor && post.status === 'rejected') {
+        throw new ForbiddenException('Rejected posts cannot be edited');
+      }
+    }
+
+    // Strip userId from the fields saved to DB (never update the post owner)
+    const { userId: _uid, ...updateFields } = updatePostDto as any;
+
+    const updatedPost = await this.postModel.findByIdAndUpdate(id, updateFields, { new: true }).exec();
     if (!updatedPost) throw new NotFoundException(`Post with ID ${id} not found`);
     return updatedPost;
   }
@@ -173,7 +196,7 @@ export class PostsService {
       throw new ForbiddenException('You can only delete your own posts');
     }
 
-    await this.postModel.findByIdAndUpdate(id, { isActive: false }).exec();
+    await this.postModel.findByIdAndDelete(id).exec();
 
     // Fire-and-forget: reverse all milestone points earned from this post
     if (post.approvedBy && post.status === 'approved') {

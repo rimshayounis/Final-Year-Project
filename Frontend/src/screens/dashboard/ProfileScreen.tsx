@@ -19,12 +19,37 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  PanResponder,
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import apiClient, { API_URL } from "../../services/api";
+import apiClient, { API_URL, postAPI, reportAPI, feedbackAPI } from "../../services/api";
+
+const BACKGROUND_COLORS = [
+  { color: "#6B7FED", label: "Indigo"   },
+  { color: "#FF6B6B", label: "Coral"    },
+  { color: "#4ECDC4", label: "Teal"     },
+  { color: "#FFE66D", label: "Yellow"   },
+  { color: "#A8E6CF", label: "Mint"     },
+  { color: "#FF8B94", label: "Pink"     },
+  { color: "#C7CEEA", label: "Lavender" },
+  { color: "#FFDAB9", label: "Peach"    },
+  { color: "#98D8C8", label: "Seafoam"  },
+  { color: "#F7DC6F", label: "Gold"     },
+  { color: "#BB8FCE", label: "Plum"     },
+  { color: "#85C1E2", label: "Sky"      },
+];
+
+const POST_CATEGORIES = [
+  "Hair & Skin",
+  "Mental Health",
+  "Nutrition",
+  "Fitness",
+  "Heart Health",
+  "General Health",
+];
 
 const { width } = Dimensions.get("window");
 const COLORED_POST_SIZE = width - 32;
@@ -70,6 +95,9 @@ interface UserProfile {
 type ProfileScreenProps = {
   id: string;
   role?: "user" | "doctor";
+  isOwner?: boolean; // true = viewing own profile; private posts are visible
+  viewerId?: string;       // id of the logged-in user (reporter)
+  viewerRole?: "user" | "doctor"; // role of the logged-in user
   onBack?: () => void;
   onBookAppointment?: (doctor: {
     _id: string;
@@ -150,7 +178,7 @@ const bsStyles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "700", color: "#1A1D2E" },
 });
 
-export default function ProfileScreen({ id, role, onBack, onBookAppointment, onCreateAppointment, onOpenSettings }: ProfileScreenProps) {
+export default function ProfileScreen({ id, role, isOwner = false, viewerId, viewerRole, onBack, onBookAppointment, onCreateAppointment, onOpenSettings }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,6 +205,13 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
     [userProfile?.profileImage],
   );
   const [pointsRefreshing, setPointsRefreshing] = useState(false);
+
+  // Doctor ratings & feedbacks
+  const [doctorRating, setDoctorRating] = useState<{
+    avgRating: number;
+    ratingCount: number;
+    feedbacks: Array<{ _id: string; rating: number; description: string; createdAt: string; userId?: { fullName?: string } }>;
+  } | null>(null);
 
   // Points conversion modal
   const [convertModal, setConvertModal] = useState(false);
@@ -211,11 +246,42 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
   const [editPostModal, setEditPostModal] = useState(false);
   const [editPostTitle, setEditPostTitle] = useState("");
   const [editPostDesc, setEditPostDesc] = useState("");
+  const [editPostCategory, setEditPostCategory] = useState("");
+  const [editPostColor, setEditPostColor] = useState("");
+  const [editPostExistingMedia, setEditPostExistingMedia] = useState<string[]>([]);
+  const [editPostNewMedia, setEditPostNewMedia] = useState<Array<{ uri: string }>>([]);
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   const [editPostLoading, setEditPostLoading] = useState(false);
 
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [doctorIsActive, setDoctorIsActive] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<"approved" | "pending" | "rejected">("approved");
+
+  // Report
+  const [reportMenuVisible, setReportMenuVisible] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportSubmitted, setReportSubmitted] = useState(false);
+
+  const TAB_ORDER = ["approved", "pending", "rejected"] as const;
+
+  const swipePan = useRef(
+    PanResponder.create({
+      // Only capture clearly horizontal movements so vertical scroll still works
+      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+        Math.abs(dx) > Math.abs(dy) * 2 && Math.abs(dx) > 12,
+      onPanResponderRelease: (_, { dx }) => {
+        if (Math.abs(dx) < 40) return;
+        setActiveTab((prev) => {
+          const idx = TAB_ORDER.indexOf(prev);
+          if (dx < 0 && idx < TAB_ORDER.length - 1) return TAB_ORDER[idx + 1];
+          if (dx > 0 && idx > 0) return TAB_ORDER[idx - 1];
+          return prev;
+        });
+      },
+    })
+  ).current;
 
   /* ── Fetch profile ── */
   const fetchProfile = async () => {
@@ -260,7 +326,9 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
   const fetchUserPosts = async () => {
     try {
       const res = await apiClient.get(`/posts/user/${id}`);
-      setPosts(res.data.data || []);
+      const all: Post[] = res.data.data || [];
+      // Non-owners must not see private posts
+      setPosts(isOwner ? all : all.filter((p) => p.isActive !== false));
     } catch {
       Alert.alert("Error", "Failed to load posts");
     } finally {
@@ -312,6 +380,15 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
     }
   };
 
+  const fetchDoctorRating = async () => {
+    try {
+      const res = await feedbackAPI.getDoctorFeedbacks(id);
+      setDoctorRating(res.data?.data ?? null);
+    } catch {
+      // silent
+    }
+  };
+
   const handlePointsRefresh = async () => {
     setPointsRefreshing(true);
     await Promise.all([fetchPointsSummary(), fetchVerificationSlots()]);
@@ -351,12 +428,13 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
         fetchApprovedByCount();
         fetchAppointmentCount();
         fetchPointsSummary();
+        fetchDoctorRating();
         if (!onBookAppointment) fetchVerificationSlots();
         if (onBookAppointment) fetchDoctorActiveStatus();
       }
 
       return () => {};
-    }, [id]),
+    }, [id, isOwner]),
   );
 
   const handleRefresh = () => {
@@ -367,6 +445,7 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
       fetchApprovedByCount();
       fetchAppointmentCount();
       fetchPointsSummary();
+      fetchDoctorRating();
       if (!onBookAppointment) fetchVerificationSlots();
       if (onBookAppointment) fetchDoctorActiveStatus();
     }
@@ -601,29 +680,57 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
 
   const handleOpenEditPost = (post: Post) => {
     setMenuVisible(false);
-    if (post.status !== "pending") {
-      Alert.alert("Cannot Edit", "Only pending posts can be edited.");
-      return;
-    }
     setEditPostTitle(post.title);
     setEditPostDesc(post.description);
+    setEditPostCategory(post.category);
+    setEditPostColor(post.backgroundColor || "");
+    setEditPostExistingMedia(post.mediaUrls || []);
+    setEditPostNewMedia([]);
     setEditPostModal(true);
   };
 
   const handleSavePost = async () => {
     if (!menuPost) return;
+    if (!editPostTitle.trim() || !editPostDesc.trim() || !editPostCategory) {
+      Alert.alert("Error", "Please fill all required fields");
+      return;
+    }
     setEditPostLoading(true);
     try {
-      // Backend: PATCH /posts/:id — requires userId in body, only pending posts
-      await apiClient.patch(`/posts/${menuPost._id}`, {
-        userId: id,
-        title: editPostTitle,
-        description: editPostDesc,
+      const formData = new FormData();
+      formData.append("userId", id);
+      formData.append("title", editPostTitle.trim());
+      formData.append("description", editPostDesc.trim());
+      formData.append("category", editPostCategory);
+      if (editPostColor) formData.append("backgroundColor", editPostColor);
+
+      // Existing media URLs the user wants to keep
+      editPostExistingMedia.forEach((url) => formData.append("mediaUrls", url));
+
+      // New media files to upload
+      editPostNewMedia.forEach((file) => {
+        const fileName = file.uri.split("/").pop() ?? "image.jpg";
+        formData.append("media", {
+          uri: file.uri,
+          name: fileName,
+          type: "image/jpeg",
+        } as any);
       });
+
+      const res = await postAPI.updatePost(menuPost._id, formData);
+      const updatedPost = res.data?.data;
+
       setPosts((prev) =>
         prev.map((p) =>
           p._id === menuPost._id
-            ? { ...p, title: editPostTitle, description: editPostDesc }
+            ? {
+                ...p,
+                title: editPostTitle.trim(),
+                description: editPostDesc.trim(),
+                category: editPostCategory,
+                backgroundColor: editPostColor || null,
+                mediaUrls: updatedPost?.mediaUrls ?? editPostExistingMedia,
+              }
             : p,
         ),
       );
@@ -636,6 +743,24 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
       );
     } finally {
       setEditPostLoading(false);
+    }
+  };
+
+  const handlePickEditMedia = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted")
+      return Alert.alert("Permission Needed", "Allow gallery access");
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      const newFiles = result.assets.map((a) => ({ uri: a.uri }));
+      setEditPostNewMedia((prev) => [...prev, ...newFiles]);
+      setEditPostColor(""); // clear bg color when media added
     }
   };
 
@@ -669,6 +794,11 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
     });
   };
 
+  const canEditPost = (post: Post) => {
+    if (role === "doctor") return post.status === "pending" || post.status === "approved";
+    return post.status === "pending";
+  };
+
   const statusColor = (s: string) =>
     s === "approved" ? "#00B374" : s === "rejected" ? "#E53E3E" : "#F6A623";
   const statusLabel = (s: string) =>
@@ -697,9 +827,10 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
   const pendingCount = posts.filter((p) => p.status === "pending").length;
 
   /* ══════════════════════════════════
-     Profile Header
+     Profile Header — memoized so the avatar image does not reload
+     when modal-only state (bioText, editName, etc.) changes
   ══════════════════════════════════ */
-  const ProfileHeader = () => (
+  const ProfileHeader = useCallback(() => (
     <View>
       {/* White Profile Card */}
       <View style={styles.profileCard}>
@@ -707,7 +838,8 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
         <View style={styles.profileTopRow}>
           {/* Avatar */}
           <TouchableOpacity
-            onPress={handlePickPhoto}
+            onPress={isOwner ? handlePickPhoto : undefined}
+            activeOpacity={isOwner ? 0.7 : 1}
             style={styles.avatarTouchable}
           >
             {avatarSource ? (
@@ -722,9 +854,11 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
                 </Text>
               </View>
             )}
-            <View style={styles.cameraBadge}>
-              <Ionicons name="camera" size={11} color="#FFF" />
-            </View>
+            {isOwner && (
+              <View style={styles.cameraBadge}>
+                <Ionicons name="camera" size={11} color="#FFF" />
+              </View>
+            )}
           </TouchableOpacity>
 
           {/* Name + Stats */}
@@ -738,15 +872,17 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
                   <Ionicons name="checkmark-circle" size={17} color="#1D9BF0" />
                 )}
               </View>
-              <TouchableOpacity
-                onPress={() => {
-                  setEditName(userProfile?.fullName ?? "");
-                  setEditModal(true);
-                }}
-                style={styles.pencilBtn}
-              >
-                <Ionicons name="pencil" size={13} color="#6B7FED" />
-              </TouchableOpacity>
+              {isOwner && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditName(userProfile?.fullName ?? "");
+                    setEditModal(true);
+                  }}
+                  style={styles.pencilBtn}
+                >
+                  <Ionicons name="pencil" size={13} color="#6B7FED" />
+                </TouchableOpacity>
+              )}
             </View>
 
             {role === "doctor" && (
@@ -769,17 +905,26 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
                 <Text style={styles.statNum}>{posts.length}</Text>
                 <Text style={styles.statLabel}>Posts</Text>
               </View>
-              <View style={styles.statDivider} />
               {role === "doctor" ? (
                 <>
                   <View style={styles.statItem}>
                     <Text style={styles.statNum}>{approvedByDoctorCount}</Text>
                     <Text style={styles.statLabel}>Approved</Text>
                   </View>
-                  <View style={styles.statDivider} />
                   <View style={styles.statItem}>
                     <Text style={styles.statNum}>{appointmentCount}</Text>
-                    <Text style={styles.statLabel}>Appointments</Text>
+                    <Text style={styles.statLabel}>Sessions</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <Ionicons name="star" size={13} color="#F6A623" />
+                      <Text style={styles.statNum}>
+                        {doctorRating && doctorRating.ratingCount > 0
+                          ? doctorRating.avgRating.toFixed(1)
+                          : '—'}
+                      </Text>
+                    </View>
+                    <Text style={styles.statLabel}>Rating</Text>
                   </View>
                 </>
               ) : (
@@ -788,7 +933,6 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
                     <Text style={styles.statNum}>{pendingCount}</Text>
                     <Text style={styles.statLabel}>Pending</Text>
                   </View>
-                  <View style={styles.statDivider} />
                   <View style={styles.statItem}>
                     <Text style={styles.statNum}>{publishedCount}</Text>
                     <Text style={styles.statLabel}>Published</Text>
@@ -802,42 +946,24 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
         {/* Bio */}
         <View style={styles.bioSection}>
           <View style={styles.bioHeaderRow}>
-            <Text style={styles.bioSectionLabel}>About yourself</Text>
-            <TouchableOpacity
-              onPress={() => {
-                setBioText(userProfile?.bio ?? "");
-                setBioModal(true);
-              }}
-              style={styles.pencilBtn}
-            >
-              <Ionicons name="pencil" size={13} color="#6B7FED" />
-            </TouchableOpacity>
+            <Text style={styles.bioSectionLabel}>
+              {isOwner ? "About yourself" : "About"}
+            </Text>
+            {isOwner && (
+              <TouchableOpacity
+                onPress={() => {
+                  setBioText(userProfile?.bio ?? "");
+                  setBioModal(true);
+                }}
+                style={styles.pencilBtn}
+              >
+                <Ionicons name="pencil" size={13} color="#6B7FED" />
+              </TouchableOpacity>
+            )}
           </View>
           <Text style={styles.bioText}>
-            {userProfile?.bio || "No bio yet. Tap the pencil to add one."}
+            {userProfile?.bio || (isOwner ? "No bio yet. Tap the pencil to add one." : "No bio available.")}
           </Text>
-          <View style={styles.metaRow}>
-            {userProfile?.email ? (
-              <View style={styles.metaItem}>
-                <Ionicons name="mail-outline" size={12} color="#999" />
-                <Text style={styles.metaText} numberOfLines={1}>
-                  {userProfile.email}
-                </Text>
-              </View>
-            ) : null}
-            {userProfile?.gender ? (
-              <View style={styles.metaItem}>
-                <Ionicons name="person-outline" size={12} color="#999" />
-                <Text style={styles.metaText}>{userProfile.gender}</Text>
-              </View>
-            ) : null}
-            {userProfile?.age ? (
-              <View style={styles.metaItem}>
-                <Ionicons name="calendar-outline" size={12} color="#999" />
-                <Text style={styles.metaText}>{userProfile.age} yrs</Text>
-              </View>
-            ) : null}
-          </View>
         </View>
 
         {/* Trust Badge — visible to ALL users on doctor profiles */}
@@ -967,15 +1093,92 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
             <Text style={styles.createAppointmentBtnText}>Create Appointments</Text>
           </TouchableOpacity>
         ) : null}
+
+        {/* ── Patient Reviews — visible on doctor profiles ── */}
+        {role === "doctor" && doctorRating !== null && (
+          <View style={styles.reviewsSection}>
+            <View style={styles.reviewsHeader}>
+              <Ionicons name="star" size={16} color="#F6A623" />
+              <Text style={styles.reviewsTitle}>Patient Reviews</Text>
+              {doctorRating.ratingCount > 0 && (
+                <Text style={styles.reviewsAvg}>
+                  {doctorRating.avgRating.toFixed(1)} · {doctorRating.ratingCount} {doctorRating.ratingCount === 1 ? 'review' : 'reviews'}
+                </Text>
+              )}
+            </View>
+
+            {doctorRating.feedbacks.length === 0 ? (
+              <Text style={styles.reviewsEmpty}>No reviews yet.</Text>
+            ) : (
+              doctorRating.feedbacks.map(fb => (
+                <View key={fb._id} style={styles.reviewCard}>
+                  <View style={styles.reviewTopRow}>
+                    <View style={styles.reviewStars}>
+                      {[1,2,3,4,5].map(s => (
+                        <Ionicons
+                          key={s}
+                          name={s <= fb.rating ? 'star' : 'star-outline'}
+                          size={13}
+                          color={s <= fb.rating ? '#F6A623' : '#DDD'}
+                        />
+                      ))}
+                    </View>
+                    <Text style={styles.reviewName}>
+                      {fb.userId?.fullName ?? 'Anonymous'}
+                    </Text>
+                    <Text style={styles.reviewDate}>
+                      {new Date(fb.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Text>
+                  </View>
+                  {!!fb.description && (
+                    <Text style={styles.reviewDesc}>{fb.description}</Text>
+                  )}
+                </View>
+              ))
+            )}
+          </View>
+        )}
       </View>
 
-      {/* Activity header */}
-      <View style={styles.activityHeader}>
-        <Text style={styles.activityTitle}>Activity</Text>
-        <Text style={styles.activityCount}>{posts.length} posts</Text>
-      </View>
+      {/* ── Post Status Tabs ── */}
+      {role !== "doctor" && <View style={styles.postTabsRow}>
+        {(
+          [
+            { key: "approved", icon: "checkmark-circle", color: "#00B374" },
+            { key: "pending",  icon: "time",             color: "#F6A623" },
+            { key: "rejected", icon: "close-circle",     color: "#E53E3E" },
+          ] as const
+        ).map((tab, index, arr) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <React.Fragment key={tab.key}>
+              <TouchableOpacity
+                style={[styles.postTab, isActive && { borderBottomColor: tab.color }]}
+                onPress={() => setActiveTab(tab.key)}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name={tab.icon}
+                  size={20}
+                  color={isActive ? tab.color : "#CCC"}
+                />
+              </TouchableOpacity>
+              {index < arr.length - 1 && (
+                <View style={styles.statDivider} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </View>}
     </View>
-  );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [
+    userProfile, avatarSource, posts, isOwner, role,
+    approvedByDoctorCount, appointmentCount,
+    pointsSummary, pointsRefreshing, verificationSlots,
+    doctorIsActive, onBookAppointment, onCreateAppointment,
+    activeTab, pendingCount, publishedCount,
+  ]);
 
   /* ══════════════════════════════════
      Post Card
@@ -1067,15 +1270,17 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            style={styles.dotsBtn}
-            onPress={() => {
-              setMenuPost(item);
-              setMenuVisible(true);
-            }}
-          >
-            <MaterialIcons name="more-vert" size={22} color="#666" />
-          </TouchableOpacity>
+          {isOwner && (
+            <TouchableOpacity
+              style={styles.dotsBtn}
+              onPress={() => {
+                setMenuPost(item);
+                setMenuVisible(true);
+              }}
+            >
+              <MaterialIcons name="more-vert" size={22} color="#666" />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.categoryChip}>
@@ -1219,20 +1424,32 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} {...(role !== "doctor" ? swipePan.panHandlers : {})}>
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
 
       {/* ── Sticky Top Nav ── */}
       <View style={[styles.topNav, { paddingTop: insets.top + 4 }]}>
+        {/* Left — back arrow + role label */}
         {onBack ? (
-          <TouchableOpacity onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color="#FFF" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <TouchableOpacity onPress={onBack}>
+              <Ionicons name="arrow-back" size={24} color="#FFF" />
+            </TouchableOpacity>
+            <Text style={styles.navRoleText}>
+              {role === "doctor" ? "Doctor" : "User"}
+            </Text>
+          </View>
         ) : (
           <View style={{ width: 24 }} />
         )}
+
+        <View style={{ flex: 1 }} />
+
+        {/* Right — three-dot report menu OR settings icon */}
         {onBack ? (
-          <View style={{ width: 24 }} />
+          <TouchableOpacity onPress={() => setReportMenuVisible(true)} style={{ padding: 2 }}>
+            <MaterialIcons name="more-horiz" size={24} color="#FFF" />
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={onOpenSettings}>
             <Ionicons name="settings-outline" size={24} color="#FFF" />
@@ -1241,16 +1458,30 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
       </View>
 
       <FlatList
-        data={posts}
+        data={role !== "doctor" ? posts.filter((p) => p.status === activeTab) : posts}
         keyExtractor={(item) => item._id}
         renderItem={renderPost}
         ListHeaderComponent={<ProfileHeader />}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <Ionicons name="document-text-outline" size={52} color="#D0D5E8" />
-            <Text style={styles.emptyTitle}>No posts yet</Text>
+            <Ionicons
+              name={
+                activeTab === "approved" ? "checkmark-circle-outline" :
+                activeTab === "pending"  ? "time-outline" :
+                "close-circle-outline"
+              }
+              size={52}
+              color="#D0D5E8"
+            />
+            <Text style={styles.emptyTitle}>
+              {activeTab === "approved" ? "No published posts" :
+               activeTab === "pending"  ? "No pending posts" :
+               "No rejected posts"}
+            </Text>
             <Text style={styles.emptySubtitle}>
-              Your posts will appear here once created.
+              {activeTab === "approved" ? "Approved posts will appear here." :
+               activeTab === "pending"  ? "Posts awaiting review will appear here." :
+               "Rejected posts will appear here."}
             </Text>
           </View>
         }
@@ -1443,8 +1674,19 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => menuPost && handleOpenEditPost(menuPost)}
+            style={[styles.menuItem, menuPost && !canEditPost(menuPost) && { opacity: 0.4 }]}
+            onPress={() => {
+              if (!menuPost || !canEditPost(menuPost)) {
+                Alert.alert(
+                  "Cannot Edit",
+                  role === "doctor"
+                    ? "Rejected posts cannot be edited."
+                    : "Only pending posts can be edited.",
+                );
+                return;
+              }
+              handleOpenEditPost(menuPost);
+            }}
           >
             <Ionicons name="pencil-outline" size={20} color="#333" />
             <Text style={styles.menuItemText}>Edit Post</Text>
@@ -1462,44 +1704,294 @@ export default function ProfileScreen({ id, role, onBack, onBookAppointment, onC
         </View>
       </Modal>
 
-      {/* ══ Edit Post Modal ══ */}
-      <BottomSheetModal
-        visible={editPostModal}
-        onClose={() => setEditPostModal(false)}
-        title="Edit Post"
+      {/* ══ Report — three-dot dropdown ══ */}
+      <Modal
+        visible={reportMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReportMenuVisible(false)}
       >
-        <Text style={styles.inputLabel}>Title</Text>
-        <TextInput
-          style={styles.modalInput}
-          value={editPostTitle}
-          onChangeText={setEditPostTitle}
-          placeholder="Post title"
-          placeholderTextColor="#AAA"
-        />
-        <Text style={styles.inputLabel}>Description</Text>
-        <TextInput
-          style={[
-            styles.modalInput,
-            { minHeight: 100, textAlignVertical: "top" },
-          ]}
-          value={editPostDesc}
-          onChangeText={setEditPostDesc}
-          placeholder="Post description"
-          placeholderTextColor="#AAA"
-          multiline
-        />
-        <TouchableOpacity
-          style={styles.saveBtn}
-          onPress={handleSavePost}
-          disabled={editPostLoading}
+        <TouchableWithoutFeedback onPress={() => setReportMenuVisible(false)}>
+          <View style={styles.menuOverlay} />
+        </TouchableWithoutFeedback>
+        <View style={styles.reportDropdown}>
+          <TouchableOpacity
+            style={styles.reportDropdownItem}
+            onPress={() => {
+              setReportMenuVisible(false);
+              setReportReason("");
+              setReportSubmitted(false);
+              setReportModalVisible(true);
+            }}
+          >
+            <Ionicons name="flag-outline" size={18} color="#E53E3E" />
+            <Text style={styles.reportDropdownText}>Report</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* ══ Report — reason modal ══ */}
+      <Modal
+        visible={reportModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReportModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.reportOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.reportCard}>
+                {reportSubmitted ? (
+                  <>
+                    <Ionicons name="checkmark-circle" size={44} color="#00B374" style={{ alignSelf: "center", marginBottom: 12 }} />
+                    <Text style={styles.reportSuccessTitle}>Thank you</Text>
+                    <Text style={styles.reportSuccessMsg}>
+                      We will review your request and take appropriate action.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.reportCardTitle}>Report Profile</Text>
+                    <Text style={styles.reportCardSubtitle}>
+                      Tell us why you're reporting this profile.
+                    </Text>
+                    <TextInput
+                      style={styles.reportInput}
+                      placeholder="Describe the issue..."
+                      placeholderTextColor="#AAA"
+                      value={reportReason}
+                      onChangeText={setReportReason}
+                      multiline
+                      textAlignVertical="top"
+                    />
+                    <TouchableOpacity
+                      style={[styles.reportSubmitBtn, !reportReason.trim() && { opacity: 0.4 }]}
+                      disabled={!reportReason.trim()}
+                      onPress={async () => {
+                        try {
+                          await reportAPI.submit({
+                            reporterId:    viewerId ?? id,
+                            reporterModel: viewerRole === "doctor" ? "Doctor" : "User",
+                            reportedId:    id,
+                            reportedModel: role === "doctor" ? "Doctor" : "User",
+                            reason:        reportReason.trim(),
+                          });
+                        } catch {
+                          // silently continue — still show success to user
+                        }
+                        setReportSubmitted(true);
+                        setTimeout(() => {
+                          setReportModalVisible(false);
+                          setReportSubmitted(false);
+                          setReportReason("");
+                        }, 2200);
+                      }}
+                    >
+                      <Text style={styles.reportSubmitText}>Submit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setReportModalVisible(false)} style={{ marginTop: 10, alignItems: "center" }}>
+                      <Text style={{ fontSize: 13, color: "#999" }}>Cancel</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* ══ Edit Post Full-Screen Modal ══ */}
+      <Modal
+        visible={editPostModal}
+        animationType="slide"
+        onRequestClose={() => setEditPostModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: "#FFF" }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          {editPostLoading ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <Text style={styles.saveBtnText}>Save Changes</Text>
-          )}
-        </TouchableOpacity>
-      </BottomSheetModal>
+          {/* Header */}
+          <View style={editStyles.header}>
+            <TouchableOpacity onPress={() => setEditPostModal(false)} style={editStyles.closeBtn}>
+              <Ionicons name="arrow-back" size={24} color="#FFF" />
+            </TouchableOpacity>
+            <Text style={editStyles.headerTitle}>Edit Post</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={editStyles.body}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Title */}
+            <Text style={editStyles.label}>Post Title</Text>
+            <TextInput
+              style={editStyles.input}
+              placeholder="Enter title"
+              value={editPostTitle}
+              onChangeText={setEditPostTitle}
+              placeholderTextColor="#999"
+            />
+
+            {/* Description + color preview */}
+            <Text style={editStyles.label}>Description</Text>
+            <View style={[editStyles.descContainer, editPostColor ? { backgroundColor: editPostColor } : {}]}>
+              <TextInput
+                style={[
+                  editStyles.input,
+                  editStyles.textArea,
+                  editPostColor ? { backgroundColor: "transparent", color: "#FFF" } : {},
+                ]}
+                placeholder="Enter description"
+                placeholderTextColor={editPostColor ? "rgba(255,255,255,0.7)" : "#999"}
+                multiline
+                value={editPostDesc}
+                onChangeText={setEditPostDesc}
+              />
+            </View>
+
+            {/* Background color strip — hidden when media present */}
+            {editPostExistingMedia.length === 0 && editPostNewMedia.length === 0 && (
+              <View style={editStyles.colorStripWrap}>
+                <View style={editStyles.colorStripHeader}>
+                  <MaterialIcons name="palette" size={15} color="#6B7FED" />
+                  <Text style={editStyles.colorStripLabel}>Background color</Text>
+                  {editPostColor ? (
+                    <TouchableOpacity onPress={() => setEditPostColor("")} style={editStyles.clearColorBtn}>
+                      <Text style={editStyles.clearColorText}>Clear</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={editStyles.colorStrip}>
+                  <TouchableOpacity
+                    onPress={() => setEditPostColor("")}
+                    style={[editStyles.swatch, editStyles.swatchNone, !editPostColor && editStyles.swatchSelected]}
+                  >
+                    <MaterialIcons name="block" size={18} color={!editPostColor ? "#6B7FED" : "#CCC"} />
+                  </TouchableOpacity>
+                  {BACKGROUND_COLORS.map((item) => (
+                    <TouchableOpacity
+                      key={item.color}
+                      onPress={() => setEditPostColor(editPostColor === item.color ? "" : item.color)}
+                      style={[
+                        editStyles.swatch,
+                        { backgroundColor: item.color },
+                        editPostColor === item.color && editStyles.swatchSelected,
+                      ]}
+                    >
+                      {editPostColor === item.color && (
+                        <MaterialIcons name="check" size={18} color="#FFF" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {editPostColor ? (
+                  <Text style={editStyles.selectedColorLabel}>
+                    {BACKGROUND_COLORS.find((c) => c.color === editPostColor)?.label} selected
+                  </Text>
+                ) : null}
+              </View>
+            )}
+
+            {/* Category */}
+            <Text style={editStyles.label}>Category</Text>
+            <TouchableOpacity
+              style={editStyles.categorySelector}
+              onPress={() => setShowEditCategoryModal(true)}
+            >
+              <Text style={[editStyles.categoryText, !editPostCategory && { color: "#999" }]}>
+                {editPostCategory || "Select Category"}
+              </Text>
+              <MaterialIcons name="keyboard-arrow-down" size={24} color="#666" />
+            </TouchableOpacity>
+
+            {/* Media */}
+            <Text style={editStyles.label}>Images</Text>
+            <TouchableOpacity style={editStyles.mediaBtn} onPress={handlePickEditMedia}>
+              <Text style={editStyles.mediaBtnText}>Add Images</Text>
+              <Ionicons name="camera-outline" size={24} color="#6B7FED" />
+            </TouchableOpacity>
+
+            {/* Existing media thumbnails */}
+            {(editPostExistingMedia.length > 0 || editPostNewMedia.length > 0) && (
+              <View style={editStyles.mediaGrid}>
+                {editPostExistingMedia.map((url, i) => {
+                  const baseUrl = API_URL.replace("/api", "");
+                  const imgUri = url.startsWith("http") ? url : baseUrl + url;
+                  return (
+                    <View key={"ex_" + i} style={editStyles.mediaThumb}>
+                      <Image source={{ uri: imgUri }} style={editStyles.thumbImg} />
+                      <TouchableOpacity
+                        style={editStyles.removeThumb}
+                        onPress={() => setEditPostExistingMedia((prev) => prev.filter((_, idx) => idx !== i))}
+                      >
+                        <MaterialIcons name="close" size={16} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                {editPostNewMedia.map((file, i) => (
+                  <View key={"new_" + i} style={editStyles.mediaThumb}>
+                    <Image source={{ uri: file.uri }} style={editStyles.thumbImg} />
+                    <TouchableOpacity
+                      style={editStyles.removeThumb}
+                      onPress={() => setEditPostNewMedia((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <MaterialIcons name="close" size={16} color="#FFF" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Save button */}
+            <TouchableOpacity
+              style={editStyles.saveBtn}
+              onPress={handleSavePost}
+              disabled={editPostLoading}
+            >
+              {editPostLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={editStyles.saveBtnText}>Save Changes</Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        {/* Category picker modal */}
+        <Modal
+          visible={showEditCategoryModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowEditCategoryModal(false)}
+        >
+          <View style={editStyles.modalOverlay}>
+            <View style={editStyles.modalContent}>
+              <View style={editStyles.modalHeader}>
+                <Text style={editStyles.modalTitle}>Select Category</Text>
+                <TouchableOpacity onPress={() => setShowEditCategoryModal(false)}>
+                  <MaterialIcons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={editStyles.categoryList}>
+                {POST_CATEGORIES.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[editStyles.categoryOption, editPostCategory === c && editStyles.categoryOptionActive]}
+                    onPress={() => { setEditPostCategory(c); setShowEditCategoryModal(false); }}
+                  >
+                    <Text style={[editStyles.categoryOptionText, editPostCategory === c && editStyles.categoryOptionTextActive]}>
+                      {c}
+                    </Text>
+                    {editPostCategory === c && <MaterialIcons name="check" size={20} color="#6B7FED" />}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </Modal>
 
       {/* ══ Comment Modal — slide-up sheet ══ */}
       <Modal
@@ -1672,8 +2164,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     paddingHorizontal: 16,
     paddingTop: 18,
-    paddingBottom: 20,
-    marginBottom: 8,
+    paddingBottom: 0,
+    marginBottom: 0,
   },
   bookBtn: {
     flexDirection: "row",
@@ -1709,7 +2201,7 @@ const styles = StyleSheet.create({
   },
   profileTopRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     marginBottom: 18,
   },
 
@@ -1778,7 +2270,7 @@ const styles = StyleSheet.create({
   },
   premiumBadgeText: { fontSize: 11, color: "#C8960C", fontWeight: "700" },
   statsRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
-  statItem: { flex: 1, alignItems: "center" },
+  statItem: { flex: 1, alignItems: "flex-start" },
   statNum: { fontSize: 17, fontWeight: "800", color: "#1A1D2E" },
   statLabel: { fontSize: 11, color: "#888", marginTop: 1 },
   statDivider: { width: 1, height: 26, backgroundColor: "#E8EAF6" },
@@ -1927,8 +2419,40 @@ const styles = StyleSheet.create({
   slotsCount: { fontSize: 12, fontWeight: "700", color: "#1A1D2E" },
   slotsNone: { fontSize: 11, color: "#F6A623", fontStyle: "italic" },
 
+  // Reviews section
+  reviewsSection: {
+    backgroundColor: "#FFF",
+    borderTopWidth: 1,
+    borderTopColor: "#F0F2F8",
+    paddingTop: 14,
+    paddingBottom: 6,
+    marginTop: 10,
+  },
+  reviewsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+  },
+  reviewsTitle: { fontSize: 14, fontWeight: "700", color: "#1A1D2E", flex: 1 },
+  reviewsAvg:   { fontSize: 13, fontWeight: "600", color: "#F6A623" },
+  reviewsEmpty: { fontSize: 13, color: "#AAA", fontStyle: "italic", paddingHorizontal: 16, marginBottom: 8 },
+  reviewCard: {
+    backgroundColor: "#F8F9FF",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    marginHorizontal: 16,
+  },
+  reviewTopRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  reviewStars:  { flexDirection: "row", gap: 2 },
+  reviewName:   { fontSize: 12, fontWeight: "700", color: "#444", flex: 1 },
+  reviewDate:   { fontSize: 11, color: "#AAA" },
+  reviewDesc:   { fontSize: 13, color: "#555", lineHeight: 19, marginTop: 4 },
+
   // Bio
-  bioSection: { borderTopWidth: 1, borderTopColor: "#F0F2F8", paddingTop: 14 },
+  bioSection: { borderTopWidth: 1, borderTopColor: "#F0F2F8", paddingTop: 10, paddingBottom: 10 },
   bioHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1936,7 +2460,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   bioSectionLabel: { fontSize: 13, fontWeight: "700", color: "#555" },
-  bioText: { fontSize: 14, color: "#444", lineHeight: 21, marginBottom: 10 },
+  bioText: { fontSize: 14, color: "#444", lineHeight: 21, marginBottom: 0 },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   metaText: { fontSize: 12, color: "#888" },
@@ -2116,6 +2640,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionLabel: { fontSize: 13, color: "#666", fontWeight: "600" },
+
+  // Post status tabs
+  postTabsRow: {
+    flexDirection: "row",
+    backgroundColor: "#FFF",
+    borderTopWidth: 1,
+    borderTopColor: "#F0F2F8",
+  },
+  postTab: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
 
   // Empty
   emptyWrap: { paddingTop: 60, alignItems: "center", paddingHorizontal: 30 },
@@ -2364,4 +2903,289 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+
+  // Header role label
+  navRoleText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+
+  // Report dropdown
+  reportDropdown: {
+    position: "absolute",
+    top: 72,
+    right: 16,
+    backgroundColor: "#FFF",
+    borderRadius: 10,
+    paddingVertical: 4,
+    minWidth: 130,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
+  reportDropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  reportDropdownText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#E53E3E",
+  },
+
+  // Report modal
+  reportOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  reportCard: {
+    width: "100%",
+    backgroundColor: "#FFF",
+    borderRadius: 18,
+    padding: 24,
+  },
+  reportCardTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#1A1D2E",
+    marginBottom: 6,
+  },
+  reportCardSubtitle: {
+    fontSize: 13,
+    color: "#888",
+    marginBottom: 16,
+  },
+  reportInput: {
+    backgroundColor: "#F5F7FF",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 14,
+    color: "#1A1D2E",
+    minHeight: 100,
+    borderWidth: 1,
+    borderColor: "#E8EAF6",
+    marginBottom: 16,
+  },
+  reportSubmitBtn: {
+    backgroundColor: "#E53E3E",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  reportSubmitText: {
+    color: "#FFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  reportSuccessTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#1A1D2E",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  reportSuccessMsg: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 21,
+  },
+});
+
+// ── Edit Post full-screen modal styles ─────────────────────────────────────
+const editStyles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#6B7FED",
+    paddingHorizontal: 16,
+    paddingTop: 48,
+    paddingBottom: 16,
+  },
+  closeBtn: { width: 40, alignItems: "flex-start" },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: "#FFF" },
+  body: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 50 },
+  label: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#2C3E50",
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  input: {
+    backgroundColor: "#F5F5F5",
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#2C3E50",
+    minHeight: 50,
+    marginBottom: 16,
+  },
+  textArea: { minHeight: 120, paddingTop: 12, textAlignVertical: "top" },
+  descContainer: { borderRadius: 10, overflow: "hidden" },
+
+  // Color strip
+  colorStripWrap: {
+    marginBottom: 16,
+    backgroundColor: "#F8F9FF",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E8ECFF",
+    overflow: "hidden",
+  },
+  colorStripHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  colorStripLabel: { flex: 1, fontSize: 12, fontWeight: "600", color: "#6B7FED" },
+  clearColorBtn: {
+    backgroundColor: "#FFE8E8",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  clearColorText: { fontSize: 11, fontWeight: "700", color: "#FF4444" },
+  colorStrip: { gap: 10, paddingVertical: 4, paddingHorizontal: 4 },
+  swatch: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2.5,
+    borderColor: "transparent",
+  },
+  swatchNone: {
+    backgroundColor: "#FFF",
+    borderWidth: 1.5,
+    borderColor: "#DDD",
+    borderStyle: "dashed",
+  },
+  swatchSelected: {
+    borderColor: "#2C3E50",
+    transform: [{ scale: 1.15 }],
+  },
+  selectedColorLabel: {
+    marginTop: 8,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6B7FED",
+    textAlign: "center",
+  },
+
+  // Category selector
+  categorySelector: {
+    backgroundColor: "#F5F5F5",
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+    minHeight: 50,
+  },
+  categoryText: { fontSize: 15, color: "#2C3E50" },
+
+  // Media
+  mediaBtn: {
+    backgroundColor: "#F5F5F5",
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    minHeight: 50,
+  },
+  mediaBtnText: { fontSize: 15, color: "#2C3E50" },
+  mediaGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 20,
+  },
+  mediaThumb: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    position: "relative",
+  },
+  thumbImg: { width: "100%", height: "100%", borderRadius: 10 },
+  removeThumb: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#FF4444",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Save button
+  saveBtn: {
+    backgroundColor: "#6B7FED",
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  saveBtnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
+
+  // Category picker modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    paddingTop: 20,
+    paddingBottom: 40,
+    maxHeight: "70%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 25,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  modalTitle: { fontSize: 20, fontWeight: "700", color: "#2C3E50" },
+  categoryList: { paddingHorizontal: 25, paddingTop: 10 },
+  categoryOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: "#F8F8F8",
+  },
+  categoryOptionActive: { backgroundColor: "#E8F0FE" },
+  categoryOptionText: { fontSize: 16, color: "#2C3E50" },
+  categoryOptionTextActive: { color: "#6B7FED", fontWeight: "600" },
 });

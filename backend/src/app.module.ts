@@ -15,6 +15,9 @@ import { SubscriptionPlanModule } from './subscription-plan/subscription-plan.mo
 import { WalletModule } from './wallet/wallet.module';
 import { PaymentModule } from './payment/payment.module';
 import { NotificationModule } from './notification/notification.module';
+import { ReportModule } from './report/report.module';
+import { FeedbackModule } from './feedback/feedback.module';
+import { SupportRequestModule } from './support-request/support-request.module';
 
 
 @Module({
@@ -36,6 +39,9 @@ import { NotificationModule } from './notification/notification.module';
     WalletModule,
     PaymentModule,
     NotificationModule,
+    ReportModule,
+    FeedbackModule,
+    SupportRequestModule,
   ],
 })
 export class AppModule {}

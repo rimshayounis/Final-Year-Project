@@ -62,7 +62,6 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
     "Fitness",
     "Heart Health",
     "General Health",
-    "Other",
   ];
 
   const handleCategorySelect = (category: string) => {

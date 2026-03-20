@@ -473,13 +473,13 @@ export default function SettingsScreen() {
           <SettingRow
             icon={<Ionicons name="shield-outline" size={20} color="#6B7FED" />}
             label="Privacy Policy"
-            onPress={() => placeholder("Privacy Policy")}
+            onPress={() => navigation.navigate("PrivacyPolicy")}
           />
           <View style={styles.divider} />
           <SettingRow
             icon={<Ionicons name="document-text-outline" size={20} color="#6B7FED" />}
             label="Terms of Service"
-            onPress={() => placeholder("Terms of Service")}
+            onPress={() => navigation.navigate("TermsOfService")}
           />
         </View>
 
@@ -489,13 +489,13 @@ export default function SettingsScreen() {
           <SettingRow
             icon={<Ionicons name="help-circle-outline" size={20} color="#888" />}
             label="Help & FAQ"
-            onPress={() => placeholder("Help & FAQ")}
+            onPress={() => navigation.navigate("HelpFAQ")}
           />
           <View style={styles.divider} />
           <SettingRow
             icon={<MaterialIcons name="support-agent" size={20} color="#888" />}
             label="Contact Support"
-            onPress={() => placeholder("Contact Support")}
+            onPress={() => navigation.navigate("ContactSupport", { id, role })}
           />
         </View>
 

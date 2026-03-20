@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, StatusBar, TouchableOpacity,
   ScrollView, ActivityIndicator, RefreshControl, Alert, Switch,
+  Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStripe } from '@stripe/stripe-react-native';
-import { bookedAppointmentAPI, appointmentAPI, chatAPI } from '../../services/api';
+import { bookedAppointmentAPI, appointmentAPI, chatAPI, feedbackAPI } from '../../services/api';
 import apiClient from '../../services/api';
 
 interface AppointmentScreenProps { id: string; role: string; }
@@ -24,6 +25,7 @@ interface Appointment {
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   paymentStatus: 'not_required' | 'pending_payment' | 'payment_held' | 'released' | 'refunded';
   heldAmount: number;
+  hasFeedback: boolean;
   createdAt: string;
 }
 
@@ -229,6 +231,15 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
   const [payLoadingId,    setPayLoadingId]    = useState<string | null>(null);
   const [,                setNow]             = useState(new Date());
 
+  // Feedback modal state
+  const [feedbackAppt,      setFeedbackAppt]      = useState<Appointment | null>(null);
+  const [feedbackRating,    setFeedbackRating]    = useState(0);
+  const [feedbackText,      setFeedbackText]      = useState('');
+  const [feedbackLoading,   setFeedbackLoading]   = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  // Track locally which appointments have received feedback this session
+  const [localFeedbackIds,  setLocalFeedbackIds]  = useState<Set<string>>(new Set());
+
   const convCache = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -360,6 +371,42 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
     }
   };
 
+  const handleOpenFeedback = (appt: Appointment) => {
+    setFeedbackAppt(appt);
+    setFeedbackRating(0);
+    setFeedbackText('');
+    setFeedbackSubmitted(false);
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!feedbackAppt) return;
+    if (feedbackRating === 0) {
+      Alert.alert('Rating Required', 'Please select a star rating before submitting.');
+      return;
+    }
+    setFeedbackLoading(true);
+    try {
+      const doctorId = feedbackAppt.doctorId?._id || feedbackAppt.doctorId;
+      await feedbackAPI.submit({
+        appointmentId: feedbackAppt._id,
+        userId: id,
+        doctorId,
+        rating: feedbackRating,
+        description: feedbackText.trim(),
+      });
+      setFeedbackSubmitted(true);
+      setLocalFeedbackIds(prev => new Set([...prev, feedbackAppt._id]));
+      setTimeout(() => {
+        setFeedbackAppt(null);
+        setFeedbackSubmitted(false);
+      }, 2200);
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to submit feedback.');
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
   const handleBookAppointment   = () => navigation.navigate('BookAppointments', { userId: id, role });
   const handleCreateAppointment = () => navigation.navigate('CreateAppointment', { doctorId: id });
 
@@ -423,9 +470,18 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
         {role === 'doctor' ? (
           <Text style={styles.label}>Patient: <Text style={styles.value}>{getPatientName(item)}</Text></Text>
         ) : (
-          <Text style={styles.label}>
-            Doctor: <Text style={styles.value}>{getDoctorName(item)}{getSpecialization(item) ? ` · ${getSpecialization(item)}` : ''}</Text>
-          </Text>
+          <>
+            <Text style={styles.label}>
+              Doctor: <Text style={styles.value}>{getDoctorName(item)}{getSpecialization(item) ? ` · ${getSpecialization(item)}` : ''}</Text>
+            </Text>
+            {(item.doctorId?.ratingCount ?? 0) > 0 && (
+              <View style={styles.ratingChip}>
+                <MaterialIcons name="star" size={12} color="#F6A623" />
+                <Text style={styles.ratingChipText}>{(item.doctorId?.avgRating ?? 0).toFixed(1)}</Text>
+                <Text style={styles.ratingChipCount}>({item.doctorId.ratingCount})</Text>
+              </View>
+            )}
+          </>
         )}
         <Text style={styles.label}>Date: <Text style={styles.value}>{formatDisplayDate(item.date)}</Text></Text>
         <Text style={styles.label}>Time: <Text style={styles.value}>{formatDisplayTime(item.time)}</Text></Text>
@@ -470,6 +526,30 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
               </>
             )}
           </TouchableOpacity>
+        )}
+
+        {/* Feedback button — only for users on completed appointments */}
+        {role === 'user' && item.status === 'completed' && (
+          (() => {
+            const alreadyGiven = item.hasFeedback || localFeedbackIds.has(item._id);
+            return (
+              <TouchableOpacity
+                style={[styles.feedbackBtn, alreadyGiven && styles.feedbackBtnDone]}
+                onPress={() => !alreadyGiven && handleOpenFeedback(item)}
+                disabled={alreadyGiven}
+                activeOpacity={alreadyGiven ? 1 : 0.8}
+              >
+                <Ionicons
+                  name={alreadyGiven ? 'checkmark-circle' : 'star-outline'}
+                  size={15}
+                  color={alreadyGiven ? '#00B374' : PURPLE}
+                />
+                <Text style={[styles.feedbackBtnText, alreadyGiven && styles.feedbackBtnTextDone]}>
+                  {alreadyGiven ? 'Feedback Given' : 'Give Feedback'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })()
         )}
       </View>
     );
@@ -532,38 +612,103 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
       )}
 
       {/* ── Schedule Tab ── */}
+      {/* ── Feedback Modal ── */}
+      <Modal visible={!!feedbackAppt} transparent animationType="fade" onRequestClose={() => setFeedbackAppt(null)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.fbOverlay}>
+            <View style={styles.fbCard}>
+              {feedbackSubmitted ? (
+                <View style={styles.fbThankWrap}>
+                  <Ionicons name="checkmark-circle" size={52} color="#00B374" />
+                  <Text style={styles.fbThankText}>Thank you for your feedback!</Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.fbTitle}>How was your experience?</Text>
+                  <Text style={styles.fbSub}>
+                    {feedbackAppt?.doctorId?.fullName
+                      ? `Dr. ${feedbackAppt.doctorId.fullName}`
+                      : 'Your appointment'}
+                  </Text>
+
+                  {/* Stars */}
+                  <View style={styles.fbStarsRow}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <TouchableOpacity key={star} onPress={() => setFeedbackRating(star)} activeOpacity={0.7}>
+                        <Ionicons
+                          name={star <= feedbackRating ? 'star' : 'star-outline'}
+                          size={36}
+                          color={star <= feedbackRating ? '#F6A623' : '#CCC'}
+                          style={{ marginHorizontal: 4 }}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Description */}
+                  <TextInput
+                    style={styles.fbInput}
+                    placeholder="Share your experience (optional)..."
+                    placeholderTextColor="#AAA"
+                    multiline
+                    numberOfLines={3}
+                    value={feedbackText}
+                    onChangeText={setFeedbackText}
+                    maxLength={300}
+                  />
+
+                  {/* Buttons */}
+                  <View style={styles.fbBtnRow}>
+                    <TouchableOpacity style={styles.fbCancelBtn} onPress={() => setFeedbackAppt(null)}>
+                      <Text style={styles.fbCancelTxt}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.fbSubmitBtn, feedbackRating === 0 && styles.fbSubmitBtnDisabled]}
+                      onPress={handleSubmitFeedback}
+                      disabled={feedbackLoading || feedbackRating === 0}
+                    >
+                      {feedbackLoading
+                        ? <ActivityIndicator size="small" color="#FFF" />
+                        : <Text style={styles.fbSubmitTxt}>Submit</Text>}
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {role === 'doctor' && activeTab === 'schedule' ? (
         <ScheduleTab doctorId={id} onCreateSchedule={handleCreateAppointment} />
       ) : (
         /* ── Appointments Tab (or Patient view) ── */
         <>
-          {/* Sub-tabs: Active / Completed — doctor only */}
-          {role === 'doctor' && (
-            <View style={styles.subTabBar}>
-              <TouchableOpacity
-                style={[styles.subTabBtn, apptSubTab === 'active' && styles.subTabBtnActive]}
-                onPress={() => setApptSubTab('active')}
-              >
-                <Text style={[styles.subTabBtnText, apptSubTab === 'active' && styles.subTabBtnTextActive]}>
-                  Active
-                  {activeAppts.length > 0 && (
-                    <Text style={styles.subTabCount}> ({activeAppts.length})</Text>
-                  )}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.subTabBtn, apptSubTab === 'completed' && styles.subTabBtnActive]}
-                onPress={() => setApptSubTab('completed')}
-              >
-                <Text style={[styles.subTabBtnText, apptSubTab === 'completed' && styles.subTabBtnTextActive]}>
-                  Completed
-                  {(completedAppts.length + cancelledAppts.length) > 0 && (
-                    <Text style={styles.subTabCount}> ({completedAppts.length + cancelledAppts.length})</Text>
-                  )}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          {/* Sub-tabs: Active / Completed — both doctor and user */}
+          <View style={styles.subTabBar}>
+            <TouchableOpacity
+              style={[styles.subTabBtn, apptSubTab === 'active' && styles.subTabBtnActive]}
+              onPress={() => setApptSubTab('active')}
+            >
+              <Text style={[styles.subTabBtnText, apptSubTab === 'active' && styles.subTabBtnTextActive]}>
+                Active
+                {activeAppts.length > 0 && (
+                  <Text style={styles.subTabCount}> ({activeAppts.length})</Text>
+                )}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.subTabBtn, apptSubTab === 'completed' && styles.subTabBtnActive]}
+              onPress={() => setApptSubTab('completed')}
+            >
+              <Text style={[styles.subTabBtnText, apptSubTab === 'completed' && styles.subTabBtnTextActive]}>
+                Completed
+                {(completedAppts.length + cancelledAppts.length) > 0 && (
+                  <Text style={styles.subTabCount}> ({completedAppts.length + cancelledAppts.length})</Text>
+                )}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           <ScrollView
             contentContainerStyle={styles.content}
@@ -608,15 +753,40 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
                 )
               )
             ) : (
-              /* Patient view — unchanged */
-              appointments.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <MaterialIcons name="event-busy" size={70} color="#CCC" />
-                  <Text style={styles.emptyTitle}>No Appointments</Text>
-                  <Text style={styles.emptySubtitle}>You have no appointments yet. Book one below!</Text>
-                </View>
+              /* Patient view — Active / Completed sub-tabs */
+              apptSubTab === 'active' ? (
+                activeAppts.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <MaterialIcons name="event-available" size={70} color="#CCC" />
+                    <Text style={styles.emptyTitle}>No Active Appointments</Text>
+                    <Text style={styles.emptySubtitle}>Your upcoming and pending appointments will appear here.</Text>
+                  </View>
+                ) : (
+                  activeAppts.map(item => renderAppointmentCard(item, false))
+                )
               ) : (
-                appointments.map(item => renderAppointmentCard(item, false))
+                (completedAppts.length + cancelledAppts.length) === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <MaterialIcons name="event-busy" size={70} color="#CCC" />
+                    <Text style={styles.emptyTitle}>No Completed Appointments</Text>
+                    <Text style={styles.emptySubtitle}>Finished and cancelled sessions will appear here.</Text>
+                  </View>
+                ) : (
+                  <>
+                    {completedAppts.length > 0 && (
+                      <>
+                        <Text style={styles.sectionHeader}>Completed</Text>
+                        {completedAppts.map(item => renderAppointmentCard(item, true))}
+                      </>
+                    )}
+                    {cancelledAppts.length > 0 && (
+                      <>
+                        <Text style={styles.sectionHeader}>Cancelled</Text>
+                        {cancelledAppts.map(item => renderAppointmentCard(item, true))}
+                      </>
+                    )}
+                  </>
+                )
               )
             )}
 
@@ -680,6 +850,10 @@ const styles = StyleSheet.create({
   statusText:                 { fontSize: 12, fontWeight: '700' },
   label:                      { fontSize: 14, color: '#555', marginBottom: 6 },
   value:                      { fontWeight: '600', color: '#2C3E50' },
+  ratingChip:                 { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FFF8E7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, alignSelf: 'flex-start', marginTop: 4, marginBottom: 2 },
+  ratingChipText:             { fontSize: 12, fontWeight: '700', color: '#B07D00' },
+  ratingChipCount:            { fontSize: 11, color: '#C89600' },
+
   concernContainer:           { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F0F2FF', borderRadius: 10, padding: 10, marginTop: 4, marginBottom: 4, flexWrap: 'wrap' },
   concernLabel:               { fontSize: 13, fontWeight: '600', color: PURPLE },
   concernText:                { fontSize: 13, color: '#444', flex: 1 },
@@ -702,6 +876,28 @@ const styles = StyleSheet.create({
   bookButtonText:             { color: '#FFF', fontSize: 16, fontWeight: '700' },
   createButton:               { backgroundColor: '#4CAF50', paddingVertical: 15, borderRadius: 30, alignItems: 'center', marginTop: 10, flexDirection: 'row', justifyContent: 'center', gap: 10, shadowColor: '#4CAF50', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
   createButtonText:           { color: '#FFF', fontSize: 16, fontWeight: '700' },
+
+  // Feedback button on completed card
+  feedbackBtn:             { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: PURPLE },
+  feedbackBtnDone:         { borderColor: '#00B374', backgroundColor: '#F0FBF7' },
+  feedbackBtnText:         { fontSize: 13, fontWeight: '600', color: PURPLE },
+  feedbackBtnTextDone:     { color: '#00B374' },
+
+  // Feedback modal
+  fbOverlay:               { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  fbCard:                  { backgroundColor: '#FFF', borderRadius: 20, padding: 24, width: '100%', alignItems: 'center', elevation: 10 },
+  fbThankWrap:             { alignItems: 'center', paddingVertical: 20 },
+  fbThankText:             { fontSize: 17, fontWeight: '700', color: '#00B374', marginTop: 14, textAlign: 'center' },
+  fbTitle:                 { fontSize: 20, fontWeight: '700', color: '#1A1D2E', marginBottom: 6, textAlign: 'center' },
+  fbSub:                   { fontSize: 14, color: '#888', marginBottom: 20, textAlign: 'center' },
+  fbStarsRow:              { flexDirection: 'row', marginBottom: 20 },
+  fbInput:                 { width: '100%', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 12, fontSize: 14, color: '#333', minHeight: 80, textAlignVertical: 'top', marginBottom: 20 },
+  fbBtnRow:                { flexDirection: 'row', gap: 12, width: '100%' },
+  fbCancelBtn:             { flex: 1, paddingVertical: 12, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD', alignItems: 'center' },
+  fbCancelTxt:             { fontSize: 14, fontWeight: '600', color: '#888' },
+  fbSubmitBtn:             { flex: 1, paddingVertical: 12, borderRadius: 20, backgroundColor: PURPLE, alignItems: 'center' },
+  fbSubmitBtnDisabled:     { backgroundColor: '#CCC' },
+  fbSubmitTxt:             { fontSize: 14, fontWeight: '700', color: '#FFF' },
 
   // Schedule tab
   scheduleCard:               { backgroundColor: '#FFF', borderRadius: 16, padding: 18, marginBottom: 20, elevation: 3, borderWidth: 1.5, borderColor: PURPLE },

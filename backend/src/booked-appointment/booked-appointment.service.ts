@@ -79,7 +79,7 @@ export class BookedAppointmentService {
     const appointments = await this.bookedAppointmentModel
       .find({ userId: new Types.ObjectId(userId) })
       .populate('userId', 'fullName email')
-      .populate('doctorId', 'fullName email doctorProfile')
+      .populate('doctorId', 'fullName email doctorProfile avgRating ratingCount')
       .sort({ date: -1, time: -1 })
       .exec();
 
@@ -110,7 +110,7 @@ export class BookedAppointmentService {
   async getAppointmentById(appointmentId: string): Promise<any> {
     const appointment = await this.bookedAppointmentModel
       .findById(appointmentId)
-      .populate('doctorId', 'fullName email doctorProfile')
+      .populate('doctorId', 'fullName email doctorProfile avgRating ratingCount')
       .populate('userId', 'fullName email profileImage')
       .exec();
 
@@ -212,7 +212,7 @@ export class BookedAppointmentService {
         date: { $gte: today },
         status: { $in: ['pending', 'confirmed'] },
       })
-      .populate('doctorId', 'fullName email doctorProfile')
+      .populate('doctorId', 'fullName email doctorProfile avgRating ratingCount')
       .sort({ date: 1, time: 1 })
       .exec();
 
