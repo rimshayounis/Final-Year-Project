@@ -1,6 +1,6 @@
 import axios from 'axios'
-export const API_URL = 'http://10.161.203.86:3000/api';
-export const SOCKET_URL = 'http://10.161.203.86:3000';
+export const API_URL = 'http://10.71.131.86:3000/api';
+export const SOCKET_URL = 'http://10.71.131.86:3000';
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -86,6 +86,7 @@ export const reportAPI = {
     reportedId: string;
     reportedModel?: string;
     reason: string;
+     postId?: string; 
   }) => apiClient.post('/reports', data),
 };
 

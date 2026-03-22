@@ -19,6 +19,14 @@ export class Admin {
 
   @Prop({ default: 'admin' })
   role: string;
+
+  // ← explicit type: String fixes the error
+  @Prop({ type: String, default: null })
+  resetOtp: string | null;
+
+  // ← explicit type: Date fixes the error
+  @Prop({ type: Date, default: null })
+  resetOtpExpiry: Date | null;
 }
 
 export const AdminSchema = SchemaFactory.createForClass(Admin);

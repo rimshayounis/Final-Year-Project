@@ -12,6 +12,13 @@ export class FeedbackController {
     return { success: true, data: feedback };
   }
 
+  // ── ADDED: get all feedbacks for admin dashboard ──
+  @Get()
+  async getAll() {
+    const feedbacks = await this.feedbackService.getAll();
+    return { success: true, data: feedbacks };
+  }
+
   @Get('doctor/:doctorId')
   async getDoctorFeedbacks(@Param('doctorId') doctorId: string) {
     const result = await this.feedbackService.getDoctorFeedbacks(doctorId);

@@ -24,7 +24,6 @@ export class ReportController {
     return { success: true, data: reports };
   }
 
-  // ── NEW ──
   @Patch(':id/review')
   async markReviewed(@Param('id') id: string) {
     const report = await this.reportService.markReviewed(id);

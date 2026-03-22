@@ -53,7 +53,7 @@ interface Post {
   mediaUrls: string[];
   backgroundColor: string | null;
   status: "pending" | "approved" | "rejected";
-  isActive?: boolean; // false = private (owner only)
+  isActive?: boolean;
   likes: number;
   comments: number;
   shares: number;
@@ -219,16 +219,10 @@ export default function FeedScreen({
   const [rejectModal, setRejectModal] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<Post | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
-  const [profileImages, setProfileImages] = useState<Record<string, string>>(
-    {},
-  );
+  const [profileImages, setProfileImages] = useState<Record<string, string>>({});
   const [doctorIds, setDoctorIds] = useState<Set<string>>(new Set());
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({});
-  // Verified-by doctor info cache: doctorId → DoctorInfo
-  const [doctorInfoCache, setDoctorInfoCache] = useState<
-    Record<string, DoctorInfo>
-  >({});
-  // Which post has the verified-by dropdown open
+  const [doctorInfoCache, setDoctorInfoCache] = useState<Record<string, DoctorInfo>>({});
   const [verifiedDropdown, setVerifiedDropdown] = useState<string | null>(null);
   const [slotsRemaining, setSlotsRemaining] = useState<number | null>(null);
   const [doctorPlan, setDoctorPlan] = useState<string>("free_trial");
@@ -238,10 +232,9 @@ export default function FeedScreen({
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Report post
-  const [reportPost,      setReportPost]      = useState<Post | null>(null);
-  const [reportReason,    setReportReason]    = useState("");
-  const [reportLoading,   setReportLoading]   = useState(false);
+  const [reportPost, setReportPost]           = useState<Post | null>(null);
+  const [reportReason, setReportReason]       = useState("");
+  const [reportLoading, setReportLoading]     = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
 
   const categories = [
@@ -258,16 +251,12 @@ export default function FeedScreen({
     { key: "approved", label: "Approved", color: "#00B374" },
   ];
 
-  /* ── Fetch doctor info for verified-by ── */
-  const fetchDoctorInfo = async (
-    doctorId: string,
-  ): Promise<DoctorInfo | null> => {
+  const fetchDoctorInfo = async (doctorId: string): Promise<DoctorInfo | null> => {
     if (doctorInfoCache[doctorId]) return doctorInfoCache[doctorId];
     try {
       const r = await apiClient.get(`/doctors/${doctorId}`);
       const d = r.data?.doctor ?? r.data?.data ?? r.data;
       if (!d?.fullName) return null;
-      // Fetch profile image
       let profileImage: string | undefined;
       try {
         const pr = await apiClient.get(`/profiles/doctor/${doctorId}`);
@@ -276,9 +265,7 @@ export default function FeedScreen({
           const base = API_URL.replace("/api", "");
           profileImage = imgPath.startsWith("http") ? imgPath : base + imgPath;
         }
-      } catch {
-        /* no image */
-      }
+      } catch { /* no image */ }
       const info: DoctorInfo = {
         _id: doctorId,
         fullName: d.fullName,
@@ -303,13 +290,8 @@ export default function FeedScreen({
         "";
       setDoctorSpecialization(spec);
       setDoctorPlan(plan);
-      if (plan === "free_trial") {
-        setSlotsRemaining(0);
-        return;
-      }
-      const slotsRes = await apiClient.get(
-        `/points-reward/${id}/verification-slots?plan=${plan}`,
-      );
+      if (plan === "free_trial") { setSlotsRemaining(0); return; }
+      const slotsRes = await apiClient.get(`/points-reward/${id}/verification-slots?plan=${plan}`);
       setSlotsRemaining(slotsRes.data?.data?.remainingSlots ?? 0);
     } catch {
       setSlotsRemaining(null);
@@ -324,9 +306,7 @@ export default function FeedScreen({
           list = (await apiClient.get("/posts/pending")).data.data || [];
         } else if (selectedStatus === "approved") {
           const cat = selectedCategory === "All" ? "" : selectedCategory;
-          const url = cat
-            ? `/posts/category/${encodeURIComponent(cat)}`
-            : "/posts/feed";
+          const url = cat ? `/posts/category/${encodeURIComponent(cat)}` : "/posts/feed";
           list = (await apiClient.get(url)).data.data || [];
         } else {
           const [a, p] = await Promise.all([
@@ -334,28 +314,21 @@ export default function FeedScreen({
             apiClient.get("/posts/pending"),
           ]);
           const map = new Map<string, Post>();
-          [...(a.data.data || []), ...(p.data.data || [])].forEach((x) =>
-            map.set(x._id, x),
-          );
+          [...(a.data.data || []), ...(p.data.data || [])].forEach((x) => map.set(x._id, x));
           list = Array.from(map.values()).sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
           );
         }
       } else {
         const cat = selectedCategory === "All" ? "" : selectedCategory;
-        const url = cat
-          ? `/posts/category/${encodeURIComponent(cat)}`
-          : "/posts/feed";
+        const url = cat ? `/posts/category/${encodeURIComponent(cat)}` : "/posts/feed";
         list = (await apiClient.get(url)).data.data || [];
       }
 
       const uniqueIds = [
         ...new Set(
           list
-            .map((p) =>
-              typeof p.userId === "object" ? (p.userId as any)?._id : null,
-            )
+            .map((p) => typeof p.userId === "object" ? (p.userId as any)?._id : null)
             .filter(Boolean) as string[],
         ),
       ];
@@ -370,21 +343,14 @@ export default function FeedScreen({
           try {
             const r = await apiClient.get(`/doctors/${aid}`);
             const d = r.data?.doctor ?? r.data?.data ?? r.data;
-            if (d?.fullName) {
-              name = d.fullName;
-              isDoc = true;
-            }
-          } catch {
-            /* not a doctor */
-          }
+            if (d?.fullName) { name = d.fullName; isDoc = true; }
+          } catch { /* not a doctor */ }
           if (!name) {
             try {
               const r = await apiClient.get(`/users/${aid}`);
               const d = r.data?.user ?? r.data?.data ?? r.data;
               if (d?.fullName) name = d.fullName;
-            } catch {
-              /* not a user */
-            }
+            } catch { /* not a user */ }
           }
           if (name) nMap[aid] = name;
           if (isDoc) dSet.add(aid);
@@ -396,9 +362,7 @@ export default function FeedScreen({
               const base = API_URL.replace("/api", "");
               iMap[aid] = img.startsWith("http") ? img : base + img;
             }
-          } catch {
-            /* no image */
-          }
+          } catch { /* no image */ }
         }),
       );
 
@@ -406,12 +370,8 @@ export default function FeedScreen({
       setAuthorNames((prev) => ({ ...prev, ...nMap }));
       setProfileImages((prev) => ({ ...prev, ...iMap }));
 
-      // Apply category filter client-side (covers pending/All-status cases)
       if (selectedCategory !== "All") {
-        list = list.filter(
-          (p) =>
-            p.category?.toLowerCase() === selectedCategory.toLowerCase(),
-        );
+        list = list.filter((p) => p.category?.toLowerCase() === selectedCategory.toLowerCase());
       }
 
       const filtered =
@@ -419,13 +379,11 @@ export default function FeedScreen({
           ? list
           : selectedAuthorType === "professionals"
             ? list.filter((p) => {
-                const a =
-                  typeof p.userId === "object" ? (p.userId as any)?._id : null;
+                const a = typeof p.userId === "object" ? (p.userId as any)?._id : null;
                 return a && dSet.has(a);
               })
             : list.filter((p) => {
-                const a =
-                  typeof p.userId === "object" ? (p.userId as any)?._id : null;
+                const a = typeof p.userId === "object" ? (p.userId as any)?._id : null;
                 return a && !dSet.has(a);
               });
 
@@ -445,9 +403,7 @@ export default function FeedScreen({
       const raw = res.data;
       const d = raw?.doctor ?? raw?.user ?? raw?.data ?? raw;
       setUserName(d?.fullName ?? "");
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   };
 
   useFocusEffect(
@@ -476,21 +432,13 @@ export default function FeedScreen({
       if (liked) {
         await apiClient.post(`/posts/${postId}/unlike`);
         setPosts((prev) =>
-          prev.map((p) =>
-            p._id === postId ? { ...p, likes: Math.max(0, p.likes - 1) } : p,
-          ),
+          prev.map((p) => p._id === postId ? { ...p, likes: Math.max(0, p.likes - 1) } : p),
         );
-        setLikedPosts((prev) => {
-          const n = new Set(prev);
-          n.delete(postId);
-          return n;
-        });
+        setLikedPosts((prev) => { const n = new Set(prev); n.delete(postId); return n; });
       } else {
         await apiClient.post(`/posts/${postId}/like`);
         setPosts((prev) =>
-          prev.map((p) =>
-            p._id === postId ? { ...p, likes: p.likes + 1 } : p,
-          ),
+          prev.map((p) => p._id === postId ? { ...p, likes: p.likes + 1 } : p),
         );
         setLikedPosts((prev) => new Set([...prev, postId]));
       }
@@ -504,15 +452,10 @@ export default function FeedScreen({
   const handleShare = async (post: Post) => {
     setActionLoading(post._id + "_share");
     try {
-      await Share.share({
-        title: post.title,
-        message: `${post.title}\n\n${post.description}`,
-      });
+      await Share.share({ title: post.title, message: `${post.title}\n\n${post.description}` });
       await apiClient.post(`/posts/${post._id}/share`);
       setPosts((prev) =>
-        prev.map((p) =>
-          p._id === post._id ? { ...p, shares: p.shares + 1 } : p,
-        ),
+        prev.map((p) => p._id === post._id ? { ...p, shares: p.shares + 1 } : p),
       );
     } catch {
       Alert.alert("Error", "Failed to share");
@@ -529,9 +472,7 @@ export default function FeedScreen({
       const res = await apiClient.get(`/posts/${post._id}/comments`);
       const raw = Array.isArray(res.data.data)
         ? res.data.data
-        : Array.isArray(res.data)
-          ? res.data
-          : [];
+        : Array.isArray(res.data) ? res.data : [];
       setSelectedPost({
         ...post,
         commentsList: raw.map((c: any) => ({
@@ -542,11 +483,8 @@ export default function FeedScreen({
           createdAt: c.createdAt || new Date().toISOString(),
         })),
       });
-    } catch {
-      /* ignore */
-    } finally {
-      setCommentsLoading(false);
-    }
+    } catch { /* ignore */ }
+    finally { setCommentsLoading(false); }
   };
 
   const handleSubmitComment = async () => {
@@ -566,18 +504,10 @@ export default function FeedScreen({
         createdAt: new Date().toISOString(),
       };
       setSelectedPost((p) =>
-        p
-          ? {
-              ...p,
-              comments: p.comments + 1,
-              commentsList: [...(p.commentsList || []), nc],
-            }
-          : p,
+        p ? { ...p, comments: p.comments + 1, commentsList: [...(p.commentsList || []), nc] } : p,
       );
       setPosts((prev) =>
-        prev.map((p) =>
-          p._id === selectedPost._id ? { ...p, comments: p.comments + 1 } : p,
-        ),
+        prev.map((p) => p._id === selectedPost._id ? { ...p, comments: p.comments + 1 } : p),
       );
       setCommentText("");
     } catch {
@@ -603,10 +533,7 @@ export default function FeedScreen({
             fetchPosts();
             fetchVerificationSlots();
           } catch (e: any) {
-            Alert.alert(
-              "Error",
-              e?.response?.data?.message || "Failed to approve",
-            );
+            Alert.alert("Error", e?.response?.data?.message || "Failed to approve");
           } finally {
             setActionLoading(null);
           }
@@ -621,18 +548,23 @@ export default function FeedScreen({
     setReportSubmitted(false);
   };
 
+  // ── UPDATED: now sends postId ──
   const handleSubmitReport = async () => {
     if (!reportPost) return;
     setReportLoading(true);
     try {
-      const postAuthor = typeof reportPost.userId === 'object' ? reportPost.userId as PostAuthor : null;
+      const postAuthor = typeof reportPost.userId === 'object'
+        ? reportPost.userId as PostAuthor
+        : null;
       const reportedId = postAuthor?._id ?? (reportPost.userId as string);
+
       await reportAPI.submit({
         reporterId:    id,
         reporterModel: role === 'doctor' ? 'Doctor' : 'User',
         reportedId,
         reportedModel: doctorIds.has(reportedId) ? 'Doctor' : 'User',
         reason:        reportReason.trim() || 'Reported post',
+        postId:        reportPost._id,  // ← NOW INCLUDED
       });
     } catch {
       // silent — show success regardless
@@ -647,6 +579,7 @@ export default function FeedScreen({
     setRejectTarget(post);
     setRejectModal(true);
   };
+
   const handleConfirmReject = async (reason: string) => {
     if (!rejectTarget) return;
     setReviewLoading(true);
@@ -680,22 +613,16 @@ export default function FeedScreen({
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-    return new Date(d).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
+    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  /* ── Get approvedBy doctor ID ── */
   const getApprovedById = (post: Post): string | null => {
     if (!post.approvedBy) return null;
     if (typeof post.approvedBy === "string") return post.approvedBy;
-    if (typeof post.approvedBy === "object")
-      return (post.approvedBy as any)?._id ?? null;
+    if (typeof post.approvedBy === "object") return (post.approvedBy as any)?._id ?? null;
     return null;
   };
 
-  /* ── Verified By Button + Dropdown ── */
   const VerifiedBySection = ({ post }: { post: Post }) => {
     const doctorId = getApprovedById(post);
     if (!doctorId || post.status !== "approved") return null;
@@ -705,10 +632,7 @@ export default function FeedScreen({
     const base = API_URL.replace("/api", "");
 
     const handlePress = async () => {
-      if (isOpen) {
-        setVerifiedDropdown(null);
-        return;
-      }
+      if (isOpen) { setVerifiedDropdown(null); return; }
       setVerifiedDropdown(post._id);
       if (!info) await fetchDoctorInfo(doctorId);
     };
@@ -718,13 +642,8 @@ export default function FeedScreen({
         <TouchableOpacity style={s.verifiedBtn} onPress={handlePress}>
           <Ionicons name="shield-checkmark" size={13} color="#00B374" />
           <Text style={s.verifiedBtnText}>{"Verified by a Doctor"}</Text>
-          <Ionicons
-            name={isOpen ? "chevron-up" : "chevron-down"}
-            size={13}
-            color="#00B374"
-          />
+          <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={13} color="#00B374" />
         </TouchableOpacity>
-
         {isOpen ? (
           <View style={s.verifiedDropdown}>
             {info ? (
@@ -732,30 +651,20 @@ export default function FeedScreen({
                 style={s.verifiedDoctorRow}
                 onPress={() => {
                   setVerifiedDropdown(null);
-                  if (onNavigateToDoctorProfile)
-                    onNavigateToDoctorProfile(doctorId);
+                  if (onNavigateToDoctorProfile) onNavigateToDoctorProfile(doctorId);
                 }}
               >
                 <View style={s.verifiedAvatar}>
                   {info.profileImage ? (
-                    <Image
-                      source={{ uri: info.profileImage }}
-                      style={s.verifiedAvatarImg}
-                    />
+                    <Image source={{ uri: info.profileImage }} style={s.verifiedAvatarImg} />
                   ) : (
-                    <Text style={s.verifiedAvatarText}>
-                      {info.fullName.charAt(0).toUpperCase()}
-                    </Text>
+                    <Text style={s.verifiedAvatarText}>{info.fullName.charAt(0).toUpperCase()}</Text>
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.verifiedDoctorName}>
-                    {"Dr. " + info.fullName}
-                  </Text>
+                  <Text style={s.verifiedDoctorName}>{"Dr. " + info.fullName}</Text>
                   {info.specialization ? (
-                    <Text style={s.verifiedDoctorSpec}>
-                      {info.specialization}
-                    </Text>
+                    <Text style={s.verifiedDoctorSpec}>{info.specialization}</Text>
                   ) : null}
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#888" />
@@ -772,26 +681,21 @@ export default function FeedScreen({
     );
   };
 
-  /* ── Post Card ── */
   const renderPost = ({ item }: { item: Post }) => {
     const isLiked = likedPosts.has(item._id);
     const isExpanded = expandedPosts.has(item._id);
     const hasColor = !!item.backgroundColor;
     const hasMedia = (item.mediaUrls?.length ?? 0) > 0;
     const descLimit = 150;
-    const needsExpand =
-      item.description.length > descLimit && !hasColor && !hasMedia;
-    const author =
-      typeof item.userId === "object" ? (item.userId as PostAuthor) : null;
+    const needsExpand = item.description.length > descLimit && !hasColor && !hasMedia;
+    const author = typeof item.userId === "object" ? (item.userId as PostAuthor) : null;
     const authorId = author?._id ?? "";
     const resolvedName = authorNames[authorId] || author?.fullName || "";
     const isDoc = doctorIds.has(authorId);
     const authorName = resolvedName
       ? (isDoc ? "Dr. " : "") + resolvedName.charAt(0).toUpperCase() + resolvedName.slice(1).toLowerCase()
       : "...";
-    const authorInitial = resolvedName
-      ? resolvedName.charAt(0).toUpperCase()
-      : "?";
+    const authorInitial = resolvedName ? resolvedName.charAt(0).toUpperCase() : "?";
     const authorImage = profileImages[authorId] ?? null;
     const baseUrl = API_URL.replace("/api", "");
     const isOwnPost = authorId === id;
@@ -841,8 +745,6 @@ export default function FeedScreen({
             if (role !== "doctor" || isOwnPost || item.status !== "pending") return null;
             const isMentalHealth = item.category?.toLowerCase() === "mental health";
             const isPsych = doctorSpecialization.trim().toLowerCase() === "psychologist";
-            // Mental Health posts → only psychologists can review
-            // Other category posts → only non-psychologists can review
             const canReview = (isMentalHealth && isPsych) || (!isMentalHealth && !isPsych);
             if (!canReview) return null;
             return (
@@ -891,7 +793,6 @@ export default function FeedScreen({
             );
           })()}
 
-          {/* 3-dot report button — only for other people's posts */}
           {!isOwnPost && (
             <TouchableOpacity
               style={s.threeDotBtn}
@@ -911,12 +812,7 @@ export default function FeedScreen({
         {hasMedia ? (
           <Text style={s.plainDesc}>{item.description}</Text>
         ) : hasColor ? (
-          <View
-            style={[
-              s.coloredPost,
-              { backgroundColor: item.backgroundColor as string },
-            ]}
-          >
+          <View style={[s.coloredPost, { backgroundColor: item.backgroundColor as string }]}>
             <Text style={s.coloredPostText}>{item.description}</Text>
           </View>
         ) : (
@@ -928,9 +824,7 @@ export default function FeedScreen({
             </Text>
             {needsExpand ? (
               <TouchableOpacity onPress={() => toggleExpand(item._id)}>
-                <Text style={s.seeMore}>
-                  {isExpanded ? "See less" : "See more"}
-                </Text>
+                <Text style={s.seeMore}>{isExpanded ? "See less" : "See more"}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -948,16 +842,13 @@ export default function FeedScreen({
                     source={{ uri }}
                     style={s.mediaImage}
                     resizeMode="cover"
-                    onError={() =>
-                      setFailedImages((prev) => new Set([...prev, url]))
-                    }
+                    onError={() => setFailedImages((prev) => new Set([...prev, url]))}
                   />
                 );
               })}
           </View>
         ) : null}
 
-        {/* Verified by doctor */}
         <VerifiedBySection post={item} />
 
         <View style={s.statsRow}>
@@ -972,15 +863,9 @@ export default function FeedScreen({
             ) : null}
           </View>
           <View style={s.statsRight}>
-            {item.comments > 0 ? (
-              <Text style={s.statText}>{item.comments + " comments"}</Text>
-            ) : null}
-            {item.comments > 0 && item.shares > 0 ? (
-              <Text style={s.statText}>{" · "}</Text>
-            ) : null}
-            {item.shares > 0 ? (
-              <Text style={s.statText}>{item.shares + " shares"}</Text>
-            ) : null}
+            {item.comments > 0 ? <Text style={s.statText}>{item.comments + " comments"}</Text> : null}
+            {item.comments > 0 && item.shares > 0 ? <Text style={s.statText}>{" · "}</Text> : null}
+            {item.shares > 0 ? <Text style={s.statText}>{item.shares + " shares"}</Text> : null}
           </View>
         </View>
 
@@ -1000,14 +885,9 @@ export default function FeedScreen({
                 color={isLiked ? "#E53E3E" : "#666"}
               />
             )}
-            <Text style={[s.actionLabel, isLiked ? { color: "#E53E3E" } : {}]}>
-              {"Like"}
-            </Text>
+            <Text style={[s.actionLabel, isLiked ? { color: "#E53E3E" } : {}]}>{"Like"}</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={s.actionBtn}
-            onPress={() => handleOpenComments(item)}
-          >
+          <TouchableOpacity style={s.actionBtn} onPress={() => handleOpenComments(item)}>
             <Ionicons name="chatbubble-outline" size={19} color="#666" />
             <Text style={s.actionLabel}>{"Comment"}</Text>
           </TouchableOpacity>
@@ -1028,20 +908,17 @@ export default function FeedScreen({
     );
   };
 
-  /* ── active filter count badge ── */
   const activeFilters =
     (selectedCategory !== "All" ? 1 : 0) +
     (selectedStatus !== "All" ? 1 : 0) +
     (selectedAuthorType !== "All" ? 1 : 0);
 
-  /* ── List Header — empty, all filters moved to header ── */
   const ListHeader = () => null;
 
   return (
     <View style={s.container}>
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
       <View style={[s.topNav, { paddingTop: insets.top + 10 }]}>
-        {/* Title — hidden when search is active */}
         {searchVisible ? (
           <View style={s.searchInHeader}>
             <Ionicons name="search" size={15} color="rgba(255,255,255,0.7)" />
@@ -1063,22 +940,14 @@ export default function FeedScreen({
         ) : (
           <Text style={s.topNavTitle}>{"Health Feed"}</Text>
         )}
-
-        {/* Right icons — always visible */}
         <View style={s.topNavRight}>
           <TouchableOpacity
             style={s.navIconBtn}
-            onPress={() => {
-              setSearchVisible((v) => !v);
-              setSearchQuery("");
-            }}
+            onPress={() => { setSearchVisible((v) => !v); setSearchQuery(""); }}
           >
             <Ionicons name={searchVisible ? "close" : "search-outline"} size={20} color="#FFF" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={s.navIconBtn}
-            onPress={() => setFilterVisible(true)}
-          >
+          <TouchableOpacity style={s.navIconBtn} onPress={() => setFilterVisible(true)}>
             <Ionicons name="options-outline" size={20} color="#FFF" />
             {activeFilters > 0 ? (
               <View style={s.filterBadge}>
@@ -1097,27 +966,20 @@ export default function FeedScreen({
       ) : (
         <FlatList
           data={posts.filter((p) => {
-            // Private posts — only visible to the post author
-            const authorId =
-              typeof p.userId === "object" ? (p.userId as any)?._id : p.userId;
+            const authorId = typeof p.userId === "object" ? (p.userId as any)?._id : p.userId;
             if (p.isActive === false && authorId !== id) return false;
-
-            // Non-psychologist doctors must NOT see pending Mental Health posts
             if (
               role === "doctor" &&
               doctorSpecialization.trim().toLowerCase() !== "psychologist" &&
               p.category?.toLowerCase() === "mental health" &&
               p.status === "pending"
             ) return false;
-
-            // Search filter — match any keyword against title or description
             if (searchQuery.trim()) {
               const keywords = searchQuery.trim().toLowerCase().split(/\s+/);
               const haystack = `${p.title} ${p.description}`.toLowerCase();
               const matches = keywords.some((kw) => haystack.includes(kw));
               if (!matches) return false;
             }
-
             return true;
           })}
           keyExtractor={(item) => item._id}
@@ -1220,35 +1082,22 @@ export default function FeedScreen({
         visible={commentModal}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          setCommentModal(false);
-          setCommentText("");
-        }}
+        onRequestClose={() => { setCommentModal(false); setCommentText(""); }}
       >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-          <TouchableWithoutFeedback
-            onPress={() => {
-              setCommentModal(false);
-              setCommentText("");
-            }}
-          >
+          <TouchableWithoutFeedback onPress={() => { setCommentModal(false); setCommentText(""); }}>
             <View style={s.cmBackdrop} />
           </TouchableWithoutFeedback>
           <View style={s.cmSheet}>
             <View style={s.cmHandle} />
             <View style={s.cmHeader}>
-              <Text
-                style={s.cmTitle}
-              >{`Comments${selectedPost?.comments ? " (" + selectedPost.comments + ")" : ""}`}</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setCommentModal(false);
-                  setCommentText("");
-                }}
-              >
+              <Text style={s.cmTitle}>
+                {`Comments${selectedPost?.comments ? " (" + selectedPost.comments + ")" : ""}`}
+              </Text>
+              <TouchableOpacity onPress={() => { setCommentModal(false); setCommentText(""); }}>
                 <Ionicons name="close" size={22} color="#555" />
               </TouchableOpacity>
             </View>
@@ -1264,14 +1113,11 @@ export default function FeedScreen({
                   <ActivityIndicator color="#6B7FED" />
                   <Text style={s.cmLoadingText}>{"Loading..."}</Text>
                 </View>
-              ) : selectedPost?.commentsList &&
-                selectedPost.commentsList.length > 0 ? (
+              ) : selectedPost?.commentsList && selectedPost.commentsList.length > 0 ? (
                 selectedPost.commentsList.map((c) => (
                   <View key={c._id} style={s.cmItem}>
                     <View style={s.cmAvatar}>
-                      <Text style={s.cmAvatarText}>
-                        {(c.userName || "U").charAt(0).toUpperCase()}
-                      </Text>
+                      <Text style={s.cmAvatarText}>{(c.userName || "U").charAt(0).toUpperCase()}</Text>
                     </View>
                     <View style={s.cmBubble}>
                       <View style={s.cmBubbleHeader}>
@@ -1284,11 +1130,7 @@ export default function FeedScreen({
                 ))
               ) : (
                 <View style={s.cmEmpty}>
-                  <Ionicons
-                    name="chatbubbles-outline"
-                    size={44}
-                    color="#E0E3EF"
-                  />
+                  <Ionicons name="chatbubbles-outline" size={44} color="#E0E3EF" />
                   <Text style={s.cmEmptyTitle}>{"No comments yet"}</Text>
                   <Text style={s.cmEmptyText}>{"Be the first!"}</Text>
                 </View>
@@ -1296,9 +1138,7 @@ export default function FeedScreen({
             </ScrollView>
             <View style={s.cmInputWrap}>
               <View style={s.cmAvatar}>
-                <Text style={s.cmAvatarText}>
-                  {userName?.charAt(0)?.toUpperCase() || "U"}
-                </Text>
+                <Text style={s.cmAvatarText}>{userName?.charAt(0)?.toUpperCase() || "U"}</Text>
               </View>
               <View style={s.cmInputBox}>
                 <TextInput
@@ -1313,10 +1153,7 @@ export default function FeedScreen({
                 <TouchableOpacity
                   style={[s.cmSend, !commentText.trim() && { opacity: 0.35 }]}
                   onPress={handleSubmitComment}
-                  disabled={
-                    !commentText.trim() ||
-                    actionLoading === selectedPost?._id + "_comment"
-                  }
+                  disabled={!commentText.trim() || actionLoading === selectedPost?._id + "_comment"}
                 >
                   {actionLoading === selectedPost?._id + "_comment" ? (
                     <ActivityIndicator size="small" color="#6B7FED" />
@@ -1332,15 +1169,12 @@ export default function FeedScreen({
 
       <RejectModal
         visible={rejectModal}
-        onClose={() => {
-          setRejectModal(false);
-          setRejectTarget(null);
-        }}
+        onClose={() => { setRejectModal(false); setRejectTarget(null); }}
         onConfirm={handleConfirmReject}
         loading={reviewLoading}
       />
 
-      {/* ── Filter bottom sheet ── */}
+      {/* Filter bottom sheet */}
       <Modal
         visible={filterVisible}
         transparent
@@ -1352,7 +1186,6 @@ export default function FeedScreen({
         </TouchableWithoutFeedback>
         <View style={s.sheet}>
           <View style={s.sheetHandle} />
-
           <View style={s.sheetTitleRow}>
             <Text style={s.sheetTitle}>Filters</Text>
             <TouchableOpacity
@@ -1365,8 +1198,6 @@ export default function FeedScreen({
               <Text style={s.sheetReset}>Reset all</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Author type */}
           <Text style={s.sheetLabel}>Show posts by</Text>
           <View style={s.sheetChipRow}>
             {[
@@ -1382,14 +1213,10 @@ export default function FeedScreen({
                   if (k === "professionals") setSelectedStatus("All");
                 }}
               >
-                <Text style={[s.sheetChipTxt, selectedAuthorType === k && s.sheetChipTxtActive]}>
-                  {l}
-                </Text>
+                <Text style={[s.sheetChipTxt, selectedAuthorType === k && s.sheetChipTxtActive]}>{l}</Text>
               </TouchableOpacity>
             ))}
           </View>
-
-          {/* Status — doctor only */}
           {role === "doctor" && selectedAuthorType !== "professionals" ? (
             <>
               <Text style={s.sheetLabel}>Post status</Text>
@@ -1411,8 +1238,6 @@ export default function FeedScreen({
               </View>
             </>
           ) : null}
-
-          {/* Category */}
           <Text style={s.sheetLabel}>Category</Text>
           <View style={s.sheetChipRow}>
             {categories.map((cat) => (
@@ -1421,17 +1246,11 @@ export default function FeedScreen({
                 style={[s.sheetChip, selectedCategory === cat && s.sheetChipActive]}
                 onPress={() => setSelectedCategory(cat)}
               >
-                <Text style={[s.sheetChipTxt, selectedCategory === cat && s.sheetChipTxtActive]}>
-                  {cat}
-                </Text>
+                <Text style={[s.sheetChipTxt, selectedCategory === cat && s.sheetChipTxtActive]}>{cat}</Text>
               </TouchableOpacity>
             ))}
           </View>
-
-          <TouchableOpacity
-            style={s.sheetApplyBtn}
-            onPress={() => setFilterVisible(false)}
-          >
+          <TouchableOpacity style={s.sheetApplyBtn} onPress={() => setFilterVisible(false)}>
             <Text style={s.sheetApplyTxt}>Apply</Text>
           </TouchableOpacity>
         </View>
@@ -1458,17 +1277,8 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
     textAlign: "left",
   },
-  topNavRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  navIconBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  topNavRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  navIconBtn: { width: 36, height: 36, justifyContent: "center", alignItems: "center" },
   searchInHeader: {
     flex: 1,
     flexDirection: "row",
@@ -1479,12 +1289,7 @@ const s = StyleSheet.create({
     height: 38,
     gap: 6,
   },
-  searchInHeaderInput: {
-    flex: 1,
-    fontSize: 14,
-    color: "#FFF",
-    paddingVertical: 0,
-  },
+  searchInHeaderInput: { flex: 1, fontSize: 14, color: "#FFF", paddingVertical: 0 },
   docBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1495,33 +1300,12 @@ const s = StyleSheet.create({
     borderRadius: 20,
   },
   docBadgeText: { fontSize: 11, fontWeight: "700", color: "#FFF" },
-  loadingWrap: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 12,
-  },
+  loadingWrap: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
   loadingText: { fontSize: 14, color: "#6B7FED" },
   emptyWrap: { paddingTop: 80, alignItems: "center", paddingHorizontal: 40 },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2C3E50",
-    marginTop: 16,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: "#999",
-    marginTop: 6,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  filterWrap: {
-    backgroundColor: "#FFF",
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ECEEF5",
-  },
+  emptyTitle: { fontSize: 18, fontWeight: "700", color: "#2C3E50", marginTop: 16 },
+  emptySubtitle: { fontSize: 13, color: "#999", marginTop: 6, textAlign: "center", lineHeight: 20 },
+  filterWrap: { backgroundColor: "#FFF", marginBottom: 8, borderBottomWidth: 1, borderBottomColor: "#ECEEF5" },
   filterBadge: {
     position: "absolute",
     top: -4,
@@ -1534,7 +1318,6 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   filterBadgeTxt: { fontSize: 8, fontWeight: "800", color: "#FFF" },
-  // bottom sheet
   sheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
   sheet: {
     backgroundColor: "#FFF",
@@ -1552,12 +1335,7 @@ const s = StyleSheet.create({
     marginTop: 10,
     marginBottom: 16,
   },
-  sheetTitleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 18,
-  },
+  sheetTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 },
   sheetTitle: { fontSize: 16, fontWeight: "800", color: "#1A1D2E" },
   sheetReset: { fontSize: 13, fontWeight: "600", color: "#E53E3E" },
   sheetLabel: {
@@ -1568,12 +1346,7 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 10,
   },
-  sheetChipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 20,
-  },
+  sheetChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 },
   sheetChip: {
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -1585,26 +1358,10 @@ const s = StyleSheet.create({
   sheetChipActive: { backgroundColor: "#6B7FED", borderColor: "#6B7FED" },
   sheetChipTxt: { fontSize: 13, fontWeight: "600", color: "#666" },
   sheetChipTxtActive: { color: "#FFF", fontWeight: "700" },
-  sheetApplyBtn: {
-    backgroundColor: "#6B7FED",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 4,
-  },
+  sheetApplyBtn: { backgroundColor: "#6B7FED", paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 4 },
   sheetApplyTxt: { fontSize: 15, fontWeight: "700", color: "#FFF" },
-  postCard: {
-    backgroundColor: "#FFF",
-    marginBottom: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  postHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 10,
-  },
+  postCard: { backgroundColor: "#FFF", marginBottom: 8, paddingVertical: 14, paddingHorizontal: 16 },
+  postHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 },
   postAuthorRow: { flexDirection: "row", alignItems: "center", flex: 1 },
   postAvatar: {
     width: 44,
@@ -1630,12 +1387,7 @@ const s = StyleSheet.create({
     borderRadius: 10,
   },
   proBadgeText: { fontSize: 9, fontWeight: "700", color: "#6B7FED" },
-  postMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 2,
-  },
+  postMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
   postTime: { fontSize: 11, color: "#999" },
   pendingBadge: {
     flexDirection: "row",
@@ -1646,12 +1398,7 @@ const s = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
   },
-  pendingDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: "#F6A623",
-  },
+  pendingDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "#F6A623" },
   pendingBadgeText: { fontSize: 10, fontWeight: "700", color: "#F6A623" },
   reviewBtns: { flexDirection: "row", gap: 6, alignItems: "center" },
   approveBtn: {
@@ -1676,11 +1423,7 @@ const s = StyleSheet.create({
     borderColor: "#FFCDD2",
   },
   rejectBtnText: { fontSize: 11, fontWeight: "700", color: "#E53E3E" },
-
-  // 3-dot report button
   threeDotBtn: { padding: 4, marginLeft: 4 },
-
-  // Report modal
   reportOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1691,21 +1434,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
   },
-  reportCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 18,
-    padding: 20,
-    width: '100%',
-    elevation: 10,
-  },
-  reportCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
+  reportCard: { backgroundColor: '#FFF', borderRadius: 18, padding: 20, width: '100%', elevation: 10 },
+  reportCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   reportCardTitle: { fontSize: 16, fontWeight: '800', color: '#1A1D2E' },
-  reportCardSub:   { fontSize: 13, color: '#888', marginBottom: 14, lineHeight: 20 },
+  reportCardSub: { fontSize: 13, color: '#888', marginBottom: 14, lineHeight: 20 },
   reportInput: {
     backgroundColor: '#F5F7FF',
     borderRadius: 12,
@@ -1717,20 +1449,16 @@ const s = StyleSheet.create({
     minHeight: 100,
     marginBottom: 16,
   },
-  reportBtnRow:    { flexDirection: 'row', gap: 10 },
+  reportBtnRow: { flexDirection: 'row', gap: 10 },
   reportCancelBtn: {
     flex: 1, paddingVertical: 12, borderRadius: 12,
     borderWidth: 1.5, borderColor: '#E0E4FF', alignItems: 'center',
   },
   reportCancelTxt: { fontSize: 14, fontWeight: '600', color: '#888' },
-  reportSubmitBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: 12,
-    backgroundColor: '#E53E3E', alignItems: 'center',
-  },
+  reportSubmitBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#E53E3E', alignItems: 'center' },
   reportSubmitTxt: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   reportSuccessWrap: { alignItems: 'center', paddingVertical: 20, gap: 14 },
   reportSuccessText: { fontSize: 16, fontWeight: '700', color: '#1A1D2E', textAlign: 'center' },
-
   catChip: {
     alignSelf: "flex-start",
     backgroundColor: "#EEF0FB",
@@ -1740,20 +1468,9 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   catChipText: { fontSize: 11, color: "#6B7FED", fontWeight: "600" },
-  postTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1A1D2E",
-    marginBottom: 8,
-    lineHeight: 22,
-  },
+  postTitle: { fontSize: 15, fontWeight: "700", color: "#1A1D2E", marginBottom: 8, lineHeight: 22 },
   plainDesc: { fontSize: 14, color: "#555", lineHeight: 21, marginBottom: 10 },
-  descBox: {
-    borderRadius: 10,
-    padding: 10,
-    backgroundColor: "#F7F8FC",
-    marginBottom: 10,
-  },
+  descBox: { borderRadius: 10, padding: 10, backgroundColor: "#F7F8FC", marginBottom: 10 },
   descText: { fontSize: 14, color: "#555", lineHeight: 21 },
   seeMore: { color: "#6B7FED", fontWeight: "600", fontSize: 13, marginTop: 4 },
   coloredPost: {
@@ -1778,8 +1495,6 @@ const s = StyleSheet.create({
   },
   mediaContainer: { marginBottom: 10, borderRadius: 12, overflow: "hidden" },
   mediaImage: { width: "100%", height: 220, borderRadius: 12, marginBottom: 6 },
-
-  // Verified by section
   verifiedWrap: { marginBottom: 10 },
   verifiedBtn: {
     flexDirection: "row",
@@ -1802,12 +1517,7 @@ const s = StyleSheet.create({
     borderColor: "#C8F0DF",
     overflow: "hidden",
   },
-  verifiedDoctorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    gap: 12,
-  },
+  verifiedDoctorRow: { flexDirection: "row", alignItems: "center", padding: 12, gap: 12 },
   verifiedAvatar: {
     width: 44,
     height: 44,
@@ -1821,14 +1531,8 @@ const s = StyleSheet.create({
   verifiedAvatarText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
   verifiedDoctorName: { fontSize: 14, fontWeight: "700", color: "#1A1D2E" },
   verifiedDoctorSpec: { fontSize: 12, color: "#00B374", marginTop: 2 },
-  verifiedLoading: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    gap: 10,
-  },
+  verifiedLoading: { flexDirection: "row", alignItems: "center", padding: 14, gap: 10 },
   verifiedLoadingText: { fontSize: 13, color: "#888" },
-
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1899,28 +1603,13 @@ const s = StyleSheet.create({
     marginRight: 10,
   },
   cmAvatarText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
-  cmBubble: {
-    flex: 1,
-    backgroundColor: "#F5F7FF",
-    borderRadius: 12,
-    padding: 10,
-  },
-  cmBubbleHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
+  cmBubble: { flex: 1, backgroundColor: "#F5F7FF", borderRadius: 12, padding: 10 },
+  cmBubbleHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   cmUser: { fontSize: 12, fontWeight: "700", color: "#1A1D2E" },
   cmTime: { fontSize: 10, color: "#AAA" },
   cmText: { fontSize: 13, color: "#444", lineHeight: 19 },
   cmEmpty: { alignItems: "center", paddingVertical: 40 },
-  cmEmptyTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#555",
-    marginTop: 12,
-  },
+  cmEmptyTitle: { fontSize: 15, fontWeight: "700", color: "#555", marginTop: 12 },
   cmEmptyText: { fontSize: 13, color: "#BBB", marginTop: 4 },
   cmInputWrap: {
     flexDirection: "row",
@@ -1943,20 +1632,8 @@ const s = StyleSheet.create({
     borderColor: "#E8EAF6",
     gap: 8,
   },
-  cmInput: {
-    flex: 1,
-    fontSize: 14,
-    color: "#1A1D2E",
-    maxHeight: 80,
-    paddingVertical: 4,
-  },
-  cmSend: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  cmInput: { flex: 1, fontSize: 14, color: "#1A1D2E", maxHeight: 80, paddingVertical: 4 },
+  cmSend: { width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center" },
   slotsExhausted: {
     flexDirection: "row",
     alignItems: "center",
@@ -1968,9 +1645,5 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  slotsExhaustedText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#F6A623",
-  },
+  slotsExhaustedText: { fontSize: 11, fontWeight: "600", color: "#F6A623" },
 });

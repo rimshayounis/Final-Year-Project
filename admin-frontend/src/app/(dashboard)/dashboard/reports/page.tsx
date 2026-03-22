@@ -12,6 +12,7 @@ interface Report {
   reportedId: { _id: string; fullName?: string; email?: string } | string;
   reason: string;
   status: 'pending' | 'reviewed';
+  postId?: string;
   createdAt: string;
 }
 
@@ -24,12 +25,18 @@ export default function ReportsPage() {
   const [search, setSearch]     = useState('');
   const [selected, setSelected] = useState<Report | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [toast, setToast]       = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (msg: string, type: 'success' | 'error') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const fetchReports = async () => {
     try {
       const res  = await fetch(`${BASE_URL}/reports`);
       const data = await res.json();
-      setReports(Array.isArray(data) ? data : (data.data || []));
+      setReports(data.data || []);
     } catch (e) {
       console.error('Failed to fetch reports:', e);
     } finally {
@@ -42,11 +49,60 @@ export default function ReportsPage() {
   const markReviewed = async (id: string) => {
     setUpdating(id);
     try {
-      await fetch(`${BASE_URL}/reports/${id}/review`, { method: 'PATCH' });
-      setReports(prev => prev.map(r => r._id === id ? { ...r, status: 'reviewed' } : r));
-      if (selected?._id === id) setSelected(prev => prev ? { ...prev, status: 'reviewed' } : null);
-    } catch (e) {
-      console.error('Failed to update report:', e);
+      const res = await fetch(`${BASE_URL}/reports/${id}/review`, { method: 'PATCH' });
+      if (res.ok) {
+        setReports(prev => prev.map(r => r._id === id ? { ...r, status: 'reviewed' } : r));
+        if (selected?._id === id) setSelected(prev => prev ? { ...prev, status: 'reviewed' } : null);
+        showToast('Report marked as reviewed', 'success');
+      }
+    } catch {
+      showToast('Failed to update report', 'error');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const deletePost = async (report: Report) => {
+    const postId = (report as any).postId;
+
+    if (!postId) {
+      showToast('No post linked to this report — file a new report from the app', 'error');
+      return;
+    }
+
+    setUpdating(report._id);
+    try {
+      const res = await fetch(`${BASE_URL}/posts/admin/${postId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetch(`${BASE_URL}/reports/${report._id}/review`, { method: 'PATCH' });
+        setReports(prev => prev.map(r =>
+          r._id === report._id ? { ...r, status: 'reviewed' } : r
+        ));
+        if (selected?._id === report._id) {
+          setSelected(prev => prev ? { ...prev, status: 'reviewed' } : null);
+        }
+        showToast('Post deleted and report reviewed', 'success');
+      } else {
+        showToast('Failed to delete post', 'error');
+      }
+    } catch {
+      showToast('Failed to delete post', 'error');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const dismissReport = async (report: Report) => {
+    setUpdating(report._id);
+    try {
+      const res = await fetch(`${BASE_URL}/reports/${report._id}/review`, { method: 'PATCH' });
+      if (res.ok) {
+        setReports(prev => prev.map(r => r._id === report._id ? { ...r, status: 'reviewed' } : r));
+        if (selected?._id === report._id) setSelected(prev => prev ? { ...prev, status: 'reviewed' } : null);
+        showToast('Report dismissed', 'success');
+      }
+    } catch {
+      showToast('Failed to dismiss report', 'error');
     } finally {
       setUpdating(null);
     }
@@ -71,10 +127,19 @@ export default function ReportsPage() {
   const pendingCount  = reports.filter(r => r.status === 'pending').length;
   const reviewedCount = reports.filter(r => r.status === 'reviewed').length;
 
-  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' });
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-PK', {
+    day: 'numeric', month: 'short', year: 'numeric'
+  });
 
   return (
     <div className="rp-page">
+
+      {toast && (
+        <div className={`rp-toast ${toast.type}`}>
+          {toast.type === 'success' ? '✓' : '✕'} {toast.msg}
+        </div>
+      )}
+
       <div className="rp-header">
         <div className="rp-header-left">
           <div className="rp-title-row">
@@ -124,6 +189,7 @@ export default function ReportsPage() {
       </div>
 
       <div className={`rp-content ${selected ? 'with-detail' : ''}`}>
+
         <div className="rp-table-wrap">
           {loading ? (
             <div className="rp-loading">
@@ -143,7 +209,7 @@ export default function ReportsPage() {
                   <th>Reason</th>
                   <th>Date</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -183,17 +249,22 @@ export default function ReportsPage() {
                       </span>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
-                      {r.status === 'pending' ? (
+                      <div className="rp-action-row">
                         <button
-                          className="rp-action-btn"
+                          className="rp-btn-delete"
                           disabled={updating === r._id}
-                          onClick={() => markReviewed(r._id)}
+                          onClick={() => deletePost(r)}
                         >
-                          {updating === r._id ? '...' : 'Mark Reviewed'}
+                          🗑 Delete Post
                         </button>
-                      ) : (
-                        <span className="rp-done-text">Done</span>
-                      )}
+                        <button
+                          className="rp-btn-dismiss"
+                          disabled={updating === r._id}
+                          onClick={() => dismissReport(r)}
+                        >
+                          ✕ Dismiss
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -208,12 +279,14 @@ export default function ReportsPage() {
               <h3>Report Detail</h3>
               <button className="rp-detail-close" onClick={() => setSelected(null)}>✕</button>
             </div>
+
             <div className="rp-detail-status-bar">
               <span className={`rp-status-chip ${selected.status}`}>
                 {selected.status === 'pending' ? '⚠ Pending Review' : '✓ Reviewed'}
               </span>
               <span className="rp-detail-date">{formatDate(selected.createdAt)}</span>
             </div>
+
             <div className="rp-detail-section">
               <div className="rp-detail-label">Filed By (Reporter)</div>
               <div className="rp-detail-user-card" style={{ borderColor: '#6d28d9', background: '#faf8ff' }}>
@@ -226,6 +299,7 @@ export default function ReportsPage() {
                 </div>
               </div>
             </div>
+
             <div className="rp-detail-section">
               <div className="rp-detail-label">Reported Party</div>
               <div className="rp-detail-user-card" style={{ borderColor: '#dc2626', background: '#fff8f8' }}>
@@ -238,25 +312,62 @@ export default function ReportsPage() {
                 </div>
               </div>
             </div>
+
             <div className="rp-detail-section">
               <div className="rp-detail-label">Reason for Report</div>
               <div className="rp-detail-reason">{selected.reason}</div>
             </div>
-            {selected.status === 'pending' && (
+
+            <div className="rp-detail-actions">
+              <div className="rp-detail-label">Take Action</div>
               <button
-                className="rp-detail-action-btn"
+                className="rp-detail-btn-delete"
+                disabled={updating === selected._id}
+                onClick={() => deletePost(selected)}
+              >
+                🗑 Delete Reported Post
+              </button>
+              <button
+                className="rp-detail-btn-reviewed"
                 disabled={updating === selected._id}
                 onClick={() => markReviewed(selected._id)}
               >
-                {updating === selected._id ? 'Updating...' : '✓ Mark as Reviewed'}
+                ✓ Mark as Reviewed
               </button>
+              <button
+                className="rp-detail-btn-dismiss"
+                disabled={updating === selected._id}
+                onClick={() => dismissReport(selected)}
+              >
+                ✕ Dismiss (False Report)
+              </button>
+            </div>
+
+            {selected.status === 'reviewed' && (
+              <div className="rp-detail-done">
+                <span>✓</span>
+                <p>This report has been reviewed and actioned.</p>
+              </div>
             )}
           </div>
         )}
       </div>
 
       <style>{`
-        .rp-page { display: flex; flex-direction: column; gap: 20px; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .rp-page { display: flex; flex-direction: column; gap: 20px; font-family: 'Segoe UI', system-ui, sans-serif; position: relative; }
+
+        .rp-toast {
+          position: fixed; top: 24px; right: 24px; z-index: 9999;
+          padding: 12px 20px; border-radius: 12px;
+          font-size: 14px; font-weight: 600;
+          display: flex; align-items: center; gap: 8px;
+          animation: slideIn 0.3s ease;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .rp-toast.success { background: #d1fae5; color: #065f46; }
+        .rp-toast.error   { background: #fee2e2; color: #991b1b; }
+        @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
         .rp-header { display: flex; align-items: center; justify-content: space-between; background: #fff; border-radius: 16px; padding: 24px 28px; border: 1px solid #f0f0f5; }
         .rp-title-row { display: flex; align-items: center; gap: 14px; }
         .rp-icon-big { font-size: 36px; }
@@ -271,6 +382,7 @@ export default function ReportsPage() {
         .rp-hstat-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; margin-top: 2px; }
         .rp-hstat.pending  .rp-hstat-val { color: #dc2626; }
         .rp-hstat.reviewed .rp-hstat-val { color: #059669; }
+
         .rp-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .rp-filters { display: flex; gap: 6px; }
         .rp-filter-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; border: 1px solid #e5e5e5; background: #fff; font-size: 13px; font-weight: 600; color: #666; cursor: pointer; transition: all 0.15s; }
@@ -282,8 +394,10 @@ export default function ReportsPage() {
         .rp-search:focus-within { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
         .rp-search input { border: none; outline: none; font-size: 14px; color: #333; width: 280px; }
         .rp-search button { background: none; border: none; cursor: pointer; color: #aaa; font-size: 12px; }
-        .rp-content { display: grid; grid-template-columns: 1fr; gap: 16px; }
+
+        .rp-content { display: grid; grid-template-columns: 1fr; gap: 16px; transition: grid-template-columns 0.2s; }
         .rp-content.with-detail { grid-template-columns: 1fr 320px; }
+
         .rp-table-wrap { background: #fff; border-radius: 16px; border: 1px solid #f0f0f5; overflow: hidden; }
         .rp-loading { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
         .rp-row-skeleton { height: 56px; background: linear-gradient(90deg, #f0f0f5 25%, #e8e8f0 50%, #f0f0f5 75%); background-size: 200% 100%; border-radius: 10px; animation: shimmer 1.5s infinite; }
@@ -291,6 +405,7 @@ export default function ReportsPage() {
         .rp-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 60px 20px; color: #aaa; }
         .rp-empty span { font-size: 40px; }
         .rp-empty p { font-size: 14px; color: #888; font-weight: 500; }
+
         .rp-table { width: 100%; border-collapse: collapse; }
         .rp-table thead tr { background: #f8f8fc; }
         .rp-table th { padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #f0f0f5; }
@@ -299,19 +414,34 @@ export default function ReportsPage() {
         .rp-row:hover { background: #fafafe; }
         .rp-row.selected { background: #f5f3ff; }
         .rp-table td { padding: 14px 16px; vertical-align: middle; }
+
         .rp-user-cell { display: flex; align-items: center; gap: 10px; }
         .rp-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
         .rp-name { font-size: 13px; font-weight: 600; color: #111; }
         .rp-model-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; margin-top: 2px; }
-        .rp-reason { font-size: 13px; color: #444; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rp-reason { font-size: 13px; color: #444; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .rp-date { font-size: 12px; color: #888; white-space: nowrap; }
         .rp-status-chip { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; white-space: nowrap; }
         .rp-status-chip.pending  { background: #fee2e2; color: #dc2626; }
         .rp-status-chip.reviewed { background: #d1fae5; color: #059669; }
-        .rp-action-btn { background: #1e1b4b; color: #fff; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
-        .rp-action-btn:hover:not(:disabled) { background: #3730a3; }
-        .rp-action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .rp-done-text { font-size: 12px; color: #aaa; font-weight: 500; }
+
+        .rp-action-row { display: flex; gap: 6px; }
+        .rp-btn-delete {
+          padding: 5px 10px; border-radius: 8px;
+          background: #fee2e2; color: #dc2626;
+          border: 1px solid #fecaca; font-size: 11px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .rp-btn-delete:hover:not(:disabled) { background: #dc2626; color: #fff; }
+        .rp-btn-dismiss {
+          padding: 5px 10px; border-radius: 8px;
+          background: #f3f4f8; color: #666;
+          border: 1px solid #e5e5e5; font-size: 11px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .rp-btn-dismiss:hover:not(:disabled) { background: #e5e5e5; }
+        .rp-btn-delete:disabled, .rp-btn-dismiss:disabled { opacity: 0.5; cursor: not-allowed; }
+
         .rp-detail { background: #fff; border-radius: 16px; border: 1px solid #f0f0f5; padding: 22px; display: flex; flex-direction: column; gap: 16px; height: fit-content; position: sticky; top: 20px; }
         .rp-detail-header { display: flex; align-items: center; justify-content: space-between; }
         .rp-detail-header h3 { font-size: 15px; font-weight: 700; color: #111; }
@@ -325,9 +455,39 @@ export default function ReportsPage() {
         .rp-detail-uname { font-size: 14px; font-weight: 700; color: #111; }
         .rp-detail-utype { font-size: 11px; font-weight: 600; text-transform: uppercase; margin-top: 2px; }
         .rp-detail-reason { font-size: 14px; color: #444; line-height: 1.6; background: #f8f8fc; border-radius: 10px; padding: 12px 14px; border: 1px solid #f0f0f5; }
-        .rp-detail-action-btn { background: linear-gradient(135deg, #059669, #047857); color: #fff; border: none; border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; width: 100%; }
-        .rp-detail-action-btn:hover:not(:disabled) { opacity: 0.9; }
-        .rp-detail-action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .rp-detail-actions { display: flex; flex-direction: column; gap: 8px; }
+        .rp-detail-btn-delete {
+          width: 100%; padding: 11px; border-radius: 10px;
+          background: #dc2626; color: #fff;
+          border: none; font-size: 13px; font-weight: 700;
+          cursor: pointer; transition: opacity 0.15s;
+        }
+        .rp-detail-btn-delete:hover:not(:disabled) { opacity: 0.88; }
+        .rp-detail-btn-reviewed {
+          width: 100%; padding: 11px; border-radius: 10px;
+          background: linear-gradient(135deg, #059669, #047857); color: #fff;
+          border: none; font-size: 13px; font-weight: 700;
+          cursor: pointer; transition: opacity 0.15s;
+        }
+        .rp-detail-btn-reviewed:hover:not(:disabled) { opacity: 0.88; }
+        .rp-detail-btn-dismiss {
+          width: 100%; padding: 11px; border-radius: 10px;
+          background: #f3f4f8; color: #555;
+          border: 1px solid #e5e5e5; font-size: 13px; font-weight: 700;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .rp-detail-btn-dismiss:hover:not(:disabled) { background: #e5e5e5; }
+        .rp-detail-btn-delete:disabled,
+        .rp-detail-btn-reviewed:disabled,
+        .rp-detail-btn-dismiss:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .rp-detail-done {
+          display: flex; align-items: center; gap: 10px;
+          background: #d1fae5; border-radius: 10px; padding: 14px; color: #059669;
+        }
+        .rp-detail-done span { font-size: 20px; }
+        .rp-detail-done p { font-size: 13px; font-weight: 600; }
       `}</style>
     </div>
   );

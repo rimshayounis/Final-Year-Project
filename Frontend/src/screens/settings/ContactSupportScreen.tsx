@@ -7,7 +7,7 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../../../../App';
+import { RootStackParamList } from './../../../App';
 import apiClient from '../../services/api';
 
 const PURPLE = '#6B7FED';

@@ -24,6 +24,7 @@ export class ReportService {
       reportedId:    new Types.ObjectId(dto.reportedId),
       reportedModel: dto.reportedModel ?? 'User',
       reason:        dto.reason,
+      postId:        dto.postId ? new Types.ObjectId(dto.postId) : null,
     });
 
     return report.save();
@@ -32,6 +33,8 @@ export class ReportService {
   async findAll(): Promise<ReportDocument[]> {
     return this.reportModel
       .find()
+      .populate('reporterId', 'fullName email')
+      .populate('reportedId', 'fullName email')
       .sort({ createdAt: -1 })
       .exec();
   }
@@ -42,11 +45,12 @@ export class ReportService {
     }
     return this.reportModel
       .find({ reportedId: new Types.ObjectId(reportedId) })
+      .populate('reporterId', 'fullName email')
+      .populate('reportedId', 'fullName email')
       .sort({ createdAt: -1 })
       .exec();
   }
 
-  // ── NEW ──
   async markReviewed(id: string): Promise<ReportDocument> {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Invalid report id');

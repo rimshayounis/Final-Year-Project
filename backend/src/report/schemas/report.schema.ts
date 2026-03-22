@@ -22,6 +22,9 @@ export class Report {
 
   @Prop({ type: String, enum: ['pending', 'reviewed'], default: 'pending' })
   status: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'Post', default: null })
+  postId: Types.ObjectId | null;
 }
 
 export const ReportSchema = SchemaFactory.createForClass(Report);

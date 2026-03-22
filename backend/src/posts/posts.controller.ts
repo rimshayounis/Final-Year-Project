@@ -142,6 +142,11 @@ export class PostsController {
     const post = await this.postsService.update(id, updatePostDto.userId, updatePostDto);
     return { success: true, message: 'Post updated successfully', data: post };
   }
+  @Delete('admin/:id')
+async adminDelete(@Param('id') id: string) {
+  await this.postsService.adminDelete(id);
+  return { success: true, message: 'Post deleted by admin' };
+}
 
   @Delete(':id/:userId')
   async delete(@Param('id') id: string, @Param('userId') userId: string) {

@@ -9,6 +9,8 @@ export class SupportRequestService {
   constructor(
     @InjectModel(SupportRequest.name)
     private readonly model: Model<SupportRequestDocument>,
+    @InjectModel('User')   private readonly userModel:   Model<any>,
+    @InjectModel('Doctor') private readonly doctorModel: Model<any>,
   ) {}
 
   async create(dto: CreateSupportRequestDto): Promise<SupportRequestDocument> {
@@ -21,10 +23,30 @@ export class SupportRequestService {
     return request.save();
   }
 
-  async findAll(status?: string): Promise<SupportRequestDocument[]> {
+  async findAll(status?: string): Promise<any[]> {
     const query: any = {};
     if (status) query.status = status;
-    return this.model.find(query).sort({ createdAt: -1 }).exec();
+    const tickets = await this.model.find(query).sort({ createdAt: -1 }).exec();
+
+    const enriched = await Promise.all(
+      tickets.map(async (t) => {
+        const obj: any  = t.toObject();
+        try {
+          if (t.userRole === 'doctor') {
+            const doc = await this.doctorModel.findById(t.userId).select('fullName email').exec();
+            obj.userName  = doc?.fullName || null;
+            obj.userEmail = doc?.email    || null;
+          } else {
+            const user = await this.userModel.findById(t.userId).select('fullName email').exec();
+            obj.userName  = user?.fullName || null;
+            obj.userEmail = user?.email    || null;
+          }
+        } catch { /* userId might not be a valid ObjectId */ }
+        return obj;
+      })
+    );
+
+    return enriched;
   }
 
   async findByUser(userId: string): Promise<SupportRequestDocument[]> {

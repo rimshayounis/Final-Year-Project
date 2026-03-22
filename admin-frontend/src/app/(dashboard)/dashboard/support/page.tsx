@@ -7,6 +7,8 @@ const BASE_URL = 'http://localhost:3000/api';
 interface SupportTicket {
   _id: string;
   userId: string;
+  userName?: string;
+  userEmail?: string;
   userRole: 'user' | 'doctor';
   purpose: string;
   description: string;
@@ -99,6 +101,8 @@ export default function SupportPage() {
     const matchSearch = !q ||
       t.purpose?.toLowerCase().includes(q) ||
       t.description?.toLowerCase().includes(q) ||
+      t.userName?.toLowerCase().includes(q) ||
+      t.userEmail?.toLowerCase().includes(q) ||
       t.userId?.toLowerCase().includes(q);
     return matchStatus && matchSearch;
   });
@@ -176,8 +180,8 @@ export default function SupportPage() {
                       {t.userRole === 'doctor' ? '👨‍⚕️' : '👤'}
                     </div>
                     <div className="sp-ticket-info">
-                      <div className="sp-ticket-name">{PURPOSE_LABELS[t.purpose] || t.purpose}</div>
-                      <div className="sp-ticket-email">{t.userRole} · {t.userId?.slice(-8)}</div>
+                      <div className="sp-ticket-name">{t.userName || (t.userRole === 'doctor' ? 'Doctor' : 'Patient')}</div>
+                      <div className="sp-ticket-email">{t.userEmail || `ID: ${t.userId?.slice(-8)}`}</div>
                     </div>
                   </div>
                   <div className="sp-ticket-mid">
@@ -218,8 +222,8 @@ export default function SupportPage() {
                 {selected.userRole === 'doctor' ? '👨‍⚕️' : '👤'}
               </div>
               <div>
-                <div className="sp-detail-uname">{selected.userRole === 'doctor' ? 'Doctor' : 'Patient'}</div>
-                <div className="sp-detail-uemail">ID: {selected.userId}</div>
+                <div className="sp-detail-uname">{selected.userName || (selected.userRole === 'doctor' ? 'Doctor' : 'Patient')}</div>
+                <div className="sp-detail-uemail">{selected.userEmail || `ID: ${selected.userId}`}</div>
                 <span className="sp-user-type" style={{ background: selected.userRole === 'doctor' ? '#ede9fe' : '#dbeafe', color: selected.userRole === 'doctor' ? '#6d28d9' : '#1d4ed8' }}>
                   {selected.userRole}
                 </span>
@@ -313,7 +317,7 @@ export default function SupportPage() {
         .sp-ticket:hover { background: #fafafe; }
         .sp-ticket.selected { background: #f5f3ff; }
         .sp-ticket.urgent { border-left: 3px solid #dc2626; }
-        .sp-ticket-left { display: flex; align-items: center; gap: 10px; min-width: 120px; }
+        .sp-ticket-left { display: flex; align-items: center; gap: 10px; min-width: 160px; }
         .sp-ticket-avatar { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
         .sp-ticket-name  { font-size: 13px; font-weight: 700; color: #111; }
         .sp-ticket-email { font-size: 11px; color: #888; margin-top: 1px; }
@@ -344,7 +348,7 @@ export default function SupportPage() {
         .sp-status-btn:hover:not(:disabled) { background: #f8f8fc; }
         .sp-status-btn.active { font-weight: 700; }
         .sp-status-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .sp-reply-box { width: 100%; border: 1px solid #e5e5e5; border-radius: 10px; padding: 12px; font-size: 13px; font-family: inherit; color: #333; resize: vertical; outline: none; line-height: 1.5; transition: border-color 0.15s; }
+        .sp-reply-box { width: 100%; border: 1px solid #e5e5e5; border-radius: 10px; padding: 12px; font-size: 13px; font-family: inherit; color: #333; resize: vertical; outline: none; line-height: 1.5; transition: border-color 0.15s; box-sizing: border-box; }
         .sp-reply-box:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
         .sp-send-btn { background: linear-gradient(135deg, #1e1b4b, #3730a3); color: #fff; border: none; border-radius: 10px; padding: 11px; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; width: 100%; }
         .sp-send-btn:hover:not(:disabled) { opacity: 0.9; }

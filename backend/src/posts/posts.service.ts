@@ -374,4 +374,9 @@ export class PostsService {
 
     return { posts, total, page, totalPages: Math.ceil(total / limit) };
   }
+  async adminDelete(id: string) {
+  const post = await this.postModel.findByIdAndDelete(id);
+  if (!post) throw new NotFoundException('Post not found');
+  return post;
+}
 }

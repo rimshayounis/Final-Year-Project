@@ -25,7 +25,7 @@ interface AdminNotif {
   id: string;
   title: string;
   message: string;
-  type: 'doctor' | 'appointment' | 'payment' | 'report' | 'feedback' | 'support';
+  type: 'doctor' | 'appointment' | 'payment' | 'report' | 'feedback' | 'support' | 'patient' | 'subscription' | 'post';
   time: string;
   read: boolean;
   href: string;
@@ -58,8 +58,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('admin_notif_baseline');
-      if (saved) lastDataRef.current = JSON.parse(saved);
+      localStorage.removeItem('admin_notif_baseline');
+      lastDataRef.current = null;
     } catch {}
   }, []);
 
@@ -93,27 +93,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     try {
       const BASE = 'http://localhost:3000/api';
 
-      const [doctorsRes, walletRes, reportsRes] = await Promise.allSettled([
+      const [
+        usersRes,
+        doctorsRes,
+        walletRes,
+        reportsRes,
+        feedbackRes,
+        pendingPostsRes,
+      ] = await Promise.allSettled([
+        fetch(`${BASE}/users`).then(r => r.json()),
         fetch(`${BASE}/doctors`).then(r => r.json()),
         fetch(`${BASE}/payment/admin/wallet`).then(r => r.json()),
         fetch(`${BASE}/reports`).then(r => r.json()),
+        fetch(`${BASE}/feedback`).then(r => r.json()),
+        fetch(`${BASE}/posts/pending?limit=100`).then(r => r.json()),
       ]);
 
-      const doctorsRaw = doctorsRes.status === 'fulfilled' ? doctorsRes.value : [];
-      const doctors: any[] = Array.isArray(doctorsRaw) ? doctorsRaw : (doctorsRaw.doctors || []);
+      const usersRaw        = usersRes.status        === 'fulfilled' ? usersRes.value        : [];
+      const doctorsRaw      = doctorsRes.status      === 'fulfilled' ? doctorsRes.value      : [];
+      const wallet          = walletRes.status       === 'fulfilled' ? (walletRes.value.data || walletRes.value) : {};
+      const reportsRaw      = reportsRes.status      === 'fulfilled' ? reportsRes.value      : [];
+      const feedbackRaw     = feedbackRes.status     === 'fulfilled' ? feedbackRes.value     : [];
+      const pendingPostsRaw = pendingPostsRes.status === 'fulfilled' ? pendingPostsRes.value : {};
 
-      const wallet = walletRes.status === 'fulfilled' ? (walletRes.value.data || walletRes.value) : {};
-
-      const reportsRaw = reportsRes.status === 'fulfilled' ? reportsRes.value : [];
-      const reports: any[] = Array.isArray(reportsRaw) ? reportsRaw : (reportsRaw.data || []);
-      const pendingReports = reports.filter((r: any) => r.status === 'pending').length;
+      const allUsers: any[]   = Array.isArray(usersRaw)    ? usersRaw    : (usersRaw.users    || usersRaw.data    || []);
+      const allDoctors: any[] = Array.isArray(doctorsRaw)  ? doctorsRaw  : (doctorsRaw.doctors || doctorsRaw.data  || []);
+      const reports: any[]    = Array.isArray(reportsRaw)  ? reportsRaw  : (reportsRaw.data   || []);
+      const feedbacks: any[]  = Array.isArray(feedbackRaw) ? feedbackRaw : (feedbackRaw.data  || []);
+      const pendingPosts      = pendingPostsRaw.pagination?.total || pendingPostsRaw.data?.length || 0;
+      const pendingReports    = reports.filter((r: any) => r.status === 'pending').length;
 
       setBadges(prev => ({ ...prev, reports: pendingReports }));
 
       const now = new Date();
-
       const aptResults = await Promise.allSettled(
-        doctors.slice(0, 10).map((d: any) =>
+        allDoctors.slice(0, 10).map((d: any) =>
           fetch(`${BASE}/booked-appointments/doctor/${d._id}`)
             .then(r => r.json())
             .then(r => r.data || r.appointments || [])
@@ -123,12 +137,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const allApts: any[] = [];
       aptResults.forEach(r => { if (r.status === 'fulfilled') allApts.push(...r.value); });
 
+      const paidDoctors = allDoctors.filter((d: any) =>
+        d.subscriptionPlan && d.subscriptionPlan !== 'free_trial'
+      ).length;
+
       const currData = {
-        totalDoctors:    doctors.length,
+        totalPatients:   allUsers.length,
+        totalDoctors:    allDoctors.length,
+        pendingDoctors:  allDoctors.filter((d: any) => !d.doctorProfile?.isVerified).length,
         totalCommission: wallet.totalCommission || 0,
         totalApts:       allApts.length,
         completedApts:   allApts.filter((a: any) => a.status === 'completed').length,
         pendingReports,
+        totalFeedbacks:  feedbacks.length,
+        pendingPosts,
+        paidDoctors,
       };
 
       if (!lastDataRef.current) {
@@ -137,33 +160,124 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         return;
       }
 
+      const prev = lastDataRef.current;
       const newNotifs: AdminNotif[] = [];
 
-      if (currData.totalDoctors > lastDataRef.current.totalDoctors) {
-        const diff = currData.totalDoctors - lastDataRef.current.totalDoctors;
-        newNotifs.push({ id: makeId(), title: '🆕 New Doctor Registered', message: `${diff} new doctor${diff > 1 ? 's' : ''} waiting for approval`, type: 'doctor', time: timeAgo(now), read: false, href: '/dashboard/users/doctors' });
+      // 1. New patient registered
+      if (prev.totalPatients !== undefined && currData.totalPatients > prev.totalPatients) {
+        const diff = currData.totalPatients - prev.totalPatients;
+        newNotifs.push({
+          id: makeId(), type: 'patient', read: false, time: timeAgo(now),
+          href: '/dashboard/users/patients',
+          title: '🧑 New Patient Joined',
+          message: `${diff} new patient${diff > 1 ? 's' : ''} registered on the platform`,
+        });
       }
-      if (currData.totalCommission > lastDataRef.current.totalCommission) {
-        const diff = currData.totalCommission - lastDataRef.current.totalCommission;
-        newNotifs.push({ id: makeId(), title: '💰 Commission Received', message: `PKR ${diff.toLocaleString()} new commission earned`, type: 'payment', time: timeAgo(now), read: false, href: '/dashboard/payments' });
+
+      // 2. New doctor registered
+      if (prev.totalDoctors !== undefined && currData.totalDoctors > prev.totalDoctors) {
+        const diff = currData.totalDoctors - prev.totalDoctors;
+        newNotifs.push({
+          id: makeId(), type: 'doctor', read: false, time: timeAgo(now),
+          href: '/dashboard/users/doctors',
+          title: '👨‍⚕️ New Doctor Registered',
+          message: `${diff} new doctor${diff > 1 ? 's' : ''} waiting for approval`,
+        });
       }
-      if (currData.totalApts > lastDataRef.current.totalApts) {
-        const diff = currData.totalApts - lastDataRef.current.totalApts;
-        newNotifs.push({ id: makeId(), title: '📅 New Appointment Booked', message: `${diff} new appointment${diff > 1 ? 's' : ''} booked`, type: 'appointment', time: timeAgo(now), read: false, href: '/dashboard/appointments' });
+
+      // 3. Pending verifications increased
+      if (prev.pendingDoctors !== undefined && currData.pendingDoctors > prev.pendingDoctors) {
+        const diff = currData.pendingDoctors - prev.pendingDoctors;
+        newNotifs.push({
+          id: makeId(), type: 'doctor', read: false, time: timeAgo(now),
+          href: '/dashboard/users/doctors',
+          title: '⏳ Doctor Awaiting Verification',
+          message: `${diff} doctor${diff > 1 ? 's' : ''} submitted profile and waiting for approval`,
+        });
       }
-      if (currData.completedApts > lastDataRef.current.completedApts) {
-        const diff = currData.completedApts - lastDataRef.current.completedApts;
-        newNotifs.push({ id: makeId(), title: '✅ Appointment Completed', message: `${diff} appointment${diff > 1 ? 's' : ''} successfully completed`, type: 'appointment', time: timeAgo(now), read: false, href: '/dashboard/appointments' });
+
+      // 4. Commission earned
+      if (prev.totalCommission !== undefined && currData.totalCommission > prev.totalCommission) {
+        const diff = currData.totalCommission - prev.totalCommission;
+        newNotifs.push({
+          id: makeId(), type: 'payment', read: false, time: timeAgo(now),
+          href: '/dashboard/payments',
+          title: '💰 Commission Received',
+          message: `PKR ${diff.toLocaleString()} new commission earned`,
+        });
       }
-      if (currData.pendingReports > (lastDataRef.current.pendingReports || 0)) {
-        const diff = currData.pendingReports - (lastDataRef.current.pendingReports || 0);
-        newNotifs.push({ id: makeId(), title: '🚨 New Report Filed', message: `${diff} new post report${diff > 1 ? 's' : ''} require review`, type: 'report', time: timeAgo(now), read: false, href: '/dashboard/reports' });
+
+      // 5. New appointment booked
+      if (prev.totalApts !== undefined && currData.totalApts > prev.totalApts) {
+        const diff = currData.totalApts - prev.totalApts;
+        newNotifs.push({
+          id: makeId(), type: 'appointment', read: false, time: timeAgo(now),
+          href: '/dashboard/appointments',
+          title: '📅 New Appointment Booked',
+          message: `${diff} new appointment${diff > 1 ? 's' : ''} booked`,
+        });
+      }
+
+      // 6. Appointment completed
+      if (prev.completedApts !== undefined && currData.completedApts > prev.completedApts) {
+        const diff = currData.completedApts - prev.completedApts;
+        newNotifs.push({
+          id: makeId(), type: 'appointment', read: false, time: timeAgo(now),
+          href: '/dashboard/appointments',
+          title: '✅ Appointment Completed',
+          message: `${diff} appointment${diff > 1 ? 's' : ''} successfully completed`,
+        });
+      }
+
+      // 7. New report filed
+      if (prev.pendingReports !== undefined && currData.pendingReports > prev.pendingReports) {
+        const diff = currData.pendingReports - prev.pendingReports;
+        newNotifs.push({
+          id: makeId(), type: 'report', read: false, time: timeAgo(now),
+          href: '/dashboard/reports',
+          title: '🚨 New Report Filed',
+          message: `${diff} new post report${diff > 1 ? 's' : ''} require review`,
+        });
+      }
+
+      // 8. New feedback submitted
+      if (prev.totalFeedbacks !== undefined && currData.totalFeedbacks > prev.totalFeedbacks) {
+        const diff = currData.totalFeedbacks - prev.totalFeedbacks;
+        newNotifs.push({
+          id: makeId(), type: 'feedback', read: false, time: timeAgo(now),
+          href: '/dashboard/feedback',
+          title: '⭐ New Doctor Feedback',
+          message: `${diff} new review${diff > 1 ? 's' : ''} submitted by patients`,
+        });
+      }
+
+      // 9. New post pending approval
+      if (prev.pendingPosts !== undefined && currData.pendingPosts > prev.pendingPosts) {
+        const diff = currData.pendingPosts - prev.pendingPosts;
+        newNotifs.push({
+          id: makeId(), type: 'post', read: false, time: timeAgo(now),
+          href: '/dashboard/posts',
+          title: '📝 New Post Pending',
+          message: `${diff} new post${diff > 1 ? 's' : ''} waiting for doctor approval`,
+        });
+      }
+
+      // 10. Doctor purchased subscription
+      if (prev.paidDoctors !== undefined && currData.paidDoctors > prev.paidDoctors) {
+        const diff = currData.paidDoctors - prev.paidDoctors;
+        newNotifs.push({
+          id: makeId(), type: 'subscription', read: false, time: timeAgo(now),
+          href: '/dashboard/subscriptions',
+          title: '🎯 Subscription Purchased',
+          message: `${diff} doctor${diff > 1 ? 's' : ''} upgraded their subscription plan`,
+        });
       }
 
       lastDataRef.current = currData;
       localStorage.setItem('admin_notif_baseline', JSON.stringify(currData));
+
       if (newNotifs.length > 0) {
-        setNotifications(prev => [...newNotifs, ...prev].slice(0, 30));
+        setNotifications(prev => [...newNotifs, ...prev].slice(0, 50));
       }
     } catch (e) {
       console.error('[Notifications] Poll error:', e);
@@ -172,7 +286,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     pollNotifications();
-    const interval = setInterval(pollNotifications, 5000);
+    const interval = setInterval(pollNotifications, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -240,12 +354,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const clearAll    = () => setNotifications([]);
 
   const notifColors: Record<string, { bg: string; color: string }> = {
-    doctor:      { bg: '#ede9fe', color: '#6d28d9' },
-    appointment: { bg: '#dbeafe', color: '#1d4ed8' },
-    payment:     { bg: '#d1fae5', color: '#059669' },
-    report:      { bg: '#fee2e2', color: '#dc2626' },
-    feedback:    { bg: '#fef3c7', color: '#d97706' },
-    support:     { bg: '#e0f2fe', color: '#0284c7' },
+    doctor:       { bg: '#ede9fe', color: '#6d28d9' },
+    appointment:  { bg: '#dbeafe', color: '#1d4ed8' },
+    payment:      { bg: '#d1fae5', color: '#059669' },
+    report:       { bg: '#fee2e2', color: '#dc2626' },
+    feedback:     { bg: '#fef3c7', color: '#d97706' },
+    support:      { bg: '#e0f2fe', color: '#0284c7' },
+    patient:      { bg: '#f0fdf4', color: '#16a34a' },
+    subscription: { bg: '#fef9c3', color: '#ca8a04' },
+    post:         { bg: '#f5f3ff', color: '#7c3aed' },
   };
 
   const getPageTitle = () => {
@@ -406,7 +523,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </div>
                   <div className="notif-panel-footer">
                     <span>{unreadCount} unread · {notifications.length} total</span>
-                    <span className="notif-refresh">Refreshes every 5s</span>
+                    <span className="notif-refresh">Refreshes every 3s</span>
                   </div>
                 </div>
               )}

@@ -33,18 +33,16 @@ export class FeedbackService {
 
     const feedback = new this.feedbackModel({
       appointmentId: new Types.ObjectId(dto.appointmentId),
-      userId: new Types.ObjectId(dto.userId),
-      doctorId: new Types.ObjectId(dto.doctorId),
-      rating: dto.rating,
-      description: dto.description ?? '',
+      userId:        new Types.ObjectId(dto.userId),
+      doctorId:      new Types.ObjectId(dto.doctorId),
+      rating:        dto.rating,
+      description:   dto.description ?? '',
     });
 
     await feedback.save();
 
-    // Mark appointment as having feedback
     await this.appointmentModel.findByIdAndUpdate(dto.appointmentId, { hasFeedback: true }).exec();
 
-    // Update doctor's denormalized avgRating and ratingCount
     const doctor = await this.doctorModel
       .findById(dto.doctorId)
       .select('avgRating ratingCount')
@@ -52,11 +50,11 @@ export class FeedbackService {
 
     if (doctor) {
       const oldCount = doctor.ratingCount ?? 0;
-      const oldAvg = doctor.avgRating ?? 0;
+      const oldAvg   = doctor.avgRating   ?? 0;
       const newCount = oldCount + 1;
-      const newAvg = parseFloat(((oldAvg * oldCount + dto.rating) / newCount).toFixed(2));
+      const newAvg   = parseFloat(((oldAvg * oldCount + dto.rating) / newCount).toFixed(2));
       await this.doctorModel.findByIdAndUpdate(dto.doctorId, {
-        avgRating: newAvg,
+        avgRating:   newAvg,
         ratingCount: newCount,
       }).exec();
     }
@@ -64,29 +62,41 @@ export class FeedbackService {
     return feedback;
   }
 
-  async getDoctorFeedbacks(doctorId: string): Promise<{
-    avgRating: number;
-    ratingCount: number;
-    feedbacks: FeedbackDocument[];
-  }> {
-    if (!Types.ObjectId.isValid(doctorId)) {
-      throw new BadRequestException('Invalid doctorId');
-    }
-
-    const [feedbacks, doctor] = await Promise.all([
-      this.feedbackModel
-        .find({ doctorId: new Types.ObjectId(doctorId) })
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .populate('userId', 'fullName')
-        .exec(),
-      this.doctorModel.findById(doctorId).select('avgRating ratingCount').exec(),
-    ]);
-
-    return {
-      avgRating: doctor?.avgRating ?? 0,
-      ratingCount: doctor?.ratingCount ?? 0,
-      feedbacks,
-    };
+  // ── ADDED: get all feedbacks for admin dashboard ──
+  async getAll(): Promise<FeedbackDocument[]> {
+  return this.feedbackModel
+    .find()
+    .sort({ createdAt: -1 })
+    .populate('userId', 'fullName')
+    .populate('doctorId', 'fullName email doctorProfile')  // ← add this
+    .exec();
+}
+   async getDoctorFeedbacks(doctorId: string): Promise<{
+  avgRating: number;
+  ratingCount: number;
+  feedbacks: FeedbackDocument[];
+}> {
+  if (!Types.ObjectId.isValid(doctorId)) {
+    throw new BadRequestException('Invalid doctorId');
   }
+
+  const [feedbacks, doctor] = await Promise.all([
+    this.feedbackModel
+      .find({ doctorId: new Types.ObjectId(doctorId) })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate('userId', 'fullName')
+      .populate('doctorId', 'fullName email doctorProfile')  // ← add this
+      .exec(),
+    this.doctorModel.findById(doctorId).select('avgRating ratingCount fullName').exec(),
+  ]);
+
+  return {
+    avgRating:   doctor?.avgRating   ?? 0,
+    ratingCount: doctor?.ratingCount ?? 0,
+    feedbacks,
+  };
+}
+
+ 
 }
