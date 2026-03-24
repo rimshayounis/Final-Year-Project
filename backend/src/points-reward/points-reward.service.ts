@@ -9,6 +9,7 @@ import {
 } from './schemas/points-reward.schema';
 import { SubscriptionPlan } from '../doctors/schemas/doctor.schema';
 import { Post } from '../posts/schemas/post.schema';
+import { BookedAppointment, BookedAppointmentDocument } from '../booked-appointment/schemas/booked-appointment.schema';
 
 // ── Verification slot config per plan ────────────────────────────────────────
 const SLOT_CONFIG: Record<SubscriptionPlan, { base: number; bonus: number }> = {
@@ -44,6 +45,8 @@ export class PointsRewardService {
     private pointsRewardModel: Model<PointsRewardDocument>,
     @InjectModel(Post.name)
     private postModel: Model<any>,
+    @InjectModel(BookedAppointment.name)
+    private appointmentModel: Model<BookedAppointmentDocument>,
   ) {}
 
   // ── Get or create wallet for a doctor ────────────────────────────────────
@@ -473,9 +476,46 @@ export class PointsRewardService {
     };
   }
 
+  // ── Sync current month's completed count from real appointment records ─────
+  // Ensures monthlyBookings reflects actual DB state — fixes missed event-hook counts.
+  private async _syncCurrentMonthBookings(
+    wallet: PointsRewardDocument,
+    doctorId: string,
+  ): Promise<boolean> {
+    const yearMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    const monthStart = new Date(`${yearMonth}-01T00:00:00.000Z`);
+    const monthEnd   = new Date(monthStart);
+    monthEnd.setMonth(monthEnd.getMonth() + 1);
+
+    // Count actual completed appointments this month from DB
+    const realCount = await this.appointmentModel.countDocuments({
+      doctorId: new Types.ObjectId(doctorId),
+      status: 'completed',
+      completedAt: { $gte: monthStart, $lt: monthEnd },
+    });
+
+    let entry = wallet.monthlyBookings.find(m => m.yearMonth === yearMonth);
+    if (!entry) {
+      wallet.monthlyBookings.push({ yearMonth, completedCount: 0, rewarded: false });
+      entry = wallet.monthlyBookings[wallet.monthlyBookings.length - 1];
+    }
+
+    if (entry.completedCount !== realCount) {
+      entry.completedCount = realCount;
+      wallet.markModified('monthlyBookings');
+      return true; // changed
+    }
+    return false;
+  }
+
   // ── Get doctor's full wallet summary ─────────────────────────────────────
   async getWallet(doctorId: string): Promise<any> {
     const wallet = await this.getOrCreateWallet(doctorId);
+
+    // Always sync current month's count from real appointment records
+    const changed = await this._syncCurrentMonthBookings(wallet, doctorId);
+    if (changed) await wallet.save();
+
     return {
       doctorId: wallet.doctorId,
       totalPoints: wallet.totalPoints,

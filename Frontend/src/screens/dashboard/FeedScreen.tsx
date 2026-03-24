@@ -283,10 +283,11 @@ export default function FeedScreen({
     if (role !== "doctor") return;
     try {
       const drRes = await apiClient.get(`/doctors/${id}`);
-      const plan = drRes.data?.doctor?.subscriptionPlan ?? "free_trial";
+      const dr = drRes.data?.doctor ?? drRes.data ?? {};
+      const plan = dr.subscriptionPlan ?? "free_trial";
       const spec =
-        drRes.data?.doctor?.doctorProfile?.specialization ??
-        drRes.data?.doctor?.specialization ??
+        dr.doctorProfile?.specialization ??
+        dr.specialization ??
         "";
       setDoctorSpecialization(spec);
       setDoctorPlan(plan);

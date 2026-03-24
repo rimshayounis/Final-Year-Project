@@ -86,6 +86,45 @@ export class DoctorsController {
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
 
+  @Get(':doctorId/verification-status')
+  async getVerificationStatus(@Param('doctorId') doctorId: string) {
+    return this.doctorsService.getVerificationStatus(doctorId);
+  }
+
+  @Put(':doctorId/resubmit')
+  @UseInterceptors(
+    FilesInterceptor('certificates', 10, {
+      storage: diskStorage({
+        destination: './uploads/certificates',
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `certificate-${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (file.mimetype.match(/\/(jpg|jpeg|png|gif|webp|pdf)$/)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Only image or PDF files are allowed!'), false);
+        }
+      },
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  async resubmitDoctor(
+    @Param('doctorId') doctorId: string,
+    @Body() body: { specialization: string; licenseNumber?: string },
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    const certificatePaths = files?.map(f => f.path) || [];
+    return this.doctorsService.resubmitDoctor(
+      doctorId,
+      body.specialization,
+      body.licenseNumber || '',
+      certificatePaths,
+    );
+  }
+
   @Get(':doctorId')
   async getDoctorById(@Param('doctorId') doctorId: string) {
     return this.doctorsService.getDoctorById(doctorId);
@@ -109,6 +148,14 @@ export class DoctorsController {
   @Put(':doctorId/verify')
   async verifyDoctor(@Param('doctorId') doctorId: string) {
     return this.doctorsService.verifyDoctor(doctorId);
+  }
+
+  @Put(':doctorId/reject')
+  async rejectDoctor(
+    @Param('doctorId') doctorId: string,
+    @Body() body: { reason: string },
+  ) {
+    return this.doctorsService.rejectDoctor(doctorId, body.reason);
   }
 
   @Delete(':doctorId')

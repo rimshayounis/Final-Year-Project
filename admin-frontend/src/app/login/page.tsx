@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ username: '', password: '' });
+  const [form, setForm] = useState({ identifier: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -169,7 +169,7 @@ export default function LoginPage() {
         .glow{position:absolute;border-radius:50%;filter:blur(100px);pointer-events:none}
         .g1{width:480px;height:480px;background:rgba(79,70,229,0.2);top:-160px;right:-100px}
         .g2{width:340px;height:340px;background:rgba(139,92,246,0.15);bottom:-90px;left:-70px}
-        .g3{width:220px;height:220px;background:rgba(99,102,241,0.16);top:42%;left:38%;transform:translate(-50%,-50%)}
+        .g3{width:220px;height:220px;background:rgba(107,127,237,0.16);top:42%;left:38%;transform:translate(-50%,-50%)}
         .rings{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
         .ring{position:absolute;border-radius:50%;border:1px solid rgba(129,140,248,0.1)}
         .r1{width:600px;height:600px}.r2{width:440px;height:440px;border-color:rgba(129,140,248,0.13)}.r3{width:280px;height:280px;border-color:rgba(129,140,248,0.16)}.r4{width:140px;height:140px;border-color:rgba(129,140,248,0.2)}
@@ -203,29 +203,29 @@ export default function LoginPage() {
         .tline{flex:0 0 32px;height:1px;background:rgba(129,140,248,0.28)}
         .ttext{font-size:11px;color:rgba(129,140,248,0.38);font-weight:500;letter-spacing:2px;text-transform:uppercase}
         .right{flex:0 0 460px;background:#f6f6fb;display:flex;align-items:center;justify-content:center;padding:52px 44px;position:relative}
-        .right::before{content:'';position:absolute;left:0;top:8%;bottom:8%;width:1px;background:linear-gradient(to bottom,transparent,rgba(99,102,241,0.22),transparent)}
+        .right::before{content:'';position:absolute;left:0;top:8%;bottom:8%;width:1px;background:linear-gradient(to bottom,transparent,rgba(107,127,237,0.22),transparent)}
         .fw{width:100%;max-width:348px}
         .ftop{margin-bottom:36px}
-        .fbadge{display:inline-block;background:#ede9fe;color:#4338ca;font-size:11px;font-weight:700;padding:4px 13px;border-radius:20px;margin-bottom:16px;letter-spacing:.3px}
-        .ftop h2{font-size:30px;font-weight:800;color:#1e1b4b;letter-spacing:-1px;margin-bottom:8px}
+        .fbadge{display:inline-block;background:#EEF1FF;color:#5063C8;font-size:11px;font-weight:700;padding:4px 13px;border-radius:20px;margin-bottom:16px;letter-spacing:.3px}
+        .ftop h2{font-size:30px;font-weight:800;color:#1A1E52;letter-spacing:-1px;margin-bottom:8px}
         .ftop p{font-size:14px;color:#9ca3af;line-height:1.5}
         .ebox{background:#fff1f2;border:1px solid #fecdd3;border-radius:13px;padding:14px 16px;margin-bottom:24px;display:flex;gap:12px;align-items:flex-start}
         .eicon{width:34px;height:34px;border-radius:9px;background:#ffe4e6;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
         .etitle{font-size:13px;font-weight:700;color:#e11d48;margin-bottom:3px}
         .emsg{font-size:12px;color:#be123c;line-height:1.5}
-        .ecta{display:inline-block;margin-top:8px;font-size:12px;font-weight:700;color:#4338ca;text-decoration:none;border-bottom:1px solid rgba(67,56,202,.3);padding-bottom:1px}
+        .ecta{display:inline-block;margin-top:8px;font-size:12px;font-weight:700;color:#5063C8;text-decoration:none;border-bottom:1px solid rgba(67,56,202,.3);padding-bottom:1px}
         .field{margin-bottom:18px}
         .field label{display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:8px;letter-spacing:.6px;text-transform:uppercase}
         .iw{position:relative}
         .iico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#d1d5db;pointer-events:none;display:flex;align-items:center}
         .iw input{width:100%;padding:13px 14px 13px 42px;background:#fff;border:1.5px solid #eaecf0;border-radius:13px;font-size:14px;font-family:inherit;color:#111827;outline:none;transition:border-color .2s,box-shadow .2s}
         .iw input::placeholder{color:#d1d5db}
-        .iw input:focus{border-color:#6366f1;box-shadow:0 0 0 4px rgba(99,102,241,.09)}
+        .iw input:focus{border-color:#6B7FED;box-shadow:0 0 0 4px rgba(107,127,237,.09)}
         .eye{position:absolute;right:13px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#d1d5db;display:flex;align-items:center;padding:4px;border-radius:6px;transition:color .2s}
-        .eye:hover{color:#6366f1}
-        .fp-link{display:block;text-align:right;margin-top:-10px;margin-bottom:18px;font-size:12px;font-weight:600;color:#6366f1;cursor:pointer;text-decoration:none;transition:color .2s}
-        .fp-link:hover{color:#4338ca;text-decoration:underline}
-        .btn{width:100%;padding:14px;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 35%,#4338ca 70%,#6366f1 100%);border:none;border-radius:13px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .2s,transform .15s;position:relative;overflow:hidden;margin-top:8px;letter-spacing:.1px}
+        .eye:hover{color:#6B7FED}
+        .fp-link{display:block;text-align:right;margin-top:-10px;margin-bottom:18px;font-size:12px;font-weight:600;color:#6B7FED;cursor:pointer;text-decoration:none;transition:color .2s}
+        .fp-link:hover{color:#5063C8;text-decoration:underline}
+        .btn{width:100%;padding:14px;background:linear-gradient(135deg,#1A1E52 0%,#2D3680 35%,#5063C8 70%,#6B7FED 100%);border:none;border-radius:13px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .2s,transform .15s;position:relative;overflow:hidden;margin-top:8px;letter-spacing:.1px}
         .btn::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.1) 0%,transparent 60%)}
         .btn:hover{opacity:.91;transform:translateY(-1px)}
         .btn:active{transform:scale(.98) translateY(0)}
@@ -236,7 +236,7 @@ export default function LoginPage() {
         .dl{flex:1;height:1px;background:#f0f0f6}
         .dt{font-size:12px;color:#c4c9d4;font-weight:500;white-space:nowrap}
         .bot{text-align:center;font-size:13px;color:#9ca3af}
-        .bot a{color:#4338ca;font-weight:700;text-decoration:none}
+        .bot a{color:#5063C8;font-weight:700;text-decoration:none}
         .bot a:hover{text-decoration:underline}
         .trust{display:flex;justify-content:center;align-items:center;gap:6px;margin-top:28px;flex-wrap:wrap}
         .ti{display:flex;align-items:center;gap:5px;font-size:11px;color:#c4c9d4;font-weight:500}
@@ -250,40 +250,40 @@ export default function LoginPage() {
         @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
         .fp-close{position:absolute;top:16px;right:16px;background:#f3f4f8;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:14px;color:#666;display:flex;align-items:center;justify-content:center;transition:background .15s}
         .fp-close:hover{background:#e5e5e5}
-        .fp-icon{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:16px}
-        .fp-modal h3{font-size:20px;font-weight:800;color:#1e1b4b;margin-bottom:6px}
+        .fp-icon{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#EEF1FF,#ddd6fe);display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:16px}
+        .fp-modal h3{font-size:20px;font-weight:800;color:#1A1E52;margin-bottom:6px}
         .fp-modal p{font-size:13px;color:#9ca3af;line-height:1.6;margin-bottom:24px}
         .fp-field{margin-bottom:16px}
         .fp-field label{display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:8px;letter-spacing:.5px;text-transform:uppercase}
         .fp-field input{width:100%;padding:12px 14px;border:1.5px solid #eaecf0;border-radius:12px;font-size:14px;font-family:inherit;color:#111;outline:none;transition:border-color .2s,box-shadow .2s;background:#f9fafb}
-        .fp-field input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.09);background:#fff}
+        .fp-field input:focus{border-color:#6B7FED;box-shadow:0 0 0 3px rgba(107,127,237,.09);background:#fff}
         .fp-pw-wrap{position:relative}
         .fp-pw-wrap input{padding-right:44px}
         .fp-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af;display:flex;align-items:center;padding:4px}
-        .fp-eye:hover{color:#6366f1}
-        .fp-btn{width:100%;padding:13px;background:linear-gradient(135deg,#1e1b4b,#4338ca,#6366f1);border:none;border-radius:12px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .2s;margin-top:4px}
+        .fp-eye:hover{color:#6B7FED}
+        .fp-btn{width:100%;padding:13px;background:linear-gradient(135deg,#1A1E52,#5063C8,#6B7FED);border:none;border-radius:12px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .2s;margin-top:4px}
         .fp-btn:hover:not(:disabled){opacity:.88}
         .fp-btn:disabled{opacity:.5;cursor:not-allowed}
         .fp-err{background:#fff1f2;border:1px solid #fecdd3;border-radius:10px;padding:10px 14px;font-size:12px;color:#be123c;font-weight:500;margin-bottom:14px}
         .fp-steps{display:flex;align-items:center;gap:6px;margin-bottom:24px}
         .fp-step{flex:1;height:3px;border-radius:2px;background:#f0f0f5;transition:background .3s}
-        .fp-step.done{background:#6366f1}
+        .fp-step.done{background:#6B7FED}
         .fp-step.active{background:#a5b4fc}
 
         /* OTP inputs */
         .otp-row{display:flex;gap:8px;justify-content:center;margin-bottom:20px}
-        .otp-input{width:46px;height:54px;border:1.5px solid #eaecf0;border-radius:12px;font-size:22px;font-weight:700;color:#1e1b4b;text-align:center;outline:none;transition:border-color .2s,box-shadow .2s;background:#f9fafb;font-family:inherit}
-        .otp-input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.09);background:#fff}
-        .otp-input.filled{border-color:#6366f1;background:#ede9fe}
+        .otp-input{width:46px;height:54px;border:1.5px solid #eaecf0;border-radius:12px;font-size:22px;font-weight:700;color:#1A1E52;text-align:center;outline:none;transition:border-color .2s,box-shadow .2s;background:#f9fafb;font-family:inherit}
+        .otp-input:focus{border-color:#6B7FED;box-shadow:0 0 0 3px rgba(107,127,237,.09);background:#fff}
+        .otp-input.filled{border-color:#6B7FED;background:#EEF1FF}
         .resend-row{text-align:center;font-size:12px;color:#9ca3af;margin-bottom:16px}
-        .resend-btn{background:none;border:none;cursor:pointer;color:#6366f1;font-weight:700;font-size:12px;font-family:inherit;padding:0}
+        .resend-btn{background:none;border:none;cursor:pointer;color:#6B7FED;font-weight:700;font-size:12px;font-family:inherit;padding:0}
         .resend-btn:disabled{color:#c4c9d4;cursor:not-allowed}
 
         /* Success */
         .fp-success{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 0}
         .fp-success-icon{width:72px;height:72px;border-radius:50%;background:#d1fae5;display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:16px;animation:popIn .4s ease}
         @keyframes popIn{0%{transform:scale(0)}80%{transform:scale(1.1)}100%{transform:scale(1)}}
-        .fp-success h3{font-size:20px;font-weight:800;color:#1e1b4b;margin-bottom:8px}
+        .fp-success h3{font-size:20px;font-weight:800;color:#1A1E52;margin-bottom:8px}
         .fp-success p{font-size:13px;color:#9ca3af;line-height:1.6;margin-bottom:24px}
 
         @media(max-width:900px){.left{display:none}.right{flex:1}}
@@ -346,12 +346,12 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit}>
               <div className="field">
-                <label>Username</label>
+                <label>Email or Username</label>
                 <div className="iw">
                   <span className="iico">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
                   </span>
-                  <input type="text" placeholder="Enter your username" value={form.username} onChange={e => setForm({...form, username: e.target.value})} required />
+                  <input type="text" placeholder="Enter your email or username" value={form.identifier} onChange={e => setForm({...form, identifier: e.target.value})} required />
                 </div>
               </div>
 
@@ -436,7 +436,7 @@ export default function LoginPage() {
               <>
                 <div className="fp-icon">🔐</div>
                 <h3>Enter OTP</h3>
-                <p>We sent a 6-digit code to <strong style={{color:'#1e1b4b'}}>{fpEmail}</strong>. Enter it below to continue.</p>
+                <p>We sent a 6-digit code to <strong style={{color:'#1A1E52'}}>{fpEmail}</strong>. Enter it below to continue.</p>
                 {fpError && <div className="fp-err">⚠ {fpError}</div>}
                 <div className="otp-row">
                   {fpOtp.map((val, idx) => (

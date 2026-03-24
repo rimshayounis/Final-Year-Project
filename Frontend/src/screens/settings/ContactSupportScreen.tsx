@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
-  TouchableWithoutFeedback, Keyboard,
+  TouchableWithoutFeedback, Keyboard, RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,31 @@ const PURPOSES = [
   { key: 'other',         label: 'Other',               icon: 'ellipsis-horizontal-outline' as keyof typeof Ionicons.glyphMap },
 ];
 
+const PURPOSE_LABEL: Record<string, string> = Object.fromEntries(PURPOSES.map(p => [p.key, p.label]));
+
+type SupportStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
+const STATUS_CONFIG: Record<SupportStatus, { label: string; color: string; bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  open:        { label: 'Open',        color: '#B45309', bg: '#FEF3C7', icon: 'time-outline'           },
+  in_progress: { label: 'In Progress', color: '#1D4ED8', bg: '#DBEAFE', icon: 'reload-circle-outline'  },
+  resolved:    { label: 'Resolved',    color: '#065F46', bg: '#D1FAE5', icon: 'checkmark-circle-outline'},
+  closed:      { label: 'Closed',      color: '#4B5563', bg: '#F3F4F6', icon: 'close-circle-outline'   },
+};
+
+interface SupportRequest {
+  _id: string;
+  purpose: string;
+  description: string;
+  status: SupportStatus;
+  adminNote?: string | null;
+  createdAt: string;
+}
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export default function ContactSupportScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -34,6 +59,26 @@ export default function ContactSupportScreen() {
   const [description,  setDescription]  = useState('');
   const [loading,      setLoading]      = useState(false);
   const [submitted,    setSubmitted]    = useState(false);
+
+  const [requests,     setRequests]     = useState<SupportRequest[]>([]);
+  const [reqLoading,   setReqLoading]   = useState(false);
+  const [refreshing,   setRefreshing]   = useState(false);
+
+  const fetchRequests = useCallback(async (silent = false) => {
+    if (!silent) setReqLoading(true);
+    try {
+      const res = await apiClient.get(`/support-requests/user/${id}`);
+      const data: SupportRequest[] = res.data?.data ?? res.data ?? [];
+      setRequests(data);
+    } catch {
+      // silently ignore
+    } finally {
+      setReqLoading(false);
+      setRefreshing(false);
+    }
+  }, [id]);
+
+  useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
   const canSubmit = purpose !== '' && description.trim().length >= 10;
 
@@ -48,12 +93,17 @@ export default function ContactSupportScreen() {
         description: description.trim(),
       });
       setSubmitted(true);
+      fetchRequests(true);
     } catch {
-      // Show success even on network errors — store locally or retry
       setSubmitted(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchRequests(true);
   };
 
   return (
@@ -78,6 +128,7 @@ export default function ContactSupportScreen() {
             contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[PURPLE]} tintColor={PURPLE} />}
           >
             {submitted ? (
               /* ── Success state ── */
@@ -91,10 +142,21 @@ export default function ContactSupportScreen() {
                 </Text>
                 <TouchableOpacity
                   style={styles.doneBtn}
+                  onPress={() => {
+                    setSubmitted(false);
+                    setPurpose('');
+                    setDescription('');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.doneBtnText}>Submit Another</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.doneBtn, { backgroundColor: '#E5E7EB', marginTop: 10 }]}
                   onPress={() => navigation.goBack()}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.doneBtnText}>Back to Settings</Text>
+                  <Text style={[styles.doneBtnText, { color: '#374151' }]}>Back to Settings</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -171,6 +233,63 @@ export default function ContactSupportScreen() {
                 </TouchableOpacity>
               </>
             )}
+
+            {/* ── My Previous Requests ── */}
+            <View style={styles.prevSection}>
+              <View style={styles.prevHeader}>
+                <Ionicons name="list-outline" size={20} color={PURPLE} />
+                <Text style={styles.prevHeaderText}>My Requests</Text>
+                {requests.length > 0 && (
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countBadgeText}>{requests.length}</Text>
+                  </View>
+                )}
+              </View>
+
+              {reqLoading ? (
+                <ActivityIndicator color={PURPLE} style={{ marginTop: 16 }} />
+              ) : requests.length === 0 ? (
+                <View style={styles.emptyWrap}>
+                  <Ionicons name="mail-outline" size={36} color="#CCC" />
+                  <Text style={styles.emptyText}>No requests yet</Text>
+                </View>
+              ) : (
+                requests.map(req => {
+                  const cfg = STATUS_CONFIG[req.status] ?? STATUS_CONFIG.open;
+                  return (
+                    <View key={req._id} style={styles.reqCard}>
+                      {/* Top row: purpose + date */}
+                      <View style={styles.reqTopRow}>
+                        <Text style={styles.reqPurpose}>
+                          {PURPOSE_LABEL[req.purpose] ?? req.purpose}
+                        </Text>
+                        <Text style={styles.reqDate}>{formatDate(req.createdAt)}</Text>
+                      </View>
+
+                      {/* Description snippet */}
+                      <Text style={styles.reqDesc} numberOfLines={2}>{req.description}</Text>
+
+                      {/* Status badge */}
+                      <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
+                        <Ionicons name={cfg.icon} size={13} color={cfg.color} />
+                        <Text style={[styles.statusBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
+                      </View>
+
+                      {/* Admin note */}
+                      {req.adminNote ? (
+                        <View style={styles.adminNoteWrap}>
+                          <View style={styles.adminNoteHeader}>
+                            <Ionicons name="chatbubble-ellipses-outline" size={14} color={PURPLE} />
+                            <Text style={styles.adminNoteLabel}>Admin Response</Text>
+                          </View>
+                          <Text style={styles.adminNoteText}>{req.adminNote}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })
+              )}
+            </View>
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -290,7 +409,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 32,
     alignItems: 'center',
-    marginTop: 40,
+    marginBottom: 24,
     elevation: 3,
   },
   successIconWrap: {
@@ -317,4 +436,78 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   doneBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+
+  // Previous requests section
+  prevSection: {
+    marginTop: 32,
+  },
+  prevHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  prevHeaderText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1A1D2E',
+    flex: 1,
+  },
+  countBadge: {
+    backgroundColor: PURPLE,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  countBadgeText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
+
+  emptyWrap: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    gap: 8,
+  },
+  emptyText: { fontSize: 13, color: '#AAA' },
+
+  reqCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+  },
+  reqTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  reqPurpose: { fontSize: 13, fontWeight: '700', color: '#1A1D2E' },
+  reqDate:    { fontSize: 11, color: '#9CA3AF' },
+  reqDesc:    { fontSize: 13, color: '#6B7280', lineHeight: 19, marginBottom: 10 },
+
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusBadgeText: { fontSize: 12, fontWeight: '700' },
+
+  adminNoteWrap: {
+    marginTop: 12,
+    backgroundColor: '#EEF1FF',
+    borderRadius: 10,
+    padding: 12,
+  },
+  adminNoteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  adminNoteLabel: { fontSize: 12, fontWeight: '700', color: PURPLE },
+  adminNoteText:  { fontSize: 13, color: '#374151', lineHeight: 19 },
 });

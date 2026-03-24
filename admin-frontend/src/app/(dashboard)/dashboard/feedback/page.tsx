@@ -126,8 +126,8 @@ export default function FeedbackPage() {
             <div className="fb-hstat-val" style={{ color: '#d97706' }}>{avgPlatformRating || '—'}</div>
             <div className="fb-hstat-label">Avg Rating</div>
           </div>
-          <div className="fb-hstat" style={{ background: '#ede9fe' }}>
-            <div className="fb-hstat-val" style={{ color: '#6d28d9' }}>{totalFeedbacks}</div>
+          <div className="fb-hstat" style={{ background: '#EEF1FF' }}>
+            <div className="fb-hstat-val" style={{ color: '#6B7FED' }}>{totalFeedbacks}</div>
             <div className="fb-hstat-label">Total Reviews</div>
           </div>
           <div className="fb-hstat" style={{ background: '#fee2e2' }}>
@@ -303,10 +303,10 @@ export default function FeedbackPage() {
         .fb-filters { display: flex; gap: 6px; }
         .fb-filter-btn { padding: 7px 12px; border-radius: 8px; border: 1px solid #e5e5e5; background: #fff; font-size: 12px; font-weight: 600; color: #666; cursor: pointer; transition: all 0.15s; }
         .fb-filter-btn:hover { background: #f8f8fc; }
-        .fb-filter-btn.active { background: #1e1b4b; color: #fff; border-color: #1e1b4b; }
+        .fb-filter-btn.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
         .fb-sort { padding: 8px 12px; border-radius: 10px; border: 1px solid #e5e5e5; background: #fff; font-size: 13px; color: #333; outline: none; cursor: pointer; }
         .fb-search { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 8px 14px; }
-        .fb-search:focus-within { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
+        .fb-search:focus-within { border-color: #6B7FED; box-shadow: 0 0 0 3px rgba(107,127,237,0.12); }
         .fb-search input { border: none; outline: none; font-size: 14px; color: #333; width: 200px; }
         .fb-search button { background: none; border: none; cursor: pointer; color: #aaa; font-size: 12px; }
         .fb-content { display: grid; grid-template-columns: 1fr; gap: 16px; }
@@ -320,10 +320,10 @@ export default function FeedbackPage() {
         .fb-empty p { font-size: 14px; color: #888; }
         .fb-doctor-card { background: #fff; border-radius: 14px; padding: 18px; border: 1px solid #f0f0f5; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; gap: 6px; }
         .fb-doctor-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
-        .fb-doctor-card.selected { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+        .fb-doctor-card.selected { border-color: #6B7FED; box-shadow: 0 0 0 3px rgba(107,127,237,0.15); }
         .fb-doctor-card.low-rated { border-color: #fca5a5; background: #fff8f8; }
         .fb-card-top { display: flex; align-items: flex-start; justify-content: space-between; }
-        .fb-doc-avatar { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; }
+        .fb-doc-avatar { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, #6B7FED, #7B8CDE); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; }
         .fb-rating-badge { font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: 8px; }
         .fb-doc-name { font-size: 14px; font-weight: 700; color: #111; margin-top: 4px; }
         .fb-doc-spec { font-size: 11px; color: #888; }
@@ -337,7 +337,7 @@ export default function FeedbackPage() {
         .fb-review-row:hover { background: #fafafe; }
         .fb-review-left { min-width: 180px; }
         .fb-review-doc { display: flex; align-items: center; gap: 10px; }
-        .fb-review-avatar { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+        .fb-review-avatar { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #6B7FED, #7B8CDE); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
         .fb-review-dname { font-size: 13px; font-weight: 700; color: #111; }
         .fb-review-pname { font-size: 11px; color: #888; margin-top: 1px; }
         .fb-review-mid { flex: 1; display: flex; flex-direction: column; gap: 4px; }

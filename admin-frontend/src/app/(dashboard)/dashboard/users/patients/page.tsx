@@ -175,7 +175,7 @@ export default function PatientsPage() {
     name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
 
   const avatarColor = (name: string) => {
-    const colors = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#db2777', '#7c3aed'];
+    const colors = ['#6B7FED', '#0891b2', '#059669', '#d97706', '#db2777', '#7c3aed'];
     const idx = (name?.charCodeAt(0) || 0) % colors.length;
     return colors[idx];
   };
@@ -516,11 +516,11 @@ export default function PatientsPage() {
         .page-title { font-size: 22px; font-weight: 800; color: #111; letter-spacing: -0.5px; }
         .page-sub   { font-size: 13px; color: #888; margin-top: 4px; }
         .header-badge {
-          background: #fff; border: 1px solid #f0f0f5;
+          background: #fff; border: 1px solid #E0E4FF;
           border-radius: 14px; padding: 12px 20px;
           text-align: center;
         }
-        .badge-count { display: block; font-size: 24px; font-weight: 800; color: #4f46e5; }
+        .badge-count { display: block; font-size: 24px; font-weight: 800; color: #6B7FED; }
         .badge-label { font-size: 11px; color: #888; font-weight: 500; }
 
         /* Filters */
@@ -547,25 +547,25 @@ export default function PatientsPage() {
           font-size: 13px; font-weight: 500; color: #666;
           cursor: pointer; transition: all 0.15s;
         }
-        .filter-tab:hover  { border-color: #4f46e5; color: #4f46e5; }
-        .filter-tab.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+        .filter-tab:hover  { border-color: #6B7FED; color: #6B7FED; }
+        .filter-tab.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
 
         /* Table */
         .table-wrap {
           background: #fff; border-radius: 16px;
-          border: 1px solid #f0f0f5; overflow: hidden;
+          border: 1px solid #E0E4FF; overflow: hidden;
         }
         .table { width: 100%; border-collapse: collapse; }
-        .table thead tr { background: #f8f8fc; }
+        .table thead tr { background: #F0F4FF; }
         .table th {
           padding: 14px 20px; text-align: left;
           font-size: 12px; font-weight: 700;
           color: #888; text-transform: uppercase; letter-spacing: 0.5px;
-          border-bottom: 1px solid #f0f0f5;
+          border-bottom: 1px solid #E0E4FF;
         }
-        .table-row { border-bottom: 1px solid #f8f8fc; transition: background 0.12s; }
+        .table-row { border-bottom: 1px solid #EEF1FF; transition: background 0.12s; }
         .table-row:last-child { border-bottom: none; }
-        .table-row:hover { background: #fafafa; }
+        .table-row:hover { background: #F5F7FF; }
         .table td { padding: 14px 20px; vertical-align: middle; }
 
         .patient-cell { display: flex; align-items: center; gap: 10px; }
@@ -591,8 +591,8 @@ export default function PatientsPage() {
           font-size: 12px; font-weight: 600; cursor: pointer;
           border: 1px solid; transition: all 0.15s;
         }
-        .btn-view   { background: #ede9fe; color: #4f46e5; border-color: #ddd6fe; }
-        .btn-view:hover { background: #4f46e5; color: #fff; }
+        .btn-view   { background: #EEF1FF; color: #6B7FED; border-color: #E0E4FF; }
+        .btn-view:hover { background: #6B7FED; color: #fff; }
         .btn-posts  { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
         .btn-posts:hover { background: #1d4ed8; color: #fff; }
         .btn-delete { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
@@ -609,8 +609,8 @@ export default function PatientsPage() {
         .empty-state.small { padding: 40px 20px; }
         .spinner {
           width: 32px; height: 32px;
-          border: 3px solid #f0f0f5;
-          border-top-color: #4f46e5;
+          border: 3px solid #E0E4FF;
+          border-top-color: #6B7FED;
           border-radius: 50%;
           animation: spin 0.7s linear infinite;
         }
@@ -640,7 +640,7 @@ export default function PatientsPage() {
         .modal-header {
           display: flex; align-items: center; justify-content: space-between;
           padding: 24px 24px 16px;
-          border-bottom: 1px solid #f0f0f5;
+          background: linear-gradient(135deg, #6B7FED 0%, #7B8CDE 100%);
         }
         .modal-patient-info { display: flex; align-items: center; gap: 14px; }
         .modal-avatar {
@@ -650,8 +650,8 @@ export default function PatientsPage() {
           overflow: hidden; flex-shrink: 0;
         }
         .modal-avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .modal-name  { font-size: 17px; font-weight: 700; color: #111; }
-        .modal-email { font-size: 13px; color: #888; margin-top: 2px; }
+        .modal-name  { font-size: 17px; font-weight: 700; color: #fff; }
+        .modal-email { font-size: 13px; color: #fff; margin-top: 2px; }
 
         .modal-header-actions { display: flex; align-items: center; gap: 10px; }
         .btn-remove-modal {
@@ -671,7 +671,7 @@ export default function PatientsPage() {
 
         .modal-tabs {
           display: flex; gap: 4px; padding: 12px 24px;
-          border-bottom: 1px solid #f0f0f5;
+          border-bottom: 1px solid #E0E4FF;
         }
         .modal-tab {
           padding: 8px 18px; border-radius: 10px;
@@ -681,7 +681,7 @@ export default function PatientsPage() {
           transition: all 0.15s;
         }
         .modal-tab:hover  { background: #f3f4f8; color: #333; }
-        .modal-tab.active { background: #ede9fe; color: #4f46e5; }
+        .modal-tab.active { background: #EEF1FF; color: #6B7FED; }
 
         .modal-body  { flex: 1; overflow-y: auto; padding: 20px 24px; }
         .modal-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px; color: #888; }
@@ -700,11 +700,11 @@ export default function PatientsPage() {
         .contact-card  {
           display: flex; align-items: center; gap: 10px;
           background: #fff; border-radius: 10px; padding: 10px 12px;
-          border: 1px solid #f0f0f5;
+          border: 1px solid #E0E4FF;
         }
         .contact-avatar {
           width: 32px; height: 32px; border-radius: 50%;
-          background: #4f46e5; color: #fff;
+          background: #6B7FED; color: #fff;
           display: flex; align-items: center; justify-content: center;
           font-size: 13px; font-weight: 700; flex-shrink: 0;
         }
@@ -716,7 +716,7 @@ export default function PatientsPage() {
         .posts-list  { display: flex; flex-direction: column; gap: 12px; }
         .post-card   {
           background: #f8f8fc; border-radius: 14px; padding: 16px;
-          border: 1px solid #f0f0f5;
+          border: 1px solid #E0E4FF;
         }
         .post-top    { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
         .post-title  { font-size: 14px; font-weight: 700; color: #111; }

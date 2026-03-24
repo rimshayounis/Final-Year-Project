@@ -4,21 +4,57 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+function EyeIcon({ open }: { open: boolean }) {
+  return open ? (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  ) : (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
+function getStrength(pwd: string) {
+  const checks = {
+    upper: /[A-Z]/.test(pwd),
+    lower: /[a-z]/.test(pwd),
+    digit: /[0-9]/.test(pwd),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd),
+    length: pwd.length >= 8,
+  };
+  const score = Object.values(checks).filter(Boolean).length;
+  return { checks, score };
+}
+
+const STRENGTH_LABELS = ['', 'Very Weak', 'Weak', 'Fair', 'Strong', 'Very Strong'];
+const STRENGTH_COLORS = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a'];
+
 export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({ fullName: '', username: '', email: '', password: '', confirmPassword: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value });
+
+  const { checks, score } = getStrength(form.password);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return; }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (!/[0-9]/.test(form.password)) { setError('Password must contain at least one digit.'); return; }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(form.password)) { setError('Password must contain at least one special character.'); return; }
     setLoading(true);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/admin/register`, {
@@ -38,8 +74,6 @@ export default function RegisterPage() {
     }
   };
 
-  const steps = ['Personal Info', 'Account Setup', 'Access Granted'];
-
   return (
     <>
       <style>{`
@@ -55,7 +89,7 @@ export default function RegisterPage() {
         /* ─── LEFT PANEL ─── */
         .left {
           flex: 0 0 400px;
-          background: #1e1b4b;
+          background: #1A1E52;
           position: relative; overflow: hidden;
           display: flex; flex-direction: column;
           justify-content: space-between;
@@ -74,7 +108,7 @@ export default function RegisterPage() {
           position: absolute; border-radius: 50%;
           filter: blur(80px); pointer-events: none;
         }
-        .orb1 { width: 400px; height: 400px; background: rgba(99,102,241,0.3); top: -150px; right: -120px; }
+        .orb1 { width: 400px; height: 400px; background: rgba(107,127,237,0.3); top: -150px; right: -120px; }
         .orb2 { width: 280px; height: 280px; background: rgba(139,92,246,0.2); bottom: -60px; left: -60px; }
         .ring {
           position: absolute; border-radius: 50%;
@@ -98,7 +132,6 @@ export default function RegisterPage() {
         .brand-name { font-size: 20px; font-weight: 700; color: #e0e7ff; }
         .brand-name span { color: #a5b4fc; }
 
-        .hero-copy { }
         .hero-copy h2 {
           font-size: 38px; font-weight: 800; color: #e0e7ff;
           line-height: 1.1; letter-spacing: -1.5px; margin-bottom: 16px;
@@ -112,7 +145,6 @@ export default function RegisterPage() {
         }
         .hero-copy p { font-size: 14px; color: rgba(199,210,254,0.55); line-height: 1.7; max-width: 300px; }
 
-        /* Steps tracker */
         .steps { display: flex; flex-direction: column; gap: 0; }
         .step-item {
           display: flex; align-items: flex-start; gap: 14px;
@@ -133,8 +165,7 @@ export default function RegisterPage() {
           background: rgba(165,180,252,0.05);
         }
         .step-num.active {
-          border-color: #a5b4fc;
-          color: #a5b4fc;
+          border-color: #a5b4fc; color: #a5b4fc;
           background: rgba(165,180,252,0.12);
         }
         .step-text { padding: 4px 0 20px; }
@@ -154,35 +185,33 @@ export default function RegisterPage() {
           content: '';
           position: absolute; left: 0; top: 10%; bottom: 10%;
           width: 1px;
-          background: linear-gradient(to bottom, transparent, rgba(99,102,241,0.2), transparent);
+          background: linear-gradient(to bottom, transparent, rgba(107,127,237,0.2), transparent);
         }
 
         .form-wrap { width: 100%; max-width: 480px; }
 
         /* Success state */
-        .success-wrap {
-          text-align: center; padding: 40px 0;
-        }
+        .success-wrap { text-align: center; padding: 40px 0; }
         .success-circle {
           width: 80px; height: 80px; border-radius: 50%;
-          background: linear-gradient(135deg, #312e81, #4338ca);
+          background: linear-gradient(135deg, #2D3680, #5063C8);
           display: flex; align-items: center; justify-content: center;
           font-size: 32px; margin: 0 auto 24px;
-          box-shadow: 0 0 0 12px rgba(99,102,241,0.1), 0 0 0 24px rgba(99,102,241,0.05);
+          box-shadow: 0 0 0 12px rgba(107,127,237,0.1), 0 0 0 24px rgba(107,127,237,0.05);
         }
-        .success-wrap h3 { font-size: 26px; font-weight: 800; color: #1e1b4b; letter-spacing: -0.5px; margin-bottom: 10px; }
+        .success-wrap h3 { font-size: 26px; font-weight: 800; color: #1A1E52; letter-spacing: -0.5px; margin-bottom: 10px; }
         .success-wrap p { font-size: 14px; color: #6b7280; line-height: 1.6; margin-bottom: 28px; }
         .progress-track { height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; }
         .progress-fill {
           height: 100%;
-          background: linear-gradient(90deg, #312e81, #6366f1);
+          background: linear-gradient(90deg, #2D3680, #6B7FED);
           border-radius: 2px;
           animation: prog 3s linear forwards;
         }
         @keyframes prog { from { width: 0; } to { width: 100%; } }
 
         .form-top { margin-bottom: 32px; }
-        .form-top h2 { font-size: 28px; font-weight: 800; color: #1e1b4b; letter-spacing: -0.8px; margin-bottom: 8px; }
+        .form-top h2 { font-size: 28px; font-weight: 800; color: #1A1E52; letter-spacing: -0.8px; margin-bottom: 8px; }
         .form-top p { font-size: 14px; color: #6b7280; }
 
         /* error */
@@ -195,9 +224,8 @@ export default function RegisterPage() {
         .err-icon { font-size: 18px; flex-shrink: 0; }
         .err-title { font-size: 13px; font-weight: 700; color: #e11d48; margin-bottom: 3px; }
         .err-msg { font-size: 12px; color: #be123c; line-height: 1.5; }
-        .err-cta { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 700; color: #4338ca; text-decoration: none; border-bottom: 1px solid rgba(67,56,202,0.3); }
+        .err-cta { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 700; color: #5063C8; text-decoration: none; border-bottom: 1px solid rgba(67,56,202,0.3); }
 
-        /* grid layout */
         .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
         .field { margin-bottom: 18px; }
@@ -207,12 +235,13 @@ export default function RegisterPage() {
           letter-spacing: 0.5px; text-transform: uppercase;
         }
         .inp-wrap { position: relative; }
-        .inp-wrap svg {
+        .inp-wrap .left-icon {
           position: absolute; left: 13px; top: 50%;
           transform: translateY(-50%); color: #9ca3af; pointer-events: none;
+          display: flex; align-items: center;
         }
         .inp-wrap input {
-          width: 100%; padding: 12px 14px 12px 40px;
+          width: 100%; padding: 12px 42px 12px 40px;
           background: #fff; border: 1.5px solid #e5e7eb;
           border-radius: 12px; font-size: 14px;
           font-family: inherit; color: #111827; outline: none;
@@ -220,14 +249,56 @@ export default function RegisterPage() {
         }
         .inp-wrap input::placeholder { color: #d1d5db; }
         .inp-wrap input:focus {
-          border-color: #6366f1;
-          box-shadow: 0 0 0 4px rgba(99,102,241,0.1);
+          border-color: #6B7FED;
+          box-shadow: 0 0 0 4px rgba(107,127,237,0.1);
         }
         .inp-wrap.no-icon input { padding-left: 14px; }
 
+        /* eye toggle */
+        .eye-btn {
+          position: absolute; right: 12px; top: 50%;
+          transform: translateY(-50%);
+          background: none; border: none; cursor: pointer;
+          color: #9ca3af; display: flex; align-items: center;
+          padding: 2px; border-radius: 4px;
+          transition: color 0.15s;
+        }
+        .eye-btn:hover { color: #6B7FED; }
+
+        /* ─── Password strength ─── */
+        .strength-wrap { margin-top: 10px; }
+        .strength-bars {
+          display: flex; gap: 5px; margin-bottom: 6px;
+        }
+        .strength-bar {
+          flex: 1; height: 4px; border-radius: 2px;
+          background: #e5e7eb;
+          transition: background 0.3s;
+        }
+        .strength-header {
+          display: flex; justify-content: space-between;
+          align-items: center; margin-bottom: 8px;
+        }
+        .strength-label { font-size: 11px; font-weight: 700; }
+        .strength-checks {
+          display: flex; flex-wrap: wrap; gap: 6px;
+        }
+        .chk {
+          display: flex; align-items: center; gap: 4px;
+          font-size: 11px; color: #9ca3af;
+          transition: color 0.2s;
+        }
+        .chk.ok { color: #16a34a; }
+        .chk-dot {
+          width: 7px; height: 7px; border-radius: 50%;
+          background: #d1d5db; flex-shrink: 0;
+          transition: background 0.2s;
+        }
+        .chk.ok .chk-dot { background: #16a34a; }
+
         .btn {
           width: 100%; padding: 14px;
-          background: linear-gradient(135deg, #312e81 0%, #4338ca 40%, #6366f1 100%);
+          background: linear-gradient(135deg, #2D3680 0%, #5063C8 40%, #6B7FED 100%);
           border: none; border-radius: 12px;
           color: #fff; font-family: inherit;
           font-size: 15px; font-weight: 700; cursor: pointer;
@@ -254,7 +325,7 @@ export default function RegisterPage() {
         @keyframes spin { to { transform: rotate(360deg); } }
 
         .bottom-row { text-align: center; margin-top: 22px; font-size: 13px; color: #6b7280; }
-        .bottom-row a { color: #4338ca; font-weight: 700; text-decoration: none; }
+        .bottom-row a { color: #5063C8; font-weight: 700; text-decoration: none; }
         .bottom-row a:hover { text-decoration: underline; }
 
         .terms { text-align: center; margin-top: 14px; font-size: 11px; color: #9ca3af; line-height: 1.6; }
@@ -290,7 +361,7 @@ export default function RegisterPage() {
               {[
                 { label: 'Personal Info', desc: 'Your name and username', active: true },
                 { label: 'Account Setup', desc: 'Email and password', active: true },
-                { label: 'Access Granted', desc: 'You\'re in', active: false },
+                { label: 'Access Granted', desc: "You're in", active: false },
               ].map((s, i) => (
                 <div className="step-item" key={i}>
                   <div className={`step-num ${s.active ? 'active' : ''}`}>{i + 1}</div>
@@ -341,19 +412,23 @@ export default function RegisterPage() {
                     <div className="field">
                       <label>Full Name</label>
                       <div className="inp-wrap">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-                        </svg>
-                        <input name="fullName" type="text" placeholder="Rimsha Younis" value={form.fullName} onChange={handleChange} required />
+                        <span className="left-icon">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                          </svg>
+                        </span>
+                        <input name="fullName" type="text" placeholder="Full name" value={form.fullName} onChange={handleChange} required />
                       </div>
                     </div>
                     <div className="field">
                       <label>Username</label>
                       <div className="inp-wrap">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                        </svg>
-                        <input name="username" type="text" placeholder="admin_rimsha" value={form.username} onChange={handleChange} required />
+                        <span className="left-icon">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                          </svg>
+                        </span>
+                        <input name="username" type="text" placeholder="user_name" value={form.username} onChange={handleChange} required />
                       </div>
                     </div>
                   </div>
@@ -361,9 +436,11 @@ export default function RegisterPage() {
                   <div className="field">
                     <label>Email Address</label>
                     <div className="inp-wrap">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-                      </svg>
+                      <span className="left-icon">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                        </svg>
+                      </span>
                       <input name="email" type="email" placeholder="admin@truheal.com" value={form.email} onChange={handleChange} required />
                     </div>
                   </div>
@@ -372,24 +449,84 @@ export default function RegisterPage() {
                     <div className="field">
                       <label>Password</label>
                       <div className="inp-wrap">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
-                        </svg>
-                        <input name="password" type="password" placeholder="Min. 6 chars" value={form.password} onChange={handleChange} required />
+                        <span className="left-icon">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                          </svg>
+                        </span>
+                        <input
+                          name="password"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="Min. 8 chars"
+                          value={form.password}
+                          onChange={handleChange}
+                          required
+                        />
+                        <button type="button" className="eye-btn" onClick={() => setShowPassword(v => !v)} tabIndex={-1}>
+                          <EyeIcon open={showPassword} />
+                        </button>
                       </div>
+
+                      {/* Strength meter */}
+                      {form.password.length > 0 && (
+                        <div className="strength-wrap">
+                          <div className="strength-header">
+                            <span className="strength-label" style={{ color: STRENGTH_COLORS[score] }}>
+                              {STRENGTH_LABELS[score]}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#9ca3af' }}>{score}/5</span>
+                          </div>
+                          <div className="strength-bars">
+                            {[1, 2, 3, 4, 5].map(i => (
+                              <div
+                                key={i}
+                                className="strength-bar"
+                                style={{ background: i <= score ? STRENGTH_COLORS[score] : '#e5e7eb' }}
+                              />
+                            ))}
+                          </div>
+                          <div className="strength-checks">
+                            {[
+                              { key: 'upper', label: 'Uppercase' },
+                              { key: 'lower', label: 'Lowercase' },
+                              { key: 'digit', label: 'Digit' },
+                              { key: 'special', label: 'Special char' },
+                              { key: 'length', label: '8+ chars' },
+                            ].map(({ key, label }) => (
+                              <span key={key} className={`chk ${checks[key as keyof typeof checks] ? 'ok' : ''}`}>
+                                <span className="chk-dot" />
+                                {label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
+
                     <div className="field">
                       <label>Confirm Password</label>
                       <div className="inp-wrap">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        </svg>
-                        <input name="confirmPassword" type="password" placeholder="Repeat password" value={form.confirmPassword} onChange={handleChange} required />
+                        <span className="left-icon">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                          </svg>
+                        </span>
+                        <input
+                          name="confirmPassword"
+                          type={showConfirm ? 'text' : 'password'}
+                          placeholder="Repeat password"
+                          value={form.confirmPassword}
+                          onChange={handleChange}
+                          required
+                        />
+                        <button type="button" className="eye-btn" onClick={() => setShowConfirm(v => !v)} tabIndex={-1}>
+                          <EyeIcon open={showConfirm} />
+                        </button>
                       </div>
                     </div>
                   </div>
 
-                  <button type="submit" className="btn" disabled={loading}>
+                  <button type="submit" className="btn" disabled={loading || score < 5 || !form.confirmPassword || form.password !== form.confirmPassword || !form.fullName.trim() || !form.username.trim() || !form.email.trim()}>
                     {loading ? <><span className="spinner" /> Creating account...</> : 'Create Admin Account →'}
                   </button>
                 </form>

@@ -5,10 +5,13 @@ export type DoctorDocument = Doctor & Document;
 
 @Schema({ _id: false })
 export class DoctorProfile {
-  @Prop({ required: true }) licenseNumber: string;
+  @Prop({ required: true, enum: ['doctor', 'therapist'] }) professionalType: string;
+  @Prop({ type: String, default: null }) licenseNumber: string | null;
   @Prop({ required: true }) specialization: string;
   @Prop({ type: [String], default: [] }) certificates: string[];
   @Prop({ default: false }) isVerified: boolean;
+  @Prop({ default: false }) isRejected: boolean;
+  @Prop({ type: String, default: null }) rejectionReason: string | null;
   @Prop({ default: Date.now }) registeredAt: Date;
 }
 

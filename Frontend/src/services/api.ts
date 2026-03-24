@@ -1,6 +1,6 @@
 import axios from 'axios'
-export const API_URL = 'http://10.71.131.86:3000/api';
-export const SOCKET_URL = 'http://10.71.131.86:3000';
+export const API_URL = 'http://192.168.137.1:3000/api';
+export const SOCKET_URL = 'http://192.168.137.1:3000';
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -250,6 +250,12 @@ export const doctorAPI = {
 
   getVerificationStatus: (doctorId: string) =>
     apiClient.get(`/doctors/${doctorId}/verification-status`),
+
+  resubmit: (doctorId: string, data: FormData) =>
+    axios.put(`${API_URL}/doctors/${doctorId}/resubmit`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000,
+    }),
 
   // ── Forgot password ────────────────────────────────────────────────────────
   forgotPassword: (email: string) =>

@@ -10,6 +10,7 @@ interface Post {
   description: string;
   category: string;
   status: 'pending' | 'approved' | 'rejected';
+  userModel: 'User' | 'Doctor';
   likes: number;
   comments: number;
   shares: number;
@@ -132,7 +133,7 @@ export default function PostsPage() {
             <div key={tab} style={{ display: 'flex', alignItems: 'center' }}>
               {i > 0 && <div className="hstat-divider" />}
               <div className="hstat" onClick={() => setActiveTab(tab)}>
-                <span className="hstat-val" style={{ color: tab === 'all' ? '#4f46e5' : statusColors[tab]?.color || '#111' }}>
+                <span className="hstat-val" style={{ color: tab === 'all' ? '#6B7FED' : statusColors[tab]?.color || '#111' }}>
                   {counts[tab]}
                 </span>
                 <span className="hstat-label">{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
@@ -182,35 +183,49 @@ export default function PostsPage() {
       ) : (
         <div className="posts-grid">
           {filtered.map(post => (
-            <div key={post._id} className="post-card">
+            <div key={post._id} className="post-card" onClick={() => setSelected(post)}>
+              {/* Row 1: Category + Status */}
               <div className="post-card-top">
                 <span className="post-category">{post.category}</span>
                 <span className="post-status" style={statusColors[post.status]}>
                   {post.status}
                 </span>
               </div>
+
+              {/* Row 2: Title */}
               <h3 className="post-title">{post.title}</h3>
-              <p className="post-desc">{post.description?.slice(0, 100)}{post.description?.length > 100 ? '...' : ''}</p>
-              {post.mediaUrls?.length > 0 && (
-                <div className="post-media">
-                  <img
-                    src={`http://localhost:3000${post.mediaUrls[0]}`}
-                    alt="post media"
-                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
+
+              {/* Row 3: Author + Role */}
+              <div className="post-author-row">
+                <div className="post-author-info">
+                  <span className="post-author-avatar">
+                    {getName(post.userId).charAt(0).toUpperCase()}
+                  </span>
+                  <span className="post-author-name">{getName(post.userId)}</span>
                 </div>
-              )}
-              <div className="post-meta-row">
-                <span className="post-author">👤 {getName(post.userId)}</span>
-                <div className="post-stats">
-                  <span>❤️ {post.likes}</span>
-                  <span>💬 {post.comments}</span>
-                  <span>↗️ {post.shares}</span>
-                </div>
+                <span className={`post-role-badge ${post.userModel === 'Doctor' ? 'doctor' : 'user'}`}>
+                  {post.userModel === 'Doctor' ? (
+                    <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2z"/><path d="M12 14c-5 0-8 2.5-8 4v1h16v-1c0-1.5-3-4-8-4z"/><path d="M16 9h2m-1-1v2"/></svg> Doctor</>
+                  ) : (
+                    <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> User</>
+                  )}
+                </span>
               </div>
-              <div className="post-footer">
-                <span className="post-date">{new Date(post.createdAt).toLocaleDateString()}</span>
-                <button className="btn-view-post" onClick={() => setSelected(post)}>View</button>
+
+              {/* Row 4: Stats */}
+              <div className="post-stats-row">
+                <span className="stat-item">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#e11d48" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                  <strong>{post.likes}</strong>
+                </span>
+                <span className="stat-item">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7FED" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  <strong>{post.comments}</strong>
+                </span>
+                <span className="stat-item">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                  <strong>{post.shares}</strong>
+                </span>
               </div>
             </div>
           ))}
@@ -233,7 +248,7 @@ export default function PostsPage() {
             </div>
             <div className="modal-body">
               <div className="modal-author">
-                <span>👤</span>
+                <span className="modal-author-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
                 <div>
                   <div className="author-name">{getName(selected.userId)}</div>
                   <div className="author-date">{new Date(selected.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
@@ -257,9 +272,18 @@ export default function PostsPage() {
               )}
 
               <div className="modal-stats">
-                <div className="mstat"><span>❤️</span><strong>{selected.likes}</strong><span>Likes</span></div>
-                <div className="mstat"><span>💬</span><strong>{selected.comments}</strong><span>Comments</span></div>
-                <div className="mstat"><span>↗️</span><strong>{selected.shares}</strong><span>Shares</span></div>
+                <div className="mstat">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e11d48" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                  <strong>{selected.likes}</strong><span>Likes</span>
+                </div>
+                <div className="mstat">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B7FED" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  <strong>{selected.comments}</strong><span>Comments</span>
+                </div>
+                <div className="mstat">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                  <strong>{selected.shares}</strong><span>Shares</span>
+                </div>
               </div>
 
               {selected.rejectionReason && (
@@ -302,13 +326,13 @@ export default function PostsPage() {
 
         .header-stats {
           display: flex; align-items: center;
-          background: #fff; border: 1px solid #f0f0f5; border-radius: 14px; overflow: hidden;
+          background: #fff; border: 1px solid #E0E4FF; border-radius: 14px; overflow: hidden;
         }
         .hstat { padding: 12px 20px; text-align: center; cursor: pointer; }
-        .hstat:hover { background: #f8f8fc; }
+        .hstat:hover { background: #F5F7FF; }
         .hstat-val   { display: block; font-size: 20px; font-weight: 800; }
         .hstat-label { display: block; font-size: 10px; color: #888; font-weight: 500; margin-top: 1px; text-transform: capitalize; }
-        .hstat-divider { width: 1px; background: #f0f0f5; align-self: stretch; }
+        .hstat-divider { width: 1px; background: #E0E4FF; align-self: stretch; }
 
         .filters { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .tab-group { display: flex; gap: 6px; }
@@ -319,8 +343,8 @@ export default function PostsPage() {
           font-size: 13px; font-weight: 500; color: #666;
           cursor: pointer; transition: all 0.15s;
         }
-        .tab:hover  { border-color: #4f46e5; color: #4f46e5; }
-        .tab.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+        .tab:hover  { border-color: #6B7FED; color: #6B7FED; }
+        .tab.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
         .tab-count { background: rgba(0,0,0,0.08); font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 20px; }
         .tab.active .tab-count { background: rgba(255,255,255,0.25); }
 
@@ -342,7 +366,7 @@ export default function PostsPage() {
         .empty-state span { font-size: 13px; }
         .spinner {
           width: 32px; height: 32px;
-          border: 3px solid #f0f0f5; border-top-color: #4f46e5;
+          border: 3px solid #E0E4FF; border-top-color: #6B7FED;
           border-radius: 50%; animation: spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -350,34 +374,51 @@ export default function PostsPage() {
         /* Posts Grid */
         .posts-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
           gap: 16px;
         }
         .post-card {
           background: #fff; border-radius: 16px; padding: 18px;
-          border: 1px solid #f0f0f5; display: flex; flex-direction: column; gap: 10px;
-          transition: transform 0.15s, box-shadow 0.15s;
+          border: 1px solid #E0E4FF; display: flex; flex-direction: column; gap: 12px;
+          cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
         }
-        .post-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.07); }
+        .post-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); border-color: #e0e0f0; }
+
+        /* Row 1 */
         .post-card-top { display: flex; align-items: center; justify-content: space-between; }
-        .post-category { font-size: 11px; font-weight: 600; color: #4f46e5; background: #ede9fe; padding: 3px 10px; border-radius: 20px; }
+        .post-category { font-size: 11px; font-weight: 700; color: #6B7FED; background: #EEF1FF; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; }
         .post-status   { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; }
-        .post-title    { font-size: 15px; font-weight: 700; color: #111; line-height: 1.3; }
-        .post-desc     { font-size: 13px; color: #666; line-height: 1.5; }
-        .post-media    { border-radius: 10px; overflow: hidden; height: 140px; }
-        .post-media img { width: 100%; height: 100%; object-fit: cover; }
-        .post-meta-row { display: flex; align-items: center; justify-content: space-between; }
-        .post-author   { font-size: 12px; color: #888; }
-        .post-stats    { display: flex; gap: 10px; font-size: 12px; color: #888; }
-        .post-footer   { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid #f0f0f5; }
-        .post-date     { font-size: 11px; color: #aaa; }
-        .btn-view-post {
-          padding: 5px 14px; border-radius: 8px;
-          background: #ede9fe; color: #4f46e5;
-          border: 1px solid #ddd6fe; font-size: 12px; font-weight: 600;
-          cursor: pointer; transition: all 0.15s;
+
+        /* Row 2 */
+        .post-title { font-size: 15px; font-weight: 700; color: #111; line-height: 1.35; margin: 0; }
+
+        /* Row 3 */
+        .post-author-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .post-author-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .post-author-avatar {
+          width: 28px; height: 28px; border-radius: 50%;
+          background: #6B7FED; color: #fff;
+          font-size: 12px; font-weight: 700;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
         }
-        .btn-view-post:hover { background: #4f46e5; color: #fff; }
+        .post-author-name { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .post-role-badge {
+          font-size: 11px; font-weight: 700; padding: 3px 10px;
+          border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+          display: inline-flex; align-items: center; gap: 4px;
+        }
+        .post-role-badge.doctor { background: #dbeafe; color: #1d4ed8; }
+        .post-role-badge.user   { background: #f0fdf4; color: #15803d; }
+
+        /* Row 4 */
+        .post-stats-row {
+          display: flex; gap: 14px;
+          padding-top: 10px; border-top: 1px solid #EEF1FF;
+        }
+        .stat-item { font-size: 13px; color: #555; display: flex; align-items: center; gap: 5px; }
+        .stat-item strong { color: #111; font-weight: 700; }
+        .modal-author-icon { width: 36px; height: 36px; border-radius: 50%; background: #EEF1FF; display: flex; align-items: center; justify-content: center; color: #6B7FED; flex-shrink: 0; }
 
         /* Modal */
         .overlay {
@@ -396,14 +437,14 @@ export default function PostsPage() {
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .modal-header {
           display: flex; align-items: flex-start; justify-content: space-between;
-          padding: 20px 24px; border-bottom: 1px solid #f0f0f5; gap: 12px;
+          padding: 20px 24px; background: linear-gradient(135deg, #6B7FED 0%, #7B8CDE 100%); gap: 12px;
         }
-        .modal-title { font-size: 16px; font-weight: 700; color: #111; margin-bottom: 6px; }
+        .modal-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px; }
         .modal-meta  { display: flex; align-items: center; gap: 8px; }
         .modal-close {
           width: 30px; height: 30px; border-radius: 8px;
-          background: #f3f4f8; border: none; cursor: pointer;
-          font-size: 13px; color: #666; flex-shrink: 0;
+          background: rgba(255,255,255,0.2); border: none; cursor: pointer;
+          font-size: 13px; color: #fff; flex-shrink: 0;
         }
         .modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
         .modal-author { display: flex; align-items: center; gap: 10px; }
@@ -412,7 +453,7 @@ export default function PostsPage() {
         .modal-desc   { font-size: 14px; color: #444; line-height: 1.6; }
         .modal-images { display: flex; flex-direction: column; gap: 8px; }
         .modal-img    { width: 100%; border-radius: 12px; max-height: 200px; object-fit: cover; }
-        .modal-stats  { display: flex; gap: 16px; background: #f8f8fc; border-radius: 12px; padding: 14px; }
+        .modal-stats  { display: flex; gap: 16px; background: #F0F4FF; border-radius: 12px; padding: 14px; }
         .mstat        { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
         .mstat span   { font-size: 18px; }
         .mstat strong { font-size: 18px; font-weight: 800; color: #111; }

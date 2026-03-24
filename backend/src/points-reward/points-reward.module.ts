@@ -4,12 +4,14 @@ import { PointsRewardController } from './points-reward.controller';
 import { PointsRewardService } from './points-reward.service';
 import { PointsReward, PointsRewardSchema } from './schemas/points-reward.schema';
 import { Post, PostSchema } from '../posts/schemas/post.schema';
+import { BookedAppointment, BookedAppointmentSchema } from '../booked-appointment/schemas/booked-appointment.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: PointsReward.name, schema: PointsRewardSchema },
       { name: Post.name, schema: PostSchema },
+      { name: BookedAppointment.name, schema: BookedAppointmentSchema },
     ]),
   ],
   controllers: [PointsRewardController],

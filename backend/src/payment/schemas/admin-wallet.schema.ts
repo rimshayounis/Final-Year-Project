@@ -17,6 +17,10 @@ export class AdminWallet {
   @Prop({ default: 0 })
   totalCommission: number;
 
+  /** Funds currently held for pending appointment payouts (not yet earned) */
+  @Prop({ default: 0 })
+  heldBalance: number;
+
   /** Total number of successful transactions */
   @Prop({ default: 0 })
   totalTransactions: number;

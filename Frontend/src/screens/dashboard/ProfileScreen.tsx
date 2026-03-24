@@ -363,7 +363,8 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
   const fetchVerificationSlots = async () => {
     try {
       const docRes = await apiClient.get(`/doctors/${id}`);
-      const plan = docRes.data?.doctor?.subscriptionPlan ?? 'free_trial';
+      const dr = docRes.data?.doctor ?? docRes.data ?? {};
+      const plan = dr.subscriptionPlan ?? 'free_trial';
       const slotsRes = await apiClient.get(`/points-reward/${id}/verification-slots?plan=${plan}`);
       setVerificationSlots(slotsRes.data?.data ?? null);
     } catch {

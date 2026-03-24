@@ -4,6 +4,21 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/services/auth.service'; // ← adjust path if needed
 
+function EyeIcon({ open }: { open: boolean }) {
+  return open ? (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  ) : (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
 type ActiveTab = 'profile' | 'password' | 'about';
 
 export default function SettingsPage() {
@@ -24,6 +39,16 @@ export default function SettingsPage() {
   const [showOld, setShowOld]                 = useState(false);
   const [showNew, setShowNew]                 = useState(false);
   const [showConfirm, setShowConfirm]         = useState(false);
+
+  const getPwChecks = (pwd: string) => ({
+    upper:   /[A-Z]/.test(pwd),
+    lower:   /[a-z]/.test(pwd),
+    digit:   /[0-9]/.test(pwd),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd),
+    length:  pwd.length >= 8,
+  });
+  const STRENGTH_LABELS = ['', 'Very Weak', 'Weak', 'Fair', 'Strong', 'Very Strong'];
+  const STRENGTH_COLORS = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a'];
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -68,7 +93,19 @@ export default function SettingsPage() {
       showToast('All fields are required', 'error'); return;
     }
     if (newPassword.length < 8) {
-      showToast('New password must be at least 8 characters', 'error'); return;
+      showToast('Password must be at least 8 characters', 'error'); return;
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      showToast('Password must contain at least one uppercase letter', 'error'); return;
+    }
+    if (!/[a-z]/.test(newPassword)) {
+      showToast('Password must contain at least one lowercase letter', 'error'); return;
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      showToast('Password must contain at least one digit', 'error'); return;
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
+      showToast('Password must contain at least one special character', 'error'); return;
     }
     if (newPassword !== confirmPassword) {
       showToast('New passwords do not match', 'error'); return;
@@ -93,11 +130,8 @@ export default function SettingsPage() {
     { key: 'about',    label: 'About',           icon: 'ℹ️'  },
   ];
 
-  const pwStrength = !newPassword ? null :
-    newPassword.length < 6 ? { label: 'Too weak', color: '#dc2626', width: '20%' } :
-    newPassword.length < 8 ? { label: 'Weak',     color: '#d97706', width: '40%' } :
-    newPassword.length < 12? { label: 'Good',     color: '#2563eb', width: '70%' } :
-                             { label: 'Strong',   color: '#059669', width: '100%' };
+  const pwChecks = getPwChecks(newPassword);
+  const pwScore  = Object.values(pwChecks).filter(Boolean).length;
 
   return (
     <div className="page">
@@ -206,21 +240,28 @@ export default function SettingsPage() {
                 <label>Current Password</label>
                 <div className="pw-wrap">
                   <input type={showOld ? 'text' : 'password'} value={oldPassword} onChange={e => setOldPassword(e.target.value)} placeholder="Enter current password" />
-                  <button className="pw-toggle" onClick={() => setShowOld(!showOld)}>{showOld ? '🙈' : '👁️'}</button>
+                  <button type="button" className="pw-toggle" onClick={() => setShowOld(!showOld)}><EyeIcon open={showOld} /></button>
                 </div>
               </div>
               <div className="form-group">
                 <label>New Password</label>
                 <div className="pw-wrap">
                   <input type={showNew ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Minimum 8 characters" />
-                  <button className="pw-toggle" onClick={() => setShowNew(!showNew)}>{showNew ? '🙈' : '👁️'}</button>
+                  <button type="button" className="pw-toggle" onClick={() => setShowNew(!showNew)}><EyeIcon open={showNew} /></button>
                 </div>
-                {pwStrength && (
+                {newPassword.length > 0 && (
                   <div className="pw-strength">
-                    <div className="pw-bar">
-                      <div className="pw-fill" style={{ width: pwStrength.width, background: pwStrength.color }} />
+                    <div className="pw-strength-header">
+                      <span className="pw-label" style={{ color: STRENGTH_COLORS[pwScore] }}>{STRENGTH_LABELS[pwScore]}</span>
+                      <span className="pw-score">{pwScore}/5</span>
                     </div>
-                    <span className="pw-label" style={{ color: pwStrength.color }}>{pwStrength.label}</span>
+                    <div className="pw-bars">
+                      {[1,2,3,4,5].map(i => (
+                        <div key={i} className="pw-bar">
+                          <div className="pw-fill" style={{ width: i <= pwScore ? '100%' : '0%', background: STRENGTH_COLORS[pwScore] }} />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -234,22 +275,30 @@ export default function SettingsPage() {
                     placeholder="Repeat new password"
                     style={{ borderColor: confirmPassword && confirmPassword !== newPassword ? '#dc2626' : '' }}
                   />
-                  <button className="pw-toggle" onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? '🙈' : '👁️'}</button>
+                  <button type="button" className="pw-toggle" onClick={() => setShowConfirm(!showConfirm)}><EyeIcon open={showConfirm} /></button>
                 </div>
                 {confirmPassword && confirmPassword !== newPassword && (
                   <span className="field-error">Passwords do not match</span>
                 )}
               </div>
               <div className="pw-rules">
-                <div className={`rule ${newPassword.length >= 8 ? 'met' : ''}`}>{newPassword.length >= 8 ? '✓' : '○'} At least 8 characters</div>
-                <div className={`rule ${/[A-Z]/.test(newPassword) ? 'met' : ''}`}>{/[A-Z]/.test(newPassword) ? '✓' : '○'} One uppercase letter</div>
-                <div className={`rule ${/[0-9]/.test(newPassword) ? 'met' : ''}`}>{/[0-9]/.test(newPassword) ? '✓' : '○'} One number</div>
+                {([
+                  { key: 'length',  label: '8+ characters'        },
+                  { key: 'upper',   label: 'Uppercase letter'      },
+                  { key: 'lower',   label: 'Lowercase letter'      },
+                  { key: 'digit',   label: 'Number (0–9)'          },
+                  { key: 'special', label: 'Special character (!@#...)' },
+                ] as { key: keyof typeof pwChecks; label: string }[]).map(({ key, label }) => (
+                  <div key={key} className={`rule ${pwChecks[key] ? 'met' : ''}`}>
+                    {pwChecks[key] ? '✓' : '○'} {label}
+                  </div>
+                ))}
               </div>
               <div className="form-actions">
                 <button
                   className="btn-save"
                   onClick={handlePasswordChange}
-                  disabled={loading || !oldPassword || !newPassword || newPassword !== confirmPassword}
+                  disabled={loading || !oldPassword || !confirmPassword || pwScore < 5 || newPassword !== confirmPassword}
                 >
                   {loading ? '...' : '🔒 Change Password'}
                 </button>
@@ -330,48 +379,52 @@ export default function SettingsPage() {
         .page-sub    { font-size: 13px; color: #888; margin-top: 4px; }
         .settings-layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
         .settings-sidebar { display: flex; flex-direction: column; gap: 14px; }
-        .admin-card { background: #fff; border-radius: 16px; padding: 22px 20px; border: 1px solid #f0f0f5; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
-        .admin-avatar-lg { width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(135deg, #4f46e5, #6366f1); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+        .admin-card { background: #fff; border-radius: 16px; padding: 22px 20px; border: 1px solid #E0E4FF; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+        .admin-avatar-lg { width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(135deg, #6B7FED, #7B8CDE); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; }
         .admin-name-lg   { font-size: 15px; font-weight: 700; color: #111; }
         .admin-email-sm  { font-size: 12px; color: #888; }
-        .admin-role-badge { font-size: 11px; font-weight: 700; background: #ede9fe; color: #4f46e5; padding: 3px 12px; border-radius: 20px; margin-top: 4px; }
+        .admin-role-badge { font-size: 11px; font-weight: 700; background: #EEF1FF; color: #6B7FED; padding: 3px 12px; border-radius: 20px; margin-top: 4px; }
         .settings-nav { display: flex; flex-direction: column; gap: 4px; }
-        .settings-tab { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 12px; background: #fff; border: 1px solid #f0f0f5; font-size: 13px; font-weight: 500; color: #555; cursor: pointer; transition: all 0.15s; text-align: left; width: 100%; }
+        .settings-tab { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 12px; background: #fff; border: 1px solid #E0E4FF; font-size: 13px; font-weight: 500; color: #555; cursor: pointer; transition: all 0.15s; text-align: left; width: 100%; }
         .settings-tab:hover  { background: #f8f8fc; color: #333; border-color: #e5e5e5; }
-        .settings-tab.active { background: #ede9fe; color: #4f46e5; border-color: #ddd6fe; font-weight: 600; }
+        .settings-tab.active { background: #EEF1FF; color: #6B7FED; border-color: #E0E4FF; font-weight: 600; }
         .tab-icon  { font-size: 15px; }
         .tab-arrow { margin-left: auto; font-size: 16px; font-weight: 300; }
         .logout-section { background: #fff; border-radius: 14px; padding: 16px; border: 1px solid #fee2e2; display: flex; flex-direction: column; gap: 8px; align-items: center; }
         .btn-logout { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border-radius: 10px; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         .btn-logout:hover { background: #dc2626; color: #fff; border-color: #dc2626; }
         .logout-hint { font-size: 11px; color: #aaa; text-align: center; }
-        .settings-card { background: #fff; border-radius: 16px; padding: 28px; border: 1px solid #f0f0f5; display: flex; flex-direction: column; gap: 20px; }
+        .settings-card { background: #fff; border-radius: 16px; padding: 28px; border: 1px solid #E0E4FF; display: flex; flex-direction: column; gap: 20px; }
         .card-header h2 { font-size: 17px; font-weight: 700; color: #111; margin-bottom: 4px; }
         .card-header p  { font-size: 13px; color: #888; }
         .form-group { display: flex; flex-direction: column; gap: 6px; }
         .form-group label { font-size: 13px; font-weight: 600; color: #333; }
         .form-group input { padding: 11px 14px; border-radius: 10px; border: 1px solid #e5e5e5; font-size: 14px; color: #111; outline: none; background: #fff; transition: border-color 0.15s; width: 100%; }
-        .form-group input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
+        .form-group input:focus { border-color: #6B7FED; box-shadow: 0 0 0 3px rgba(107,127,237,0.12); }
         .input-disabled { background: #f8f8fc !important; color: #aaa !important; cursor: not-allowed; }
         .field-hint  { font-size: 11px; color: #aaa; }
         .field-error { font-size: 11px; color: #dc2626; font-weight: 500; }
         .pw-wrap { position: relative; }
         .pw-wrap input { padding-right: 44px; }
-        .pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; }
-        .pw-strength { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-        .pw-bar  { flex: 1; height: 4px; background: #f0f0f5; border-radius: 2px; overflow: hidden; }
+        .pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #9ca3af; display: flex; align-items: center; padding: 2px; border-radius: 4px; transition: color 0.15s; }
+        .pw-toggle:hover { color: #6B7FED; }
+        .pw-strength { margin-top: 8px; }
+        .pw-strength-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .pw-label { font-size: 11px; font-weight: 700; }
+        .pw-score { font-size: 11px; color: #aaa; }
+        .pw-bars { display: flex; gap: 4px; }
+        .pw-bar  { flex: 1; height: 4px; background: #E0E4FF; border-radius: 2px; overflow: hidden; }
         .pw-fill { height: 100%; border-radius: 2px; transition: all 0.3s; }
-        .pw-label { font-size: 11px; font-weight: 600; min-width: 60px; }
         .pw-rules { background: #f8f8fc; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
         .rule     { font-size: 12px; color: #bbb; transition: color 0.2s; }
         .rule.met { color: #059669; font-weight: 600; }
         .form-actions { display: flex; gap: 10px; }
-        .btn-save { padding: 11px 24px; border-radius: 10px; background: #4f46e5; color: #fff; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+        .btn-save { padding: 11px 24px; border-radius: 10px; background: #6B7FED; color: #fff; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
         .btn-save:hover:not(:disabled) { background: #4338ca; }
         .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-reset { padding: 11px 20px; border-radius: 10px; background: #f3f4f8; color: #555; border: 1px solid #e5e5e5; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
         .btn-reset:hover { background: #e5e5e5; }
-        .about-banner { display: flex; align-items: center; gap: 16px; background: linear-gradient(135deg, #1e1b4b, #4f46e5); border-radius: 14px; padding: 20px 22px; }
+        .about-banner { display: flex; align-items: center; gap: 16px; background: linear-gradient(135deg, #1A1E52, #6B7FED); border-radius: 14px; padding: 20px 22px; }
         .about-logo { width: 50px; height: 50px; border-radius: 14px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; color: #fff; flex-shrink: 0; }
         .about-name    { font-size: 18px; font-weight: 800; color: #fff; }
         .about-tagline { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 3px; }
@@ -382,8 +435,8 @@ export default function SettingsPage() {
         .about-desc { font-size: 13px; color: #666; line-height: 1.7; background: #f8f8fc; border-radius: 12px; padding: 16px; }
         .quick-links h3 { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 10px; }
         .links-grid { display: flex; gap: 10px; flex-wrap: wrap; }
-        .quick-link { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; background: #f3f4f8; color: #4f46e5; border: 1px solid #e5e5e5; font-size: 13px; font-weight: 600; text-decoration: none; transition: all 0.15s; }
-        .quick-link:hover { background: #ede9fe; border-color: #ddd6fe; }
+        .quick-link { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; background: #f3f4f8; color: #6B7FED; border: 1px solid #e5e5e5; font-size: 13px; font-weight: 600; text-decoration: none; transition: all 0.15s; }
+        .quick-link:hover { background: #EEF1FF; border-color: #E0E4FF; }
       `}</style>
     </div>
   );

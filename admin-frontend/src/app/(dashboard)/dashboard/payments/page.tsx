@@ -79,7 +79,7 @@ export default function PaymentsPage() {
   const fmt = (n: number) => `PKR ${(n || 0).toLocaleString()}`;
 
   const txTypeColor: Record<string, { background: string; color: string }> = {
-    subscription_payment:   { background: '#ede9fe', color: '#6d28d9' },
+    subscription_payment:   { background: '#EEF1FF', color: '#6B7FED' },
     appointment_payment:    { background: '#dbeafe', color: '#1d4ed8' },
     appointment_release:    { background: '#d1fae5', color: '#059669' },
     appointment_commission: { background: '#fef3c7', color: '#d97706' },
@@ -108,8 +108,8 @@ export default function PaymentsPage() {
           {/* Wallet Cards */}
           <div className="wallet-grid">
             <div className="wallet-card">
-              <div className="wallet-icon" style={{ background: '#ede9fe', color: '#4f46e5' }}>💳</div>
-              <div className="wallet-value" style={{ color: '#4f46e5' }}>{fmt(wallet?.totalBalance || 0)}</div>
+              <div className="wallet-icon" style={{ background: '#EEF1FF', color: '#6B7FED' }}>💳</div>
+              <div className="wallet-value" style={{ color: '#6B7FED' }}>{fmt(wallet?.totalBalance || 0)}</div>
               <div className="wallet-label">Total Balance</div>
               <div className="wallet-sub">Current admin wallet balance</div>
             </div>
@@ -379,8 +379,8 @@ export default function PaymentsPage() {
           font-size: 13px; font-weight: 500; color: #666;
           cursor: pointer; transition: all 0.15s;
         }
-        .tab:hover  { border-color: #4f46e5; color: #4f46e5; }
-        .tab.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+        .tab:hover  { border-color: #6B7FED; color: #6B7FED; }
+        .tab.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
         .tab-badge { background: #d97706; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 20px; }
         .tab-count { background: rgba(0,0,0,0.08); font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 20px; }
         .tab.active .tab-count { background: rgba(255,255,255,0.25); }
@@ -415,13 +415,13 @@ export default function PaymentsPage() {
         .held-chip  { font-size: 12px; font-weight: 700; background: #fef3c7; color: #d97706; padding: 4px 10px; border-radius: 20px; }
         .status-chip { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; }
 
-        .table-wrap { background: #fff; border-radius: 16px; border: 1px solid #f0f0f5; overflow: hidden; }
+        .table-wrap { background: #fff; border-radius: 16px; border: 1px solid #E0E4FF; overflow: hidden; }
         .table { width: 100%; border-collapse: collapse; }
-        .table thead tr { background: #f8f8fc; }
-        .table th { padding: 13px 16px; text-align: left; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #f0f0f5; }
-        .table-row { border-bottom: 1px solid #f8f8fc; transition: background 0.12s; }
+        .table thead tr { background: #F0F4FF; }
+        .table th { padding: 13px 16px; text-align: left; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #E0E4FF; }
+        .table-row { border-bottom: 1px solid #EEF1FF; transition: background 0.12s; }
         .table-row:last-child { border-bottom: none; }
-        .table-row:hover { background: #fafafa; }
+        .table-row:hover { background: #F5F7FF; }
         .table td { padding: 13px 16px; vertical-align: middle; }
 
         .person-cell { display: flex; flex-direction: column; gap: 2px; }
@@ -450,7 +450,7 @@ export default function PaymentsPage() {
         .empty-state span { font-size: 13px; }
         .spinner {
           width: 32px; height: 32px;
-          border: 3px solid #f0f0f5; border-top-color: #4f46e5;
+          border: 3px solid #E0E4FF; border-top-color: #6B7FED;
           border-radius: 50%; animation: spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
