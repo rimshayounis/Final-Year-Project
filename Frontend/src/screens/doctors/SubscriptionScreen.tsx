@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -155,15 +155,96 @@ const POINTS_INFO = [
   '1 point  =  PKR 0.10  (fixed rate)',
 ];
 
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function daysLeft(iso: string) {
+  const diff = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
+  return diff > 0 ? diff : 0;
+}
+
 export default function SubscriptionScreen({ navigation, route }: Props) {
   const { doctorId, doctorName, isVerified } = route.params;
-  const [selected, setSelected] = useState<PlanKey>('free_trial');
-  const [loading, setLoading] = useState(false);
+
+  // 'detail' = show current plan summary, 'select' = show plan cards for upgrade
+  const [mode, setMode]               = useState<'detail' | 'select'>('select');
+  const [selected, setSelected]       = useState<PlanKey>('free_trial');
+  const [currentPlan, setCurrentPlan] = useState<PlanKey | null>(null);
+  const [planStartDate, setPlanStartDate] = useState<string | null>(null);
+  const [planEndDate, setPlanEndDate]     = useState<string | null>(null);
+  const [planEndIso, setPlanEndIso]       = useState<string | null>(null);
+  const [planPrice, setPlanPrice]         = useState<number>(0);
+  const [fetchingPlan, setFetchingPlan]   = useState(true);
+  const [cancelling, setCancelling]       = useState(false);
+  const [loading, setLoading]             = useState(false);
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
+  // Fetch the doctor's current active subscription
+  useEffect(() => {
+    const fetchActivePlan = async () => {
+      try {
+        const res = await apiClient.get(`/subscriptions/${doctorId}/active`);
+        const sub = res.data?.data;
+        if (sub && sub.plan) {
+          const plan = sub.plan as PlanKey;
+          setCurrentPlan(plan);
+          setSelected(plan);
+          if (sub.startDate) setPlanStartDate(fmtDate(sub.startDate));
+          if (sub.endDate) {
+            setPlanEndDate(fmtDate(sub.endDate));
+            setPlanEndIso(sub.endDate);
+          }
+          setPlanPrice(sub.pricePKR ?? 0);
+          setMode('detail'); // show detail view if plan exists
+        }
+      } catch {
+        // no active plan — go straight to select
+      } finally {
+        setFetchingPlan(false);
+      }
+    };
+    fetchActivePlan();
+  }, [doctorId]);
+
+  const handleCancelSubscription = () => {
+    Alert.alert(
+      'Cancel Subscription',
+      `Are you sure you want to cancel your ${PLANS.find(p => p.key === currentPlan)?.name ?? ''} plan? You will lose access at the end of your billing period.`,
+      [
+        { text: 'Keep Plan', style: 'cancel' },
+        {
+          text: 'Cancel Plan',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              await apiClient.delete(`/subscriptions/${doctorId}/cancel`, {
+                data: { cancelReason: 'Cancelled by doctor from app' },
+              });
+              Alert.alert('Cancelled', 'Your subscription has been cancelled.', [
+                { text: 'OK', onPress: () => navigation.goBack() },
+              ]);
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.message ?? 'Could not cancel subscription.');
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const selectedPlan = PLANS.find(p => p.key === selected)!;
+  const isCurrentPlanSelected = currentPlan !== null && selected === currentPlan;;
 
   const handleContinue = () => {
+    // Already on this plan — nothing to do
+    if (isCurrentPlanSelected) {
+      Alert.alert('Already Active', `You are already on the ${selectedPlan.name} plan.${planEndDate ? ` It renews on ${planEndDate}.` : ''}`);
+      return;
+    }
+
     // Free trial — no payment needed
     if (selected === 'free_trial') {
       Alert.alert(
@@ -273,14 +354,166 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
     }
   };
 
+  // ── Loading ──────────────────────────────────────────────────────────────
+  if (fetchingPlan) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <StatusBar backgroundColor="#6B7FED" barStyle="light-content" />
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Subscription</Text>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#6B7FED" />
+          <Text style={{ marginTop: 12, color: '#888', fontSize: 14 }}>Loading your plan...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Detail View (current plan summary) ───────────────────────────────────
+  if (mode === 'detail' && currentPlan) {
+    const plan     = PLANS.find(p => p.key === currentPlan)!;
+    const daysRem  = planEndIso ? daysLeft(planEndIso) : 0;
+    const isFree   = currentPlan === 'free_trial';
+
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <StatusBar backgroundColor={plan.color} barStyle="light-content" />
+
+        {/* Header */}
+        <View style={[styles.header, { backgroundColor: plan.color }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>My Subscription</Text>
+          <Text style={styles.headerSub}>Manage your current plan</Text>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+
+          {/* Plan card */}
+          <View style={[styles.detailCard, { borderColor: plan.color }]}>
+            {/* Color stripe */}
+            <View style={[styles.detailStripe, { backgroundColor: plan.color }]}>
+              <View>
+                <Text style={styles.detailPlanName}>{plan.name} Plan</Text>
+                {plan.verifiedBadge && (
+                  <View style={styles.blueTickInline}>
+                    <MaterialIcons name="verified" size={13} color="#fff" />
+                    <Text style={styles.blueTickText}>Blue Tick Included</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.detailActivePill}>
+                <View style={styles.detailActiveDot} />
+                <Text style={styles.detailActiveText}>Active</Text>
+              </View>
+            </View>
+
+            {/* Details */}
+            <View style={styles.detailBody}>
+              <DetailInfoRow
+                icon="cash-outline"
+                label="Subscription Fee"
+                value={isFree ? 'Free (15-day trial)' : `PKR ${planPrice.toLocaleString()} / month`}
+                color={plan.color}
+              />
+              <View style={styles.detailDivider} />
+              <DetailInfoRow
+                icon="calendar-outline"
+                label="Start Date"
+                value={planStartDate ?? '—'}
+                color={plan.color}
+              />
+              <View style={styles.detailDivider} />
+              <DetailInfoRow
+                icon="calendar-clear-outline"
+                label="Expiry Date"
+                value={planEndDate ?? '—'}
+                color={plan.color}
+              />
+              <View style={styles.detailDivider} />
+              <DetailInfoRow
+                icon="time-outline"
+                label="Days Remaining"
+                value={`${daysRem} day${daysRem !== 1 ? 's' : ''}`}
+                color={daysRem <= 5 ? '#dc2626' : plan.color}
+              />
+            </View>
+
+            {/* Days bar */}
+            {planEndIso && (
+              <View style={styles.detailBarWrap}>
+                <View style={styles.detailBarTrack}>
+                  <View style={[styles.detailBarFill, {
+                    backgroundColor: daysRem <= 5 ? '#dc2626' : plan.color,
+                    width: `${Math.min(100, Math.round((daysRem / (isFree ? 15 : 30)) * 100))}%`,
+                  }]} />
+                </View>
+                <Text style={styles.detailBarLabel}>{daysRem} days left</Text>
+              </View>
+            )}
+          </View>
+
+          {/* What's included summary */}
+          <View style={styles.includedCard}>
+            <Text style={[styles.includedTitle, { color: plan.color }]}>What's Included</Text>
+            {plan.features.map((f, i) => (
+              <View key={i} style={styles.featureRow}>
+                <Ionicons name="checkmark-circle" size={15} color={plan.color} />
+                <Text style={styles.featureText}>{f}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Action buttons */}
+          <View style={styles.actionRow}>
+            {!isFree && (
+              <TouchableOpacity
+                style={[styles.cancelBtn, cancelling && { opacity: 0.6 }]}
+                onPress={handleCancelSubscription}
+                disabled={cancelling}
+                activeOpacity={0.8}
+              >
+                {cancelling
+                  ? <ActivityIndicator size="small" color="#dc2626" />
+                  : <><Ionicons name="close-circle-outline" size={18} color="#dc2626" /><Text style={styles.cancelBtnText}>Cancel Plan</Text></>
+                }
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.upgradeBtn, { backgroundColor: plan.color }, isFree && { flex: 1 }]}
+              onPress={() => { setSelected('free_trial'); setMode('select'); }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="arrow-up-circle-outline" size={18} color="#fff" />
+              <Text style={styles.upgradeBtnText}>{isFree ? 'Choose a Plan' : 'Upgrade Plan'}</Text>
+            </TouchableOpacity>
+          </View>
+
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Select / Upgrade View ─────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <StatusBar backgroundColor="#6B7FED" barStyle="light-content" />
-      {/* ── Header ── */}
+      {/* Header with back-to-detail if doctor already has a plan */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Choose Your Plan</Text>
+        {currentPlan && (
+          <TouchableOpacity onPress={() => setMode('detail')} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
+        )}
+        <Text style={styles.headerTitle}>
+          {currentPlan ? 'Upgrade Plan' : 'Choose Your Plan'}
+        </Text>
         <Text style={styles.headerSub}>
-          Select a subscription that works for you. You can upgrade anytime.
+          {currentPlan
+            ? 'Select a new plan to switch to'
+            : 'Select a subscription that works for you. You can upgrade anytime.'}
         </Text>
       </View>
 
@@ -292,6 +525,7 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
         {/* ── Plan Cards ── */}
         {PLANS.map(plan => {
           const isSelected = selected === plan.key;
+          const isCurrent  = currentPlan === plan.key;
           return (
             <TouchableOpacity
               key={plan.key}
@@ -300,13 +534,20 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
               style={[
                 styles.card,
                 isSelected && { borderColor: plan.color, borderWidth: 2.5 },
+                isCurrent  && { borderColor: plan.color, borderWidth: 2.5 },
               ]}
             >
               {/* Card Header */}
               <View style={[styles.cardHeader, { backgroundColor: plan.color }]}>
                 <View style={styles.cardHeaderLeft}>
                   <Text style={styles.planName}>{plan.name}</Text>
-                  {plan.verifiedBadge && (
+                  {isCurrent && (
+                    <View style={styles.currentBadge}>
+                      <Ionicons name="checkmark-circle" size={12} color={plan.color} />
+                      <Text style={[styles.currentBadgeText, { color: plan.color }]}>Current Plan</Text>
+                    </View>
+                  )}
+                  {!isCurrent && plan.verifiedBadge && (
                     <View style={styles.blueTick}>
                       <MaterialIcons name="verified" size={14} color="#fff" />
                       <Text style={styles.blueTickText}>Blue Tick</Text>
@@ -473,16 +714,26 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.continueBtn, { backgroundColor: selectedPlan.color, opacity: loading ? 0.7 : 1 }]}
+            style={[
+              styles.continueBtn,
+              { backgroundColor: isCurrentPlanSelected ? '#888' : selectedPlan.color, opacity: loading ? 0.7 : 1 },
+            ]}
             activeOpacity={0.85}
             onPress={handleContinue}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator size="small" color="#fff" />
+            ) : isCurrentPlanSelected ? (
+              <>
+                <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                <Text style={styles.continueBtnText}>Active Plan</Text>
+              </>
             ) : (
               <>
-                <Text style={styles.continueBtnText}>Continue</Text>
+                <Text style={styles.continueBtnText}>
+                  {currentPlan && currentPlan !== 'free_trial' ? 'Switch Plan' : 'Continue'}
+                </Text>
                 <Ionicons name="arrow-forward" size={18} color="#fff" />
               </>
             )}
@@ -493,7 +744,29 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
   );
 }
 
-/* ── Detail Row Component ── */
+/* ── Detail Info Row (for subscription detail view) ── */
+function DetailInfoRow({ icon, label, value, color }: { icon: string; label: string; value: string; color: string }) {
+  return (
+    <View style={infoRowStyles.row}>
+      <View style={[infoRowStyles.iconWrap, { backgroundColor: color + '18' }]}>
+        <Ionicons name={icon as any} size={16} color={color} />
+      </View>
+      <View style={infoRowStyles.texts}>
+        <Text style={infoRowStyles.label}>{label}</Text>
+        <Text style={[infoRowStyles.value, { color }]}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+const infoRowStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  texts: { flex: 1 },
+  label: { fontSize: 11, color: '#888', fontWeight: '600', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
+  value: { fontSize: 15, fontWeight: '700' },
+});
+
+/* ── Plan Card Detail Row ── */
 function DetailRow({
   icon,
   label,
@@ -558,6 +831,22 @@ const styles = StyleSheet.create({
   planName: { color: '#fff', fontSize: 20, fontWeight: '700' },
   planPrice: { color: '#fff', fontSize: 22, fontWeight: '800' },
   planDuration: { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 2 },
+
+  currentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 5,
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  currentBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
 
   blueTick: {
     flexDirection: 'row',
@@ -688,4 +977,84 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   continueBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  /* ── Detail view ── */
+  backBtn: { marginBottom: 4 },
+
+  detailCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 2,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  detailStripe: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    padding: 20,
+  },
+  detailPlanName: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  blueTickInline: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4 },
+
+  detailActivePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 6,
+  },
+  detailActiveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ade80' },
+  detailActiveText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+
+  detailBody: { paddingHorizontal: 18, paddingVertical: 6 },
+  detailDivider: { height: 1, backgroundColor: '#F0F4FF', marginVertical: 2 },
+
+  detailBarWrap: { paddingHorizontal: 18, paddingBottom: 16 },
+  detailBarTrack: { height: 6, backgroundColor: '#F0F4FF', borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
+  detailBarFill: { height: 6, borderRadius: 3 },
+  detailBarLabel: { fontSize: 11, color: '#888', fontWeight: '600', textAlign: 'right' },
+
+  includedCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  includedTitle: { fontSize: 13, fontWeight: '700', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  actionRow: { flexDirection: 'row', gap: 12 },
+  cancelBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: '#dc2626',
+    borderRadius: 14,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
+  },
+  cancelBtnText: { color: '#dc2626', fontSize: 15, fontWeight: '700' },
+  upgradeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  upgradeBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

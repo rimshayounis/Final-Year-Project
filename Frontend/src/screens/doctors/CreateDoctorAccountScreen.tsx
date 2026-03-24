@@ -32,7 +32,11 @@ interface CertificateFile {
   mimeType: string;
 }
 
+type ProfessionalType = 'doctor' | 'therapist' | null;
+
 export default function CreateDoctorAccountScreen({ navigation }: Props) {
+  const [professionalType, setProfessionalType] = useState<ProfessionalType>(null);
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -45,8 +49,14 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // License number is disabled when specialization is "psychologist" (any case)
-  const isPsychologist = formData.specialization.trim().toLowerCase() === 'psychologist';
+  const isTherapist = professionalType === 'therapist';
+
+  /* ------------------ PROFESSIONAL TYPE SELECTOR ------------------ */
+  const handleSelectProfessionalType = (type: 'doctor' | 'therapist') => {
+    setProfessionalType(type);
+    // Clear fields when switching so nothing carries over
+    setFormData(prev => ({ ...prev, specialization: '', licenseNumber: '' }));
+  };
 
   /* ------------------ INPUT HANDLER ------------------ */
   const handleChange = (field: keyof typeof formData, value: string) => {
@@ -86,20 +96,23 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
 
   /* ------------------ VALIDATION ------------------ */
   const validate = () => {
+    if (!professionalType)
+      return Alert.alert('Error', 'Please select Doctor or Therapist'), false;
+
     if (!formData.fullName.trim())
       return Alert.alert('Error', 'Full name is required'), false;
 
     if (!formData.email.includes('@'))
       return Alert.alert('Error', 'Valid email is required'), false;
 
-    if (formData.password.length < 6)
-      return Alert.alert('Error', 'Password must be at least 6 characters'), false;
+    if (formData.password.length < 8)
+      return Alert.alert('Error', 'Password must be at least 8 characters'), false;
 
     if (!formData.specialization.trim())
       return Alert.alert('Error', 'Specialization is required'), false;
 
-    if (!isPsychologist && !formData.licenseNumber.trim())
-      return Alert.alert('Error', 'License number is required'), false;
+    if (!isTherapist && !formData.licenseNumber.trim())
+      return Alert.alert('Error', 'PMDC License No. is required for doctors'), false;
 
     if (certificates.length === 0)
       return Alert.alert('Error', 'Upload at least one certificate'), false;
@@ -121,6 +134,7 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
       body.append('password', formData.password);
       body.append('specialization', formData.specialization.trim());
       body.append('licenseNumber', formData.licenseNumber.trim());
+      body.append('professionalType', professionalType!);
 
       certificates.forEach(cert => {
         body.append('certificates', {
@@ -166,10 +180,9 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
 
   /* ------------------ UI ------------------ */
   return (
-    // SafeAreaView is blue so the status-bar area matches the header
     <SafeAreaView style={styles.container} edges={['top']}>
 
-      {/* Sticky header — outside ScrollView so it never scrolls away */}
+      {/* Sticky header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="arrow-back" size={24} color="#fff" />
@@ -177,7 +190,6 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
         <Text style={styles.headerTitle}>Create Doctor Account</Text>
       </View>
 
-      {/* KeyboardAvoidingView + ScrollView both grey so keyboard area is never blue */}
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -190,11 +202,49 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.form}>
+
+              {/* ── Professional Type Selector ── */}
+              <Text style={styles.sectionLabel}>I am a</Text>
+              <View style={styles.typeSelector}>
+                <TouchableOpacity
+                  style={[styles.typeCard, professionalType === 'doctor' && styles.typeCardActive]}
+                  onPress={() => handleSelectProfessionalType('doctor')}
+                >
+                  <MaterialIcons
+                    name="local-hospital"
+                    size={20}
+                    color={professionalType === 'doctor' ? '#fff' : '#6B7FED'}
+                  />
+                  <Text style={[styles.typeCardText, professionalType === 'doctor' && styles.typeCardTextActive]}>
+                    Doctor
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.typeCard, professionalType === 'therapist' && styles.typeCardActive]}
+                  onPress={() => handleSelectProfessionalType('therapist')}
+                >
+                  <MaterialIcons
+                    name="psychology"
+                    size={20}
+                    color={professionalType === 'therapist' ? '#fff' : '#6B7FED'}
+                  />
+                  <Text style={[styles.typeCardText, professionalType === 'therapist' && styles.typeCardTextActive]}>
+                    Therapist
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* ── Form Fields ── */}
               {renderInput('Full Name', 'fullName', formData.fullName)}
               {renderInput('Email', 'email', formData.email, 'email-address')}
               {renderPasswordInput()}
               {renderInput('Specialization', 'specialization', formData.specialization)}
-              {renderInput('License Number', 'licenseNumber', formData.licenseNumber, 'default', isPsychologist)}
+              {renderInput(
+                isTherapist ? 'PPA / HEC Certification No.' : 'PMDC License No.',
+                'licenseNumber',
+                formData.licenseNumber,
+              )}
 
               <TouchableOpacity style={styles.uploadBtn} onPress={handleUploadCertificates}>
                 <MaterialIcons name="upload-file" size={22} color="#6B7FED" />
@@ -229,17 +279,30 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
     field: keyof typeof formData,
     value: string,
     keyboardType: any = 'default',
-    disabled: boolean = false
   ) {
+    const placeholders: Record<keyof typeof formData, string> = {
+      fullName:       'name',
+      email:          'naveed@example.com',
+      password:       'Min. 8 characters',
+      specialization: isTherapist ? 'e.g. Clinical Psychologist' : 'e.g. Cardiologist',
+      licenseNumber:  isTherapist ? 'Optional — enter if available' : 'e.g. PMDC-123456',
+    };
+
     return (
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.label}>
+          {label}
+          {field === 'licenseNumber' && isTherapist && (
+            <Text style={styles.optionalTag}> (optional)</Text>
+          )}
+        </Text>
         <TextInput
-          style={[styles.input, disabled && styles.inputDisabled]}
-          value={disabled ? '' : value}
+          style={styles.input}
+          value={value}
+          placeholder={placeholders[field]}
+          placeholderTextColor="#AAAAAA"
           keyboardType={keyboardType}
           autoCapitalize="none"
-          editable={!disabled}
           onChangeText={text => handleChange(field, text)}
         />
       </View>
@@ -254,6 +317,8 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
           <TextInput
             style={{ flex: 1 }}
             value={formData.password}
+            placeholder="Min. 8 characters"
+            placeholderTextColor="#AAAAAA"
             secureTextEntry={!showPassword}
             onChangeText={text => handleChange('password', text)}
           />
@@ -272,10 +337,8 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
 
 /* ------------------ STYLES ------------------ */
 const styles = StyleSheet.create({
-  // SafeAreaView background = blue so the status-bar area is blue
   container: { flex: 1, backgroundColor: '#6B7FED' },
 
-  // Sticky header — one row with arrow + title side by side
   header: {
     backgroundColor: '#6B7FED',
     paddingHorizontal: 20,
@@ -292,12 +355,56 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Grey backgrounds so keyboard area is never blue
   keyboardView: { flex: 1, backgroundColor: '#F5F5F5' },
   scrollView: { backgroundColor: '#F5F5F5' },
   scrollContent: { paddingBottom: 80 },
 
   form: { padding: 24 },
+
+  /* Professional type selector */
+  sectionLabel: {
+    fontWeight: '700',
+    fontSize: 15,
+    color: '#333',
+    marginBottom: 12,
+  },
+  typeSelector: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  typeCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: '#6B7FED',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+  },
+  typeCardActive: {
+    backgroundColor: '#6B7FED',
+    borderColor: '#6B7FED',
+  },
+  typeCardText: {
+    fontWeight: '600',
+    fontSize: 13,
+    color: '#6B7FED',
+  },
+  typeCardTextActive: {
+    color: '#fff',
+  },
+  typeCardSub: {
+    fontSize: 10,
+    color: '#999',
+  },
+  typeCardSubActive: {
+    color: 'rgba(255,255,255,0.75)',
+  },
+
   inputGroup: { marginBottom: 16 },
   label: { fontWeight: '600', marginBottom: 6 },
   input: {
@@ -345,5 +452,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '700',
+  },
+  optionalTag: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#999',
   },
 });

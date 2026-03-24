@@ -9,9 +9,9 @@ export type PlanStatus = 'active' | 'expired' | 'cancelled';
 // ── Plan pricing and duration config ─────────────────────────────────────────
 export const PLAN_CONFIG: Record<PlanName, { pricePKR: number; durationDays: number; label: string }> = {
   free_trial:   { pricePKR: 0,    durationDays: 15, label: 'Free Trial'   },
-  basic:        { pricePKR: 2000, durationDays: 30, label: 'Basic'        },
-  professional: { pricePKR: 4000, durationDays: 30, label: 'Professional' },
-  premium:      { pricePKR: 7000, durationDays: 30, label: 'Premium'      },
+  basic:        { pricePKR: 1500, durationDays: 30, label: 'Basic'        },
+  professional: { pricePKR: 3500, durationDays: 30, label: 'Professional' },
+  premium:      { pricePKR: 6000, durationDays: 30, label: 'Premium'      },
 };
 
 @Schema({ timestamps: true, collection: 'subscription_plans' })

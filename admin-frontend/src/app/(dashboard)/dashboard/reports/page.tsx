@@ -221,12 +221,12 @@ export default function ReportsPage() {
                   >
                     <td>
                       <div className="rp-user-cell">
-                        <div className="rp-avatar" style={{ background: '#ede9fe', color: '#6d28d9' }}>
+                        <div className="rp-avatar" style={{ background: '#EEF1FF', color: '#6B7FED' }}>
                           {getName(r.reporterId)[0]?.toUpperCase() || '?'}
                         </div>
                         <div>
                           <div className="rp-name">{getName(r.reporterId)}</div>
-                          <div className="rp-model-tag" style={{ color: '#6d28d9' }}>{r.reporterModel}</div>
+                          <div className="rp-model-tag" style={{ color: '#6B7FED' }}>{r.reporterModel}</div>
                         </div>
                       </div>
                     </td>
@@ -289,13 +289,13 @@ export default function ReportsPage() {
 
             <div className="rp-detail-section">
               <div className="rp-detail-label">Filed By (Reporter)</div>
-              <div className="rp-detail-user-card" style={{ borderColor: '#6d28d9', background: '#faf8ff' }}>
-                <div className="rp-detail-avatar" style={{ background: '#ede9fe', color: '#6d28d9' }}>
+              <div className="rp-detail-user-card" style={{ borderColor: '#6B7FED', background: '#F0F4FF' }}>
+                <div className="rp-detail-avatar" style={{ background: '#EEF1FF', color: '#6B7FED' }}>
                   {getName(selected.reporterId)[0]?.toUpperCase() || '?'}
                 </div>
                 <div>
                   <div className="rp-detail-uname">{getName(selected.reporterId)}</div>
-                  <div className="rp-detail-utype" style={{ color: '#6d28d9' }}>{selected.reporterModel}</div>
+                  <div className="rp-detail-utype" style={{ color: '#6B7FED' }}>{selected.reporterModel}</div>
                 </div>
               </div>
             </div>
@@ -387,18 +387,18 @@ export default function ReportsPage() {
         .rp-filters { display: flex; gap: 6px; }
         .rp-filter-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; border: 1px solid #e5e5e5; background: #fff; font-size: 13px; font-weight: 600; color: #666; cursor: pointer; transition: all 0.15s; }
         .rp-filter-btn:hover { background: #f8f8fc; border-color: #d0d0e0; }
-        .rp-filter-btn.active { background: #1e1b4b; color: #fff; border-color: #1e1b4b; }
+        .rp-filter-btn.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
         .rp-filter-count { font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.2); padding: 1px 6px; border-radius: 10px; }
         .rp-filter-btn:not(.active) .rp-filter-count { background: #f0f0f5; color: #555; }
         .rp-search { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 8px 14px; }
-        .rp-search:focus-within { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
+        .rp-search:focus-within { border-color: #6B7FED; box-shadow: 0 0 0 3px rgba(107,127,237,0.12); }
         .rp-search input { border: none; outline: none; font-size: 14px; color: #333; width: 280px; }
         .rp-search button { background: none; border: none; cursor: pointer; color: #aaa; font-size: 12px; }
 
         .rp-content { display: grid; grid-template-columns: 1fr; gap: 16px; transition: grid-template-columns 0.2s; }
         .rp-content.with-detail { grid-template-columns: 1fr 320px; }
 
-        .rp-table-wrap { background: #fff; border-radius: 16px; border: 1px solid #f0f0f5; overflow: hidden; }
+        .rp-table-wrap { background: #fff; border-radius: 16px; border: 1px solid #E0E4FF; overflow: hidden; }
         .rp-loading { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
         .rp-row-skeleton { height: 56px; background: linear-gradient(90deg, #f0f0f5 25%, #e8e8f0 50%, #f0f0f5 75%); background-size: 200% 100%; border-radius: 10px; animation: shimmer 1.5s infinite; }
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
@@ -407,12 +407,12 @@ export default function ReportsPage() {
         .rp-empty p { font-size: 14px; color: #888; font-weight: 500; }
 
         .rp-table { width: 100%; border-collapse: collapse; }
-        .rp-table thead tr { background: #f8f8fc; }
-        .rp-table th { padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #f0f0f5; }
-        .rp-row { border-bottom: 1px solid #f8f8fc; cursor: pointer; transition: background 0.12s; }
+        .rp-table thead tr { background: #F0F4FF; }
+        .rp-table th { padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #E0E4FF; }
+        .rp-row { border-bottom: 1px solid #EEF1FF; cursor: pointer; transition: background 0.12s; }
         .rp-row:last-child { border-bottom: none; }
-        .rp-row:hover { background: #fafafe; }
-        .rp-row.selected { background: #f5f3ff; }
+        .rp-row:hover { background: #F5F7FF; }
+        .rp-row.selected { background: #EEF1FF; }
         .rp-table td { padding: 14px 16px; vertical-align: middle; }
 
         .rp-user-cell { display: flex; align-items: center; gap: 10px; }

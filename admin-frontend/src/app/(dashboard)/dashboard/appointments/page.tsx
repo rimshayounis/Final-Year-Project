@@ -133,7 +133,7 @@ export default function AppointmentsPage() {
             <div key={tab}>
               {i > 0 && <div className="hstat-divider" />}
               <div className="hstat" onClick={() => setActiveTab(tab)} style={{ cursor: 'pointer' }}>
-                <span className="hstat-val" style={{ color: tab === 'all' ? '#4f46e5' : statusColors[tab]?.color || '#111' }}>
+                <span className="hstat-val" style={{ color: tab === 'all' ? '#6B7FED' : statusColors[tab]?.color || '#111' }}>
                   {counts[tab]}
                 </span>
                 <span className="hstat-label">{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
@@ -314,7 +314,7 @@ export default function AppointmentsPage() {
         .hstat:hover { background: #f8f8fc; }
         .hstat-val   { display: block; font-size: 20px; font-weight: 800; }
         .hstat-label { display: block; font-size: 10px; color: #888; font-weight: 500; margin-top: 1px; text-transform: capitalize; }
-        .hstat-divider { width: 1px; background: #f0f0f5; align-self: stretch; }
+        .hstat-divider { width: 1px; background: #E0E4FF; align-self: stretch; }
 
         .filters { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .tab-group { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -325,8 +325,8 @@ export default function AppointmentsPage() {
           font-size: 12px; font-weight: 500; color: #666;
           cursor: pointer; transition: all 0.15s;
         }
-        .tab:hover  { border-color: #4f46e5; color: #4f46e5; }
-        .tab.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+        .tab:hover  { border-color: #6B7FED; color: #6B7FED; }
+        .tab.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
         .tab-count {
           background: rgba(0,0,0,0.08); font-size: 10px; font-weight: 700;
           padding: 1px 6px; border-radius: 20px;
@@ -342,18 +342,18 @@ export default function AppointmentsPage() {
         .search-wrap input::placeholder { color: #aaa; }
         .clear-btn { background: none; border: none; cursor: pointer; color: #aaa; font-size: 12px; }
 
-        .table-wrap { background: #fff; border-radius: 16px; border: 1px solid #f0f0f5; overflow: hidden; }
+        .table-wrap { background: #fff; border-radius: 16px; border: 1px solid #E0E4FF; overflow: hidden; }
         .table { width: 100%; border-collapse: collapse; }
-        .table thead tr { background: #f8f8fc; }
+        .table thead tr { background: #F0F4FF; }
         .table th {
           padding: 13px 18px; text-align: left;
           font-size: 11px; font-weight: 700; color: #888;
           text-transform: uppercase; letter-spacing: 0.5px;
-          border-bottom: 1px solid #f0f0f5;
+          border-bottom: 1px solid #E0E4FF;
         }
-        .table-row { border-bottom: 1px solid #f8f8fc; transition: background 0.12s; }
+        .table-row { border-bottom: 1px solid #EEF1FF; transition: background 0.12s; }
         .table-row:last-child { border-bottom: none; }
-        .table-row:hover { background: #fafafa; }
+        .table-row:hover { background: #F5F7FF; }
         .table td { padding: 13px 18px; vertical-align: middle; }
 
         .person-cell { display: flex; flex-direction: column; gap: 2px; }
@@ -371,11 +371,11 @@ export default function AppointmentsPage() {
 
         .btn-details {
           padding: 6px 14px; border-radius: 8px;
-          background: #ede9fe; color: #4f46e5;
-          border: 1px solid #ddd6fe; font-size: 12px; font-weight: 600;
+          background: #EEF1FF; color: #6B7FED;
+          border: 1px solid #E0E4FF; font-size: 12px; font-weight: 600;
           cursor: pointer; transition: all 0.15s;
         }
-        .btn-details:hover { background: #4f46e5; color: #fff; }
+        .btn-details:hover { background: #6B7FED; color: #fff; }
 
         .loading-state, .empty-state {
           display: flex; flex-direction: column; align-items: center;
@@ -386,7 +386,7 @@ export default function AppointmentsPage() {
         .empty-state span { font-size: 13px; }
         .spinner {
           width: 32px; height: 32px;
-          border: 3px solid #f0f0f5; border-top-color: #4f46e5;
+          border: 3px solid #E0E4FF; border-top-color: #6B7FED;
           border-radius: 50%; animation: spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -407,25 +407,26 @@ export default function AppointmentsPage() {
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .modal-header {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 20px 24px; border-bottom: 1px solid #f0f0f5;
+          padding: 20px 24px; border-bottom: 1px solid #E0E4FF;
+          background: linear-gradient(135deg, #6B7FED 0%, #7B8CDE 100%);
         }
-        .modal-header h2 { font-size: 16px; font-weight: 700; color: #111; }
+        .modal-header h2 { font-size: 16px; font-weight: 700; color: #fff; }
         .modal-close {
           width: 30px; height: 30px; border-radius: 8px;
-          background: #f3f4f8; border: none; cursor: pointer;
-          font-size: 13px; color: #666;
+          background: rgba(255,255,255,0.2); border: none; cursor: pointer;
+          font-size: 13px; color: #fff;
         }
         .modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
 
         .detail-grid { display: flex; flex-direction: column; gap: 16px; }
-        .detail-section { background: #f8f8fc; border-radius: 12px; padding: 14px 16px; }
+        .detail-section { background: #F0F4FF; border-radius: 12px; padding: 14px 16px; }
         .detail-title {
           font-size: 11px; font-weight: 700; color: #888;
           text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
         }
         .detail-row {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 6px 0; border-bottom: 1px solid #f0f0f5; font-size: 13px;
+          padding: 6px 0; border-bottom: 1px solid #E0E4FF; font-size: 13px;
         }
         .detail-row:last-child { border-bottom: none; }
         .detail-row span { color: #888; }

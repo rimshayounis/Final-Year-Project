@@ -8,6 +8,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -60,6 +62,10 @@ export default function HealthProfileScreen({
   };
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
     <View style={styles.container}>
       {/* FIXED HEADER */}
       <View style={styles.header}>
@@ -205,6 +211,7 @@ export default function HealthProfileScreen({
         </View>
       </ScrollView>
     </View>
+    </KeyboardAvoidingView>
   );
 }
 

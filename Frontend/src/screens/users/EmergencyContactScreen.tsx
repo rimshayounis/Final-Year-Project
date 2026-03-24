@@ -10,6 +10,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -106,7 +108,7 @@ export default function EmergencyContactScreen({
 
       if (response.data.success) {
         Alert.alert('Success', 'Account created successfully!', [
-          { text: 'OK', onPress: () => navigation.navigate('Dashboard', { userId }) },
+          { text: 'OK', onPress: () => navigation.navigate('Dashboard', { id: userId, role: 'user' }) },
         ]);
       }
     } catch (error: any) {
@@ -120,7 +122,8 @@ export default function EmergencyContactScreen({
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity
@@ -232,6 +235,7 @@ export default function EmergencyContactScreen({
         <Text style={styles.requiredNote}>Please complete all required fields</Text>
       </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

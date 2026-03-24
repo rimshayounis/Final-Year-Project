@@ -27,7 +27,7 @@ interface Subscription {
 const planColors: Record<string, { bg: string; color: string }> = {
   free_trial:   { bg: '#f3f4f8', color: '#666' },
   basic:        { bg: '#dbeafe', color: '#1d4ed8' },
-  professional: { bg: '#ede9fe', color: '#6d28d9' },
+  professional: { bg: '#EEF1FF', color: '#6B7FED' },
   premium:      { bg: '#fef3c7', color: '#d97706' },
 };
 
@@ -38,7 +38,7 @@ const statusColors: Record<string, { bg: string; color: string }> = {
 };
 
 const PLAN_PRICES: Record<string, number> = {
-  free_trial: 0, basic: 2000, professional: 4000, premium: 7000,
+  free_trial: 0, basic: 1500, professional: 3500, premium: 6000,
 };
 
 export default function SubscriptionsPage() {
@@ -256,7 +256,7 @@ export default function SubscriptionsPage() {
         .page-title  { font-size: 22px; font-weight: 800; color: #111; letter-spacing: -0.5px; }
         .page-sub    { font-size: 13px; color: #888; margin-top: 4px; }
         .revenue-badge {
-          background: #fff; border: 1px solid #f0f0f5; border-radius: 14px;
+          background: #fff; border: 1px solid #E0E4FF; border-radius: 14px;
           padding: 14px 22px; text-align: center;
         }
         .rev-val   { display: block; font-size: 22px; font-weight: 800; color: #059669; }
@@ -265,16 +265,16 @@ export default function SubscriptionsPage() {
         .plan-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
         .plan-card {
           background: #fff; border-radius: 14px; padding: 16px;
-          border: 2px solid #f0f0f5; cursor: pointer;
+          border: 2px solid #E0E4FF; cursor: pointer;
           transition: all 0.15s; text-align: center;
           display: flex; flex-direction: column; gap: 6px; align-items: center;
         }
-        .plan-card:hover  { border-color: #4f46e5; }
-        .plan-card.active { border-color: #4f46e5; background: #fafafe; }
+        .plan-card:hover  { border-color: #6B7FED; }
+        .plan-card.active { border-color: #6B7FED; background: #F0F4FF; }
         .plan-chip  { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; }
         .plan-count { font-size: 28px; font-weight: 800; color: #111; }
         .plan-label { font-size: 12px; color: #888; }
-        .plan-price { font-size: 11px; color: #4f46e5; font-weight: 600; }
+        .plan-price { font-size: 11px; color: #6B7FED; font-weight: 600; }
 
         .search-wrap {
           display: flex; align-items: center; gap: 8px;
@@ -285,18 +285,18 @@ export default function SubscriptionsPage() {
         .search-wrap input::placeholder { color: #aaa; }
         .clear-btn { background: none; border: none; cursor: pointer; color: #aaa; font-size: 12px; }
 
-        .table-wrap { background: #fff; border-radius: 16px; border: 1px solid #f0f0f5; overflow: hidden; }
+        .table-wrap { background: #fff; border-radius: 16px; border: 1px solid #E0E4FF; overflow: hidden; }
         .table { width: 100%; border-collapse: collapse; }
-        .table thead tr { background: #f8f8fc; }
+        .table thead tr { background: #F0F4FF; }
         .table th {
           padding: 13px 20px; text-align: left;
           font-size: 11px; font-weight: 700; color: #888;
           text-transform: uppercase; letter-spacing: 0.5px;
-          border-bottom: 1px solid #f0f0f5;
+          border-bottom: 1px solid #E0E4FF;
         }
-        .table-row { border-bottom: 1px solid #f8f8fc; transition: background 0.12s; }
+        .table-row { border-bottom: 1px solid #EEF1FF; transition: background 0.12s; }
         .table-row:last-child { border-bottom: none; }
-        .table-row:hover { background: #fafafa; }
+        .table-row:hover { background: #F5F7FF; }
         .table td { padding: 14px 20px; vertical-align: middle; }
 
         .doctor-name  { font-size: 14px; font-weight: 600; color: #111; }
@@ -306,11 +306,11 @@ export default function SubscriptionsPage() {
         .fee { font-size: 13px; font-weight: 600; color: #059669; }
         .btn-history {
           padding: 6px 14px; border-radius: 8px;
-          background: #ede9fe; color: #4f46e5;
-          border: 1px solid #ddd6fe; font-size: 12px; font-weight: 600;
+          background: #EEF1FF; color: #6B7FED;
+          border: 1px solid #E0E4FF; font-size: 12px; font-weight: 600;
           cursor: pointer; transition: all 0.15s;
         }
-        .btn-history:hover { background: #4f46e5; color: #fff; }
+        .btn-history:hover { background: #6B7FED; color: #fff; }
 
         .loading-state, .empty-state {
           display: flex; flex-direction: column; align-items: center;
@@ -321,7 +321,7 @@ export default function SubscriptionsPage() {
         .empty-state p { font-size: 15px; font-weight: 600; color: #444; }
         .spinner {
           width: 32px; height: 32px;
-          border: 3px solid #f0f0f5; border-top-color: #4f46e5;
+          border: 3px solid #E0E4FF; border-top-color: #6B7FED;
           border-radius: 50%; animation: spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -342,19 +342,20 @@ export default function SubscriptionsPage() {
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .modal-header {
           display: flex; align-items: flex-start; justify-content: space-between;
-          padding: 20px 24px; border-bottom: 1px solid #f0f0f5;
+          padding: 20px 24px; border-bottom: 1px solid #E0E4FF;
+          background: linear-gradient(135deg, #6B7FED 0%, #7B8CDE 100%);
         }
-        .modal-title { font-size: 16px; font-weight: 700; color: #111; }
-        .modal-sub   { font-size: 12px; color: #888; margin-top: 3px; }
+        .modal-title { font-size: 16px; font-weight: 700; color: #fff; }
+        .modal-sub   { font-size: 12px; color: rgba(255,255,255,0.75); margin-top: 3px; }
         .modal-close {
           width: 30px; height: 30px; border-radius: 8px;
-          background: #f3f4f8; border: none; cursor: pointer; font-size: 13px; color: #666;
+          background: rgba(255,255,255,0.2); border: none; cursor: pointer; font-size: 13px; color: #fff;
         }
         .modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
         .modal-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px; color: #888; }
 
         .sub-list { display: flex; flex-direction: column; gap: 10px; }
-        .sub-item { background: #f8f8fc; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+        .sub-item { background: #F0F4FF; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
         .sub-top  { display: flex; align-items: center; gap: 8px; }
         .sub-dates { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #666; }
         .sub-price { font-size: 13px; font-weight: 700; color: #059669; }

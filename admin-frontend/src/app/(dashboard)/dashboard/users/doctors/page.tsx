@@ -9,6 +9,8 @@ interface DoctorProfile {
   specialization: string;
   certificates: string[];
   isVerified: boolean;
+  isRejected: boolean;
+  rejectionReason: string | null;
   registeredAt: string;
 }
 
@@ -26,7 +28,7 @@ interface UserProfile {
   profileImage?: string;
 }
 
-type FilterTab = 'all' | 'pending' | 'verified';
+type FilterTab = 'all' | 'pending' | 'verified' | 'rejected';
 
 export default function DoctorsPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -46,6 +48,13 @@ export default function DoctorsPage() {
 
   // Verify loading
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+
+  // Reject modal
+  const [rejectTarget, setRejectTarget] = useState<Doctor | null>(null);
+  const REJECT_REASONS = ['Invalid license', 'Invalid document', 'Incomplete document', 'Other'];
+  const [selectedReason, setSelectedReason] = useState('');
+  const [otherReason, setOtherReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -72,8 +81,9 @@ export default function DoctorsPage() {
   // Filter + search
   useEffect(() => {
     let result = doctors;
-    if (activeTab === 'pending')  result = result.filter(d => !d.doctorProfile?.isVerified);
+    if (activeTab === 'pending')  result = result.filter(d => !d.doctorProfile?.isVerified && !d.doctorProfile?.isRejected);
     if (activeTab === 'verified') result = result.filter(d => d.doctorProfile?.isVerified);
+    if (activeTab === 'rejected') result = result.filter(d => d.doctorProfile?.isRejected);
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(d =>
@@ -149,10 +159,44 @@ export default function DoctorsPage() {
     }
   };
 
+  const rejectDoctor = async (doctorId: string, reason: string, doctorName: string) => {
+    setRejecting(true);
+    try {
+      const res = await fetch(`${BASE_URL}/doctors/${doctorId}/reject`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      if (res.ok) {
+        setDoctors(prev =>
+          prev.map(d =>
+            d._id === doctorId
+              ? { ...d, doctorProfile: { ...d.doctorProfile, isVerified: false, isRejected: true, rejectionReason: reason } }
+              : d
+          )
+        );
+        if (selected?._id === doctorId) {
+          setSelected(prev => prev ? { ...prev, doctorProfile: { ...prev.doctorProfile, isVerified: false, isRejected: true, rejectionReason: reason } } : null);
+        }
+        showToast(`Dr. ${doctorName} application rejected`, 'error');
+        setRejectTarget(null);
+        setSelectedReason('');
+        setOtherReason('');
+      } else {
+        showToast('Failed to reject doctor', 'error');
+      }
+    } catch {
+      showToast('Failed to reject doctor', 'error');
+    } finally {
+      setRejecting(false);
+    }
+  };
+
   const counts = {
     all:      doctors.length,
-    pending:  doctors.filter(d => !d.doctorProfile?.isVerified).length,
+    pending:  doctors.filter(d => !d.doctorProfile?.isVerified && !d.doctorProfile?.isRejected).length,
     verified: doctors.filter(d =>  d.doctorProfile?.isVerified).length,
+    rejected: doctors.filter(d =>  d.doctorProfile?.isRejected).length,
   };
 
   const initials = (name: string) =>
@@ -166,7 +210,7 @@ export default function DoctorsPage() {
   const planColors: Record<string, { bg: string; color: string }> = {
     free_trial:   { bg: '#f3f4f8', color: '#666' },
     basic:        { bg: '#dbeafe', color: '#1d4ed8' },
-    professional: { bg: '#ede9fe', color: '#6d28d9' },
+    professional: { bg: '#EEF1FF', color: '#6B7FED' },
     premium:      { bg: '#fef3c7', color: '#d97706' },
   };
 
@@ -187,7 +231,7 @@ export default function DoctorsPage() {
         </div>
         <div className="header-stats">
           <div className="hstat">
-            <span className="hstat-val" style={{ color: '#4f46e5' }}>{counts.all}</span>
+            <span className="hstat-val" style={{ color: '#6B7FED' }}>{counts.all}</span>
             <span className="hstat-label">Total</span>
           </div>
           <div className="hstat-divider" />
@@ -206,14 +250,15 @@ export default function DoctorsPage() {
       {/* Filters */}
       <div className="filters">
         <div className="tab-group">
-          {(['all', 'pending', 'verified'] as FilterTab[]).map(tab => (
+          {(['all', 'pending', 'verified', 'rejected'] as FilterTab[]).map(tab => (
             <button
               key={tab}
               className={`tab ${activeTab === tab ? 'active' : ''}`}
               onClick={() => setActiveTab(tab)}
             >
-              {tab === 'pending' && <span className="tab-dot pending" />}
+              {tab === 'pending'  && <span className="tab-dot pending"  />}
               {tab === 'verified' && <span className="tab-dot verified" />}
+              {tab === 'rejected' && <span className="tab-dot rejected" />}
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
               <span className="tab-count">{counts[tab]}</span>
             </button>
@@ -260,6 +305,8 @@ export default function DoctorsPage() {
                 <div className="card-status-badge">
                   {doctor.doctorProfile?.isVerified ? (
                     <span className="badge verified">✓ Verified</span>
+                  ) : doctor.doctorProfile?.isRejected ? (
+                    <span className="badge rejected">✕ Rejected</span>
                   ) : (
                     <span className="badge pending">⏳ Pending</span>
                   )}
@@ -305,22 +352,28 @@ export default function DoctorsPage() {
                 <button className="btn-view-profile" onClick={() => openDoctor(doctor)}>
                   View Profile
                 </button>
-                {!doctor.doctorProfile?.isVerified ? (
-                  <button
-                    className="btn-approve"
-                    onClick={() => verifyDoctor(doctor._id, doctor.fullName)}
-                    disabled={verifyingId === doctor._id}
-                  >
-                    {verifyingId === doctor._id ? 'Approving...' : '✓ Approve'}
-                  </button>
+                {doctor.doctorProfile?.isVerified ? (
+                  <button className="btn-approved" disabled>✓ Approved</button>
+                ) : doctor.doctorProfile?.isRejected ? (
+                  <button className="btn-rejected-badge" disabled>✕ Rejected</button>
                 ) : (
-                  <button className="btn-approved" disabled>
-                    ✓ Approved
-                  </button>
+                  <>
+                    <button
+                      className="btn-approve"
+                      onClick={() => verifyDoctor(doctor._id, doctor.fullName)}
+                      disabled={verifyingId === doctor._id}
+                    >
+                      {verifyingId === doctor._id ? 'Approving...' : '✓ Approve'}
+                    </button>
+                    <button
+                      className="btn-reject"
+                      onClick={() => { setRejectTarget(doctor); setSelectedReason(''); setOtherReason(''); }}
+                    >
+                      ✕
+                    </button>
+                  </>
                 )}
-                <button className="btn-remove" onClick={() => setDeleteTarget(doctor)}>
-                  🗑
-                </button>
+                <button className="btn-remove" onClick={() => setDeleteTarget(doctor)}>🗑</button>
               </div>
             </div>
           ))}
@@ -344,6 +397,8 @@ export default function DoctorsPage() {
                     <h2 className="modal-name">Dr. {selected.fullName}</h2>
                     {selected.doctorProfile?.isVerified
                       ? <span className="badge verified small">✓ Verified</span>
+                      : selected.doctorProfile?.isRejected
+                      ? <span className="badge rejected small">✕ Rejected</span>
                       : <span className="badge pending small">⏳ Pending</span>
                     }
                   </div>
@@ -425,28 +480,108 @@ export default function DoctorsPage() {
                     )}
                   </div>
 
+                  {/* Rejection reason display */}
+                  {selected.doctorProfile?.isRejected && selected.doctorProfile?.rejectionReason && (
+                    <div className="rejection-reason-box">
+                      <span className="rejection-reason-label">Rejection Reason</span>
+                      <span className="rejection-reason-text">{selected.doctorProfile.rejectionReason}</span>
+                    </div>
+                  )}
+
                   {/* Modal Actions */}
                   <div className="modal-actions">
-                    {!selected.doctorProfile?.isVerified ? (
-                      <button
-                        className="btn-approve-modal"
+                    {selected.doctorProfile?.isVerified ? (
+                      <button className="btn-approved-modal" disabled>✓ Already Verified</button>
+                    ) : selected.doctorProfile?.isRejected ? (
+                      <button className="btn-approve-modal"
                         onClick={() => verifyDoctor(selected._id, selected.fullName)}
                         disabled={verifyingId === selected._id}
                       >
-                        {verifyingId === selected._id ? 'Approving...' : '✓ Approve Doctor'}
+                        {verifyingId === selected._id ? 'Approving...' : '✓ Approve Instead'}
                       </button>
                     ) : (
-                      <button className="btn-approved-modal" disabled>✓ Already Verified</button>
+                      <>
+                        <button
+                          className="btn-approve-modal"
+                          onClick={() => verifyDoctor(selected._id, selected.fullName)}
+                          disabled={verifyingId === selected._id}
+                        >
+                          {verifyingId === selected._id ? 'Approving...' : '✓ Approve Doctor'}
+                        </button>
+                        <button
+                          className="btn-reject-modal"
+                          onClick={() => { setRejectTarget(selected); setSelectedReason(''); setOtherReason(''); }}
+                        >
+                          ✕ Reject
+                        </button>
+                      </>
                     )}
                     <button
                       className="btn-remove-modal"
                       onClick={() => { setSelected(null); setDeleteTarget(selected); }}
                     >
-                      🗑 Remove Doctor
+                      🗑 Remove
                     </button>
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {rejectTarget && (
+        <div className="overlay" onClick={() => setRejectTarget(null)}>
+          <div className="reject-modal" onClick={e => e.stopPropagation()}>
+            <div className="reject-modal-header">
+              <div className="reject-modal-icon">⚠️</div>
+              <div>
+                <h3>Reject Application</h3>
+                <p>Dr. {rejectTarget.fullName}</p>
+              </div>
+              <button className="modal-close" onClick={() => setRejectTarget(null)}>✕</button>
+            </div>
+            <p className="reject-modal-sub">Select a reason for rejection:</p>
+            <div className="reject-reasons">
+              {REJECT_REASONS.map(reason => (
+                <button
+                  key={reason}
+                  className={`reject-reason-item ${selectedReason === reason ? 'selected' : ''}`}
+                  onClick={() => setSelectedReason(reason)}
+                >
+                  <span className="reason-radio">{selectedReason === reason ? '●' : '○'}</span>
+                  {reason}
+                </button>
+              ))}
+            </div>
+            {selectedReason === 'Other' && (
+              <textarea
+                className="reject-other-input"
+                placeholder="Describe the reason..."
+                value={otherReason}
+                onChange={e => setOtherReason(e.target.value)}
+                rows={3}
+              />
+            )}
+            <div className="confirm-actions">
+              <button
+                className="btn-cancel"
+                onClick={() => setRejectTarget(null)}
+                disabled={rejecting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-confirm-reject"
+                disabled={rejecting || !selectedReason || (selectedReason === 'Other' && !otherReason.trim())}
+                onClick={() => {
+                  const reason = selectedReason === 'Other' ? otherReason.trim() : selectedReason;
+                  rejectDoctor(rejectTarget._id, reason, rejectTarget.fullName);
+                }}
+              >
+                {rejecting ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
             </div>
           </div>
         </div>
@@ -495,13 +630,13 @@ export default function DoctorsPage() {
 
         .header-stats {
           display: flex; align-items: center; gap: 0;
-          background: #fff; border: 1px solid #f0f0f5;
+          background: #fff; border: 1px solid #E0E4FF;
           border-radius: 14px; overflow: hidden;
         }
         .hstat { padding: 14px 24px; text-align: center; }
         .hstat-val   { display: block; font-size: 22px; font-weight: 800; }
         .hstat-label { display: block; font-size: 11px; color: #888; font-weight: 500; margin-top: 2px; }
-        .hstat-divider { width: 1px; background: #f0f0f5; align-self: stretch; }
+        .hstat-divider { width: 1px; background: #E0E4FF; align-self: stretch; }
 
         /* Filters */
         .filters { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -513,13 +648,15 @@ export default function DoctorsPage() {
           font-size: 13px; font-weight: 500; color: #666;
           cursor: pointer; transition: all 0.15s;
         }
-        .tab:hover  { border-color: #4f46e5; color: #4f46e5; }
-        .tab.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+        .tab:hover  { border-color: #6B7FED; color: #6B7FED; }
+        .tab.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
         .tab-dot { width: 7px; height: 7px; border-radius: 50%; }
         .tab-dot.pending  { background: #d97706; }
         .tab-dot.verified { background: #059669; }
+        .tab-dot.rejected { background: #dc2626; }
         .tab.active .tab-dot.pending  { background: #fde68a; }
         .tab.active .tab-dot.verified { background: #6ee7b7; }
+        .tab.active .tab-dot.rejected { background: #fca5a5; }
         .tab-count {
           background: rgba(0,0,0,0.08); color: inherit;
           font-size: 11px; font-weight: 700;
@@ -545,7 +682,7 @@ export default function DoctorsPage() {
         }
         .doctor-card {
           background: #fff; border-radius: 18px;
-          border: 1px solid #f0f0f5; padding: 20px;
+          border: 1px solid #E0E4FF; padding: 20px;
           display: flex; flex-direction: column; gap: 16px;
           transition: transform 0.15s, box-shadow 0.15s;
         }
@@ -572,11 +709,12 @@ export default function DoctorsPage() {
         }
         .badge.verified { background: #d1fae5; color: #065f46; }
         .badge.pending  { background: #fef3c7; color: #92400e; }
+        .badge.rejected { background: #fee2e2; color: #991b1b; }
         .badge.small    { font-size: 10px; padding: 3px 8px; }
 
         .card-info { }
         .card-name  { font-size: 16px; font-weight: 700; color: #111; margin-bottom: 3px; }
-        .card-spec  { font-size: 13px; color: #4f46e5; font-weight: 500; margin-bottom: 3px; }
+        .card-spec  { font-size: 13px; color: #6B7FED; font-weight: 500; margin-bottom: 3px; }
         .card-email { font-size: 12px; color: #888; }
 
         .card-meta  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -592,7 +730,7 @@ export default function DoctorsPage() {
           border: 1px solid #e5e5e5; font-size: 12px; font-weight: 600;
           cursor: pointer; transition: all 0.15s;
         }
-        .btn-view-profile:hover { background: #ede9fe; color: #4f46e5; border-color: #ddd6fe; }
+        .btn-view-profile:hover { background: #EEF1FF; color: #6B7FED; border-color: #E0E4FF; }
         .btn-approve {
           flex: 1; padding: 8px 12px; border-radius: 10px;
           background: #059669; color: #fff;
@@ -607,6 +745,20 @@ export default function DoctorsPage() {
           border: 1px solid #a7f3d0; font-size: 12px; font-weight: 700;
           cursor: not-allowed;
         }
+        .btn-reject {
+          width: 34px; height: 34px; border-radius: 10px;
+          background: #fff1f2; color: #dc2626;
+          border: 1px solid #fecaca; font-size: 13px; font-weight: 700;
+          cursor: pointer; transition: all 0.15s;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .btn-reject:hover { background: #fee2e2; }
+        .btn-rejected-badge {
+          flex: 1; padding: 8px 12px; border-radius: 10px;
+          background: #fee2e2; color: #dc2626;
+          border: 1px solid #fecaca; font-size: 12px; font-weight: 700;
+          cursor: not-allowed;
+        }
         .btn-remove {
           width: 34px; height: 34px; border-radius: 10px;
           background: #fee2e2; color: #dc2626;
@@ -614,7 +766,7 @@ export default function DoctorsPage() {
           cursor: pointer; transition: all 0.15s;
           display: flex; align-items: center; justify-content: center;
         }
-        .btn-remove:hover { background: #dc2626; }
+        .btn-remove:hover { background: #dc2626; color: #fff; border-color: #dc2626; }
 
         /* Loading / Empty */
         .loading-state, .empty-state {
@@ -626,7 +778,7 @@ export default function DoctorsPage() {
         .empty-state span { font-size: 13px; }
         .spinner {
           width: 32px; height: 32px;
-          border: 3px solid #f0f0f5; border-top-color: #4f46e5;
+          border: 3px solid #E0E4FF; border-top-color: #6B7FED;
           border-radius: 50%; animation: spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -654,7 +806,8 @@ export default function DoctorsPage() {
 
         .modal-header {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 24px 24px 16px; border-bottom: 1px solid #f0f0f5;
+          padding: 24px 24px 16px; border-bottom: 1px solid #E0E4FF;
+          background: linear-gradient(135deg, #6B7FED 0%, #7B8CDE 100%);
         }
         .modal-doc-info { display: flex; align-items: center; gap: 14px; }
         .modal-avatar {
@@ -665,22 +818,22 @@ export default function DoctorsPage() {
         }
         .modal-avatar img { width: 100%; height: 100%; object-fit: cover; }
         .modal-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
-        .modal-name  { font-size: 18px; font-weight: 700; color: #111; }
-        .modal-spec  { font-size: 13px; color: #4f46e5; font-weight: 500; margin-bottom: 2px; }
-        .modal-email { font-size: 12px; color: #888; }
+        .modal-name  { font-size: 18px; font-weight: 700; color: #fff; }
+        .modal-spec  { font-size: 13px; color: rgba(255,255,255,0.8); font-weight: 500; margin-bottom: 2px; }
+        .modal-email { font-size: 12px; color: rgba(255,255,255,0.7); }
         .modal-close {
           width: 32px; height: 32px; border-radius: 8px;
-          background: #f3f4f8; border: none; cursor: pointer;
-          font-size: 14px; color: #666; transition: background 0.15s;
+          background: rgba(255,255,255,0.2); border: none; cursor: pointer;
+          font-size: 14px; color: #fff; transition: background 0.15s;
           flex-shrink: 0;
         }
-        .modal-close:hover { background: #e5e5e5; }
+        .modal-close:hover { background: rgba(255,255,255,0.3); }
 
         .modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
         .modal-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px; color: #888; }
 
         /* Info sections */
-        .info-section  { background: #f8f8fc; border-radius: 14px; padding: 16px 18px; }
+        .info-section  { background: #F0F4FF; border-radius: 14px; padding: 16px 18px; }
         .info-title    {
           font-size: 12px; font-weight: 700; color: #888;
           text-transform: uppercase; letter-spacing: 0.5px;
@@ -699,14 +852,14 @@ export default function DoctorsPage() {
         .cert-card  {
           display: flex; align-items: center; gap: 12px;
           background: #fff; border-radius: 10px; padding: 10px 14px;
-          border: 1px solid #f0f0f5; text-decoration: none;
+          border: 1px solid #E0E4FF; text-decoration: none;
           transition: all 0.15s;
         }
-        .cert-card:hover { border-color: #4f46e5; background: #fafafe; }
+        .cert-card:hover { border-color: #6B7FED; background: #F0F4FF; }
         .cert-icon  { font-size: 22px; }
         .cert-info  { display: flex; flex-direction: column; gap: 1px; }
         .cert-name  { font-size: 13px; font-weight: 600; color: #333; }
-        .cert-view  { font-size: 11px; color: #4f46e5; }
+        .cert-view  { font-size: 11px; color: #6B7FED; }
         .no-certs   { font-size: 13px; color: #aaa; padding: 8px 0; }
 
         /* Modal Actions */
@@ -725,6 +878,13 @@ export default function DoctorsPage() {
           border: 1px solid #a7f3d0; font-size: 14px; font-weight: 700;
           cursor: not-allowed;
         }
+        .btn-reject-modal {
+          padding: 12px 20px; border-radius: 12px;
+          background: #fff1f2; color: #dc2626;
+          border: 1px solid #fecaca; font-size: 14px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .btn-reject-modal:hover { background: #fee2e2; }
         .btn-remove-modal {
           padding: 12px 20px; border-radius: 12px;
           background: #fee2e2; color: #dc2626;
@@ -732,6 +892,15 @@ export default function DoctorsPage() {
           cursor: pointer; transition: all 0.15s;
         }
         .btn-remove-modal:hover { background: #dc2626; color: #fff; }
+
+        /* Rejection reason display in modal */
+        .rejection-reason-box {
+          display: flex; flex-direction: column; gap: 4px;
+          background: #fff1f2; border: 1px solid #fecaca;
+          border-radius: 12px; padding: 14px 16px;
+        }
+        .rejection-reason-label { font-size: 10px; font-weight: 700; color: #dc2626; text-transform: uppercase; letter-spacing: 0.5px; }
+        .rejection-reason-text  { font-size: 14px; color: #991b1b; font-weight: 500; }
 
         /* Confirm Modal */
         .confirm-modal {
@@ -759,6 +928,49 @@ export default function DoctorsPage() {
         }
         .btn-confirm-delete:hover:not(:disabled) { background: #b91c1c; }
         .btn-confirm-delete:disabled, .btn-cancel:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Reject Modal */
+        .reject-modal {
+          background: #fff; border-radius: 20px; padding: 28px;
+          width: 100%; max-width: 420px;
+          animation: slideUp 0.25s ease;
+          box-shadow: 0 24px 60px rgba(0,0,0,0.18);
+          display: flex; flex-direction: column; gap: 16px;
+        }
+        .reject-modal-header {
+          display: flex; align-items: center; gap: 12px;
+        }
+        .reject-modal-icon { font-size: 28px; flex-shrink: 0; }
+        .reject-modal-header h3 { font-size: 17px; font-weight: 700; color: #111; margin: 0; }
+        .reject-modal-header p  { font-size: 13px; color: #888; margin: 0; }
+        .reject-modal-header .modal-close { margin-left: auto; }
+        .reject-modal-sub { font-size: 13px; color: #555; font-weight: 500; margin: 0; }
+        .reject-reasons { display: flex; flex-direction: column; gap: 8px; }
+        .reject-reason-item {
+          display: flex; align-items: center; gap: 10px;
+          padding: 12px 14px; border-radius: 12px;
+          border: 1.5px solid #e5e5e5; background: #F8F9FF;
+          font-size: 14px; color: #333; font-weight: 500;
+          cursor: pointer; transition: all 0.15s; text-align: left;
+        }
+        .reject-reason-item:hover { border-color: #dc2626; background: #fff1f2; color: #dc2626; }
+        .reject-reason-item.selected { border-color: #dc2626; background: #fff1f2; color: #dc2626; font-weight: 700; }
+        .reason-radio { font-size: 16px; flex-shrink: 0; }
+        .reject-other-input {
+          width: 100%; padding: 12px 14px;
+          border: 1.5px solid #e5e5e5; border-radius: 12px;
+          font-size: 14px; font-family: inherit; color: #333;
+          resize: none; outline: none; transition: border-color 0.2s;
+        }
+        .reject-other-input:focus { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,0.08); }
+        .btn-confirm-reject {
+          padding: 10px 24px; border-radius: 10px;
+          background: #dc2626; color: #fff;
+          border: none; font-size: 14px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .btn-confirm-reject:hover:not(:disabled) { background: #b91c1c; }
+        .btn-confirm-reject:disabled { opacity: 0.5; cursor: not-allowed; }
       `}</style>
     </div>
   );

@@ -209,6 +209,14 @@ export default function SettingsScreen() {
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [doctorPlan,   setDoctorPlan]   = useState<string>("free_trial");
 
+  // Verification status
+  const [verifModal, setVerifModal] = useState(false);
+  const [verifData,  setVerifData]  = useState<{
+    isVerified: boolean; isRejected: boolean; rejectionReason: string | null;
+    licenseNumber: string | null; specialization: string; certificatesCount: number;
+    fullName: string; email: string;
+  } | null>(null);
+
   // modal states
   const [pwdModal,   setPwdModal]   = useState(false);
   const [pwdFields,  setPwdFields]  = useState<Record<string, string>>({});
@@ -216,8 +224,33 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     if (role === "doctor") {
+      // Fetch plan + basic info
       apiClient.get(`/doctors/${id}`)
-        .then((res) => setDoctorPlan(res.data?.doctor?.subscriptionPlan ?? "free_trial"))
+        .then((res) => {
+          const d = res.data?.doctor ?? res.data ?? {};
+          setDoctorPlan(d.subscriptionPlan ?? "free_trial");
+          setVerifData(prev => ({
+            ...(prev ?? { isVerified: false, isRejected: false, rejectionReason: null, licenseNumber: null, specialization: '', certificatesCount: 0 }),
+            fullName: d.fullName ?? '',
+            email:    d.email    ?? '',
+          }));
+        })
+        .catch(() => {});
+
+      // Fetch full verification status separately (includes isRejected + rejectionReason)
+      apiClient.get(`/doctors/${id}/verification-status`)
+        .then((res) => {
+          const v = res.data ?? {};
+          setVerifData(prev => ({
+            ...(prev ?? { fullName: '', email: '' }),
+            isVerified:        v.isVerified        ?? false,
+            isRejected:        v.isRejected        ?? false,
+            rejectionReason:   v.rejectionReason   ?? null,
+            licenseNumber:     v.licenseNumber      ?? null,
+            specialization:    v.specialization     ?? '',
+            certificatesCount: v.certificatesCount  ?? 0,
+          }));
+        })
         .catch(() => {});
     }
     // Fetch user notification settings (only for user role)
@@ -379,8 +412,12 @@ export default function SettingsScreen() {
                   />
                 }
                 label="Verification Status"
-                sublabel="PMDC license & credentials"
-                onPress={() => placeholder("Verification Status")}
+                sublabel={
+                  verifData?.isVerified ? "✓ Verified"
+                  : verifData?.isRejected ? "Rejected — tap for details"
+                  : "Pending review"
+                }
+                onPress={() => setVerifModal(true)}
               />
               <View style={styles.divider} />
               <SettingRow
@@ -543,6 +580,63 @@ export default function SettingsScreen() {
         }
       />
 
+      {/* ── Verification Status Modal ── */}
+      <Modal visible={verifModal} transparent animationType="fade" onRequestClose={() => setVerifModal(false)}>
+        <View style={styles.overlay}>
+          <View style={[styles.modalBox, { padding: 0, overflow: 'hidden' }]}>
+            {/* Coloured header */}
+            <View style={[styles.verifHeader, {
+              backgroundColor: verifData?.isVerified ? '#059669'
+                : verifData?.isRejected ? '#dc2626'
+                : '#6B7FED',
+            }]}>
+              <MaterialIcons
+                name={verifData?.isVerified ? 'verified' : verifData?.isRejected ? 'cancel' : 'schedule'}
+                size={36} color="#fff"
+              />
+              <Text style={styles.verifHeaderTitle}>
+                {verifData?.isVerified ? 'Verified' : verifData?.isRejected ? 'Rejected' : 'Pending Review'}
+              </Text>
+              <TouchableOpacity style={styles.verifClose} onPress={() => setVerifModal(false)}>
+                <Ionicons name="close" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ padding: 20 }} showsVerticalScrollIndicator={false}>
+              {/* Data rows */}
+              <VerifRow label="Full Name"       value={verifData?.fullName || '—'} />
+              <VerifRow label="Email"           value={verifData?.email    || '—'} />
+              <VerifRow label="Specialization"  value={verifData?.specialization || '—'} />
+              <VerifRow label="License Number"  value={verifData?.licenseNumber  || 'N/A'} />
+              <VerifRow label="Certificates"    value={`${verifData?.certificatesCount ?? 0} uploaded`} />
+              <VerifRow
+                label="Status"
+                value={verifData?.isVerified ? 'Verified ✓' : verifData?.isRejected ? 'Rejected ✕' : 'Under Review ⏳'}
+                valueColor={verifData?.isVerified ? '#059669' : verifData?.isRejected ? '#dc2626' : '#d97706'}
+              />
+
+              {verifData?.isRejected && !verifData?.isVerified && (
+                <View style={styles.verifRejectBox}>
+                  <Text style={styles.verifRejectLabel}>Rejection Reason</Text>
+                  <Text style={styles.verifRejectText}>{verifData.rejectionReason || 'No reason provided.'}</Text>
+                </View>
+              )}
+
+              <View style={{ height: 12 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+    </View>
+  );
+}
+
+function VerifRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <View style={styles.verifRow}>
+      <Text style={styles.verifRowLabel}>{label}</Text>
+      <Text style={[styles.verifRowValue, valueColor ? { color: valueColor, fontWeight: '700' } : {}]}>{value}</Text>
     </View>
   );
 }
@@ -652,4 +746,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   submitBtnTxt: { color: "#FFF", fontSize: 15, fontWeight: "700" },
+
+  // Verification modal
+  verifHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 20, paddingTop: 24,
+  },
+  verifHeaderTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: '#fff' },
+  verifClose: { padding: 4 },
+  verifRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f5',
+  },
+  verifRowLabel: { fontSize: 13, color: '#888', fontWeight: '600' },
+  verifRowValue: { fontSize: 14, color: '#1A1D2E', fontWeight: '500', maxWidth: '60%', textAlign: 'right' },
+  verifRejectBox: {
+    backgroundColor: '#fff1f2', borderRadius: 12, padding: 14,
+    marginTop: 14, borderWidth: 1, borderColor: '#fecaca',
+  },
+  verifRejectLabel: { fontSize: 11, fontWeight: '700', color: '#dc2626', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
+  verifRejectText:  { fontSize: 14, color: '#991b1b', lineHeight: 20 },
 });

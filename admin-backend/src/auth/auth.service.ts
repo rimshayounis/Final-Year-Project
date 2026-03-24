@@ -25,8 +25,10 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    const { username, password } = loginDto;
-    const admin = await this.adminModel.findOne({ username });
+    const { identifier, password } = loginDto;
+    const admin = await this.adminModel.findOne({
+      $or: [{ username: identifier }, { email: identifier }],
+    });
     if (!admin) throw new UnauthorizedException('Invalid credentials');
     const isPasswordValid = await bcrypt.compare(password, admin.password);
     if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');

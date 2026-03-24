@@ -274,10 +274,10 @@ export class PaymentService {
       paymentMethod: 'card',
     });
 
-    // Hold in admin wallet
+    // Hold in admin wallet — do NOT count as earned yet
     const adminWallet = await this.getAdminWallet();
     adminWallet.totalBalance      = +(adminWallet.totalBalance + amount).toFixed(2);
-    adminWallet.totalEarned       = +(adminWallet.totalEarned + amount).toFixed(2);
+    adminWallet.heldBalance       = +((adminWallet.heldBalance || 0) + amount).toFixed(2);
     adminWallet.totalTransactions += 1;
     await adminWallet.save();
 
@@ -341,10 +341,12 @@ export class PaymentService {
     doctorWallet.markModified('transactions');
     await doctorWallet.save();
 
-    // Update admin wallet — deduct doctor's share, keep commission
+    // Update admin wallet — clear held, keep commission as earned
     const adminWallet = await this.getAdminWallet();
     adminWallet.totalBalance    = +(adminWallet.totalBalance - doctorEarning).toFixed(2);
+    adminWallet.heldBalance     = +Math.max(0, (adminWallet.heldBalance || 0) - heldAmount).toFixed(2);
     adminWallet.totalCommission = +(adminWallet.totalCommission + commissionAmt).toFixed(2);
+    adminWallet.totalEarned     = +(adminWallet.totalEarned + commissionAmt).toFixed(2);
     await adminWallet.save();
 
     // Record release transaction
@@ -400,6 +402,7 @@ export class PaymentService {
     return {
       totalBalance:      wallet.totalBalance,
       totalEarned:       wallet.totalEarned,
+      heldBalance:       wallet.heldBalance || 0,
       totalCommission:   wallet.totalCommission,
       totalTransactions: wallet.totalTransactions,
       currency:          wallet.currency,

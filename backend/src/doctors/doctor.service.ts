@@ -35,10 +35,11 @@ export class DoctorsService {
       email: dto.email.toLowerCase(),
       password: hashedPassword,
       doctorProfile: {
-        licenseNumber:  dto.licenseNumber,
-        specialization: dto.specialization,
-        certificates:   dto.certificates || [],
-        isVerified:     false,
+        professionalType: dto.professionalType,
+        licenseNumber:    dto.professionalType === 'therapist' ? (dto.licenseNumber || null) : dto.licenseNumber,
+        specialization:   dto.specialization,
+        certificates:     dto.certificates || [],
+        isVerified:       false,
       },
     });
 
@@ -132,6 +133,37 @@ export class DoctorsService {
     return doctor;
   }
 
+  async getVerificationStatus(doctorId: string) {
+    const doctor = await this.doctorModel.findById(doctorId)
+      .select('doctorProfile.isVerified doctorProfile.isRejected doctorProfile.rejectionReason doctorProfile.licenseNumber doctorProfile.specialization doctorProfile.certificates');
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    return {
+      isVerified: doctor.doctorProfile.isVerified,
+      isRejected: doctor.doctorProfile.isRejected,
+      rejectionReason: doctor.doctorProfile.rejectionReason ?? null,
+      licenseNumber: doctor.doctorProfile.licenseNumber,
+      specialization: doctor.doctorProfile.specialization,
+      certificatesCount: doctor.doctorProfile.certificates?.length ?? 0,
+    };
+  }
+
+  async resubmitDoctor(doctorId: string, specialization: string, licenseNumber: string, certificates: string[]) {
+    const doctor = await this.doctorModel.findByIdAndUpdate(
+      doctorId,
+      {
+        'doctorProfile.specialization': specialization,
+        'doctorProfile.licenseNumber': licenseNumber || null,
+        'doctorProfile.certificates': certificates,
+        'doctorProfile.isVerified': false,
+        'doctorProfile.isRejected': false,
+        'doctorProfile.rejectionReason': null,
+      },
+      { new: true },
+    ).select('-password -otpCode -otpExpiry');
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    return { success: true, doctor };
+  }
+
   async getAllDoctors() {
   const doctors = await this.doctorModel.find().select('-password -otpCode -otpExpiry');
   return { doctors };
@@ -152,6 +184,20 @@ export class DoctorsService {
     const doctor = await this.doctorModel.findByIdAndUpdate(
       doctorId,
       { 'doctorProfile.isVerified': true },
+      { new: true },
+    ).select('-password -otpCode -otpExpiry');
+    if (!doctor) throw new NotFoundException('Doctor not found');
+    return { success: true, doctor };
+  }
+
+  async rejectDoctor(doctorId: string, reason: string) {
+    const doctor = await this.doctorModel.findByIdAndUpdate(
+      doctorId,
+      {
+        'doctorProfile.isVerified': false,
+        'doctorProfile.isRejected': true,
+        'doctorProfile.rejectionReason': reason,
+      },
       { new: true },
     ).select('-password -otpCode -otpExpiry');
     if (!doctor) throw new NotFoundException('Doctor not found');

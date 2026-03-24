@@ -1,11 +1,12 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterDoctorDto {
-  @IsNotEmpty() @IsString()  fullName:       string;
-  @IsNotEmpty() @IsEmail()   email:          string;
-  @IsNotEmpty() @IsString()  @MinLength(6) password: string;
-  @IsNotEmpty() @IsString()  licenseNumber:  string;
-  @IsNotEmpty() @IsString()  specialization: string;
+  @IsNotEmpty() @IsString()  fullName:         string;
+  @IsNotEmpty() @IsEmail()   email:            string;
+  @IsNotEmpty() @IsString()  @MinLength(8) password: string;
+  @IsNotEmpty() @IsString()  @IsIn(['doctor', 'therapist']) professionalType: string;
+  @IsNotEmpty() @IsString()  specialization:   string;
+  @IsOptional() @IsString()  licenseNumber?:   string;
   @IsOptional() certificates?: string[];
 }
 

@@ -43,6 +43,7 @@ const planColors: Record<string, { bg: string; color: string }> = {
 export default function PointsRewardsPage() {
   const [data, setData]         = useState<DoctorPoints[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch]     = useState('');
   const [selected, setSelected] = useState<DoctorPoints | null>(null);
   const [toast, setToast]       = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -52,28 +53,34 @@ export default function PointsRewardsPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  useEffect(() => {
-    fetch(`${BASE_URL}/doctors`)
-      .then(r => r.json())
-      .then(async res => {
-        const doctors: Doctor[] = res.doctors || [];
-        const results = await Promise.allSettled(
-          doctors.map(d =>
-            fetch(`${BASE_URL}/points-reward/${d._id}`)
-              .then(r => r.json())
-              .then(r => r.data || null)
-              .catch(() => null)
-          )
-        );
-        const combined: DoctorPoints[] = doctors.map((doctor, i) => ({
-          doctor,
-          summary: results[i].status === 'fulfilled' ? results[i].value : null,
-        }));
-        setData(combined);
-      })
-      .catch(() => showToast('Failed to load points data', 'error'))
-      .finally(() => setLoading(false));
-  }, []);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+    try {
+      const res = await fetch(`${BASE_URL}/doctors`).then(r => r.json());
+      const doctors: Doctor[] = res.doctors || res || [];
+      const results = await Promise.allSettled(
+        doctors.map(d =>
+          fetch(`${BASE_URL}/points-reward/${d._id}`)
+            .then(r => r.json())
+            .then(r => r.data || null)
+            .catch(() => null)
+        )
+      );
+      const combined: DoctorPoints[] = doctors.map((doctor, i) => ({
+        doctor,
+        summary: results[i].status === 'fulfilled' ? results[i].value : null,
+      }));
+      setData(combined);
+    } catch {
+      showToast('Failed to load points data', 'error');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   const recalculate = async (doctorId: string, doctorName: string) => {
     try {
@@ -122,25 +129,39 @@ export default function PointsRewardsPage() {
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Points & Rewards</h1>
-          <p className="page-sub">Monitor doctor points, trust badges and reward wallets</p>
+          <h1 className="page-title">Points &amp; Rewards</h1>
+          <p className="page-sub">Monitor doctor points, trust badges and reward wallets · synced from live appointment data</p>
         </div>
-        <div className="header-stats">
-          <div className="hstat">
-            <span className="hstat-val" style={{ color: '#4f46e5' }}>{totalPoints.toLocaleString()}</span>
-            <span className="hstat-label">Total Points</span>
-          </div>
-          <div className="hstat-divider" />
-          <div className="hstat">
-            <span className="hstat-val" style={{ color: '#059669' }}>PKR {totalCashValue.toLocaleString()}</span>
-            <span className="hstat-label">Cash Value</span>
-          </div>
-          <div className="hstat-divider" />
-          <div className="hstat">
-            <span className="hstat-val" style={{ color: '#d97706' }}>
-              {Object.values(badgeCounts).reduce((a, b) => a + b, 0)}
-            </span>
-            <span className="hstat-label">Badges Earned</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            className="refresh-btn"
+            onClick={() => loadData(true)}
+            disabled={refreshing}
+            title="Refresh — re-syncs this month's appointment count from live data"
+          >
+            <svg style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+          <div className="header-stats">
+            <div className="hstat">
+              <span className="hstat-val" style={{ color: '#6B7FED' }}>{totalPoints.toLocaleString()}</span>
+              <span className="hstat-label">Total Points</span>
+            </div>
+            <div className="hstat-divider" />
+            <div className="hstat">
+              <span className="hstat-val" style={{ color: '#059669' }}>PKR {totalCashValue.toLocaleString()}</span>
+              <span className="hstat-label">Cash Value</span>
+            </div>
+            <div className="hstat-divider" />
+            <div className="hstat">
+              <span className="hstat-val" style={{ color: '#d97706' }}>
+                {Object.values(badgeCounts).reduce((a, b) => a + b, 0)}
+              </span>
+              <span className="hstat-label">Badges Earned</span>
+            </div>
           </div>
         </div>
       </div>
@@ -272,7 +293,7 @@ export default function PointsRewardsPage() {
               {/* Points Overview */}
               <div className="modal-cards">
                 <div className="modal-card">
-                  <div className="mc-icon" style={{ background: '#ede9fe', color: '#4f46e5' }}>⭐</div>
+                  <div className="mc-icon" style={{ background: '#ede9fe', color: '#6B7FED' }}>⭐</div>
                   <div className="mc-val">{(selected.summary?.totalPoints || 0).toLocaleString()}</div>
                   <div className="mc-label">Total Points</div>
                 </div>
@@ -416,24 +437,24 @@ export default function PointsRewardsPage() {
         .badge-chip { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: capitalize; }
 
         .points-cell  { display: flex; align-items: baseline; gap: 3px; }
-        .points-val   { font-size: 15px; font-weight: 800; color: #4f46e5; }
+        .points-val   { font-size: 15px; font-weight: 800; color: #6B7FED; }
         .points-label { font-size: 11px; color: #888; }
         .cash-val     { font-size: 13px; font-weight: 600; color: #059669; }
 
         .booking-cell { display: flex; flex-direction: column; gap: 4px; }
         .booking-bar-wrap { height: 6px; background: #f0f0f5; border-radius: 3px; overflow: hidden; width: 120px; }
-        .booking-bar-fill { height: 100%; background: linear-gradient(90deg, #4f46e5, #6366f1); border-radius: 3px; transition: width 0.5s ease; }
+        .booking-bar-fill { height: 100%; background: linear-gradient(90deg, #6B7FED, #7B8CDE); border-radius: 3px; transition: width 0.5s ease; }
         .booking-count { font-size: 11px; color: #666; display: flex; align-items: center; gap: 6px; }
         .rewarded-badge { background: #d1fae5; color: #059669; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 20px; }
 
         .action-btns { display: flex; gap: 6px; }
         .btn-view {
           padding: 6px 12px; border-radius: 8px;
-          background: #ede9fe; color: #4f46e5;
+          background: #ede9fe; color: #6B7FED;
           border: 1px solid #ddd6fe; font-size: 12px; font-weight: 600;
           cursor: pointer; transition: all 0.15s;
         }
-        .btn-view:hover { background: #4f46e5; color: #fff; }
+        .btn-view:hover { background: #6B7FED; color: #fff; }
         .btn-recalc {
           padding: 6px 12px; border-radius: 8px;
           background: #f3f4f8; color: #555;
@@ -450,7 +471,7 @@ export default function PointsRewardsPage() {
         .empty-state p { font-size: 15px; font-weight: 600; color: #444; }
         .spinner {
           width: 32px; height: 32px;
-          border: 3px solid #f0f0f5; border-top-color: #4f46e5;
+          border: 3px solid #f0f0f5; border-top-color: #6B7FED;
           border-radius: 50%; animation: spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -501,7 +522,7 @@ export default function PointsRewardsPage() {
         .monthly-item { display: flex; align-items: center; gap: 10px; }
         .monthly-month { font-size: 12px; color: #666; width: 60px; flex-shrink: 0; }
         .monthly-bar-wrap { flex: 1; height: 6px; background: #e5e5e5; border-radius: 3px; overflow: hidden; }
-        .monthly-bar-fill { height: 100%; background: linear-gradient(90deg, #4f46e5, #6366f1); border-radius: 3px; }
+        .monthly-bar-fill { height: 100%; background: linear-gradient(90deg, #6B7FED, #7B8CDE); border-radius: 3px; }
         .monthly-count { font-size: 12px; color: #555; width: 40px; text-align: right; flex-shrink: 0; }
         .rewarded-tag { background: #d1fae5; color: #059669; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; flex-shrink: 0; }
 
@@ -524,7 +545,17 @@ export default function PointsRewardsPage() {
           border: 1px solid #e5e5e5; font-size: 14px; font-weight: 600;
           cursor: pointer; transition: all 0.15s;
         }
-        .btn-recalc-modal:hover { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+        .btn-recalc-modal:hover { background: #6B7FED; color: #fff; border-color: #6B7FED; }
+
+        .refresh-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 8px 16px; border-radius: 10px;
+          background: #EEF1FF; color: #6B7FED;
+          border: 1px solid #E0E4FF; font-size: 13px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .refresh-btn:hover:not(:disabled) { background: #6B7FED; color: #fff; border-color: #6B7FED; }
+        .refresh-btn:disabled { opacity: 0.6; cursor: default; }
       `}</style>
     </div>
   );
