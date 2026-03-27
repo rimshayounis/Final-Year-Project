@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, Alert, ActivityIndicator, StatusBar,
-  TouchableWithoutFeedback, Keyboard,
+  TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -112,7 +112,7 @@ export default function BankDetailsScreen() {
   const fetchBankDetails = async () => {
     try {
       const res = await apiClient.get(`/doctors/${doctorId}/bank-details`);
-      setBankData(res.data?.data ?? null);
+      setBankData(res.data ?? null);
     } catch {
       setBankData(null);
     } finally {
@@ -305,7 +305,7 @@ export default function BankDetailsScreen() {
               <View style={s.formBtnRow}>
                 {editMode && bankData && (
                   <TouchableOpacity
-                    style={[s.formBtn, { backgroundColor: '#F5F7FF', borderWidth: 1, borderColor: '#E0E4FF' }]}
+                    style={[s.formBtn, { flex: 0.55, backgroundColor: '#F5F7FF', borderWidth: 1, borderColor: '#E0E4FF' }]}
                     onPress={() => setEditMode(false)}
                   >
                     <Text style={[s.formBtnTxt, { color: '#6B7FED' }]}>Cancel</Text>
@@ -319,11 +319,11 @@ export default function BankDetailsScreen() {
             </>
           )}
 
-          {/* Add button when card exists */}
+          {/* Edit button when card exists */}
           {bankData && !editMode && (
-            <TouchableOpacity style={s.addNewBtn} onPress={startAdd}>
-              <Ionicons name="add-circle-outline" size={18} color="#6B7FED" />
-              <Text style={s.addNewTxt}>Replace with a new account</Text>
+            <TouchableOpacity style={s.addNewBtn} onPress={startEdit}>
+              <Ionicons name="create-outline" size={18} color="#6B7FED" />
+              <Text style={s.addNewTxt}>Edit Bank Details</Text>
             </TouchableOpacity>
           )}
 
@@ -361,6 +361,10 @@ export default function BankDetailsScreen() {
         >
           <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
           <SafeAreaView style={s.pickerScreen}>
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
             {/* Header */}
             <View style={s.pickerSheetHeader}>
               <Text style={s.pickerSheetTitle}>Select Bank</Text>
@@ -402,6 +406,7 @@ export default function BankDetailsScreen() {
                 </View>
               )}
             </ScrollView>
+            </KeyboardAvoidingView>
           </SafeAreaView>
         </Modal>
 

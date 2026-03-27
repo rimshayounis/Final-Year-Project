@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { ConvertPointsDto, WithdrawDto } from './dto/wallet.dto';
 
@@ -24,6 +24,17 @@ export class WalletController {
   @Post('withdraw')
   async requestWithdrawal(@Body() dto: WithdrawDto) {
     const data = await this.walletService.requestWithdrawal(dto);
+    return { success: true, data };
+  }
+
+  // PATCH /wallet/:doctorId/withdrawal/:txId/status  (kept for doctor-app use)
+  @Patch(':doctorId/withdrawal/:txId/status')
+  async updateWithdrawalStatus(
+    @Param('doctorId') doctorId: string,
+    @Param('txId')     txId: string,
+    @Body() body: { status: 'succeeded' | 'rejected' },
+  ) {
+    const data = await this.walletService.updateWithdrawalStatus(doctorId, txId, body.status);
     return { success: true, data };
   }
 }

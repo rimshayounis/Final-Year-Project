@@ -4,7 +4,7 @@ export class RegisterUserDto {
   @IsNotEmpty() @IsString()  fullName:  string;
   @IsNotEmpty() @IsNumber()  age:       number;
   @IsNotEmpty() @IsEmail()   email:     string;
-  @IsNotEmpty() @IsString()  @MinLength(6) password: string;
+  @IsNotEmpty() @IsString()  @MinLength(8) password: string;
   @IsNotEmpty() @IsString()  gender:    string;
   @IsNotEmpty() @IsString()  userType:  string;
 }
@@ -52,6 +52,6 @@ export class ResetPasswordDto {
   @IsNotEmpty() @IsString()
   otpCode: string;
 
-  @IsNotEmpty() @IsString() @MinLength(6)
+  @IsNotEmpty() @IsString() @MinLength(8)
   newPassword: string;
 }

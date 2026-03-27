@@ -46,6 +46,9 @@ export default function DoctorsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Doctor | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Profile images map { doctorId -> imageUrl | null }
+  const [profileImages, setProfileImages] = useState<Record<string, string | null>>({});
+
   // Verify loading
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
@@ -77,6 +80,23 @@ export default function DoctorsPage() {
       .catch(() => showToast('Failed to load doctors', 'error'))
       .finally(() => setLoading(false));
   }, []);
+
+  // Fetch profile images for all doctors in parallel
+  useEffect(() => {
+    if (doctors.length === 0) return;
+    Promise.allSettled(
+      doctors.map(d =>
+        fetch(`${BASE_URL}/profiles/doctor/${d._id}`)
+          .then(r => r.json())
+          .then(data => ({ id: d._id, img: data.data?.profileImage || null }))
+          .catch(() => ({ id: d._id, img: null }))
+      )
+    ).then(results => {
+      const map: Record<string, string | null> = {};
+      results.forEach(r => { if (r.status === 'fulfilled') map[r.value.id] = r.value.img; });
+      setProfileImages(map);
+    });
+  }, [doctors]);
 
   // Filter + search
   useEffect(() => {
@@ -223,62 +243,48 @@ export default function DoctorsPage() {
         </div>
       )}
 
-      {/* Page Header */}
-      <div className="page-header">
-        <div>
+      {/* Top Bar — title + tabs + search + stats all in one row */}
+      <div className="top-bar">
+        <div className="top-bar-left">
           <h1 className="page-title">Doctors</h1>
-          <p className="page-sub">Review and approve doctor registration requests</p>
-        </div>
-        <div className="header-stats">
-          <div className="hstat">
-            <span className="hstat-val" style={{ color: '#6B7FED' }}>{counts.all}</span>
-            <span className="hstat-label">Total</span>
-          </div>
-          <div className="hstat-divider" />
-          <div className="hstat">
-            <span className="hstat-val" style={{ color: '#d97706' }}>{counts.pending}</span>
-            <span className="hstat-label">Pending</span>
-          </div>
-          <div className="hstat-divider" />
-          <div className="hstat">
-            <span className="hstat-val" style={{ color: '#059669' }}>{counts.verified}</span>
-            <span className="hstat-label">Verified</span>
+          <div className="tab-group">
+            {(['all', 'pending', 'verified', 'rejected'] as FilterTab[]).map(tab => (
+              <button
+                key={tab}
+                className={`tab ${activeTab === tab ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab === 'pending'  && <span className="tab-dot pending"  />}
+                {tab === 'verified' && <span className="tab-dot verified" />}
+                {tab === 'rejected' && <span className="tab-dot rejected" />}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                <span className="tab-count">{counts[tab]}</span>
+              </button>
+            ))}
           </div>
         </div>
-      </div>
-
-      {/* Filters */}
-      <div className="filters">
-        <div className="tab-group">
-          {(['all', 'pending', 'verified', 'rejected'] as FilterTab[]).map(tab => (
-            <button
-              key={tab}
-              className={`tab ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab === 'pending'  && <span className="tab-dot pending"  />}
-              {tab === 'verified' && <span className="tab-dot verified" />}
-              {tab === 'rejected' && <span className="tab-dot rejected" />}
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              <span className="tab-count">{counts[tab]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="search-wrap">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-          </svg>
-          <input
-            type="text"
-            placeholder="Search by name, email or specialization..."
-            value={search}
+        <div className="top-bar-right">
+          <div className="search-wrap">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search name, email, specialization..."
+              value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          {search && <button className="clear-btn" onClick={() => setSearch('')}>✕</button>}
+            {search && <button className="clear-btn" onClick={() => setSearch('')}>✕</button>}
+          </div>
+          <div className="hstat-group">
+            <span className="hstat-chip" style={{ color: '#6B7FED' }}>{counts.all} Total</span>
+            <span className="hstat-chip" style={{ color: '#d97706' }}>{counts.pending} Pending</span>
+            <span className="hstat-chip" style={{ color: '#059669' }}>{counts.verified} Verified</span>
+          </div>
         </div>
       </div>
 
-      {/* Cards Grid */}
+      {/* Table */}
       {loading ? (
         <div className="loading-state">
           <div className="spinner" />
@@ -291,92 +297,120 @@ export default function DoctorsPage() {
           <span>Try adjusting your search or filter</span>
         </div>
       ) : (
-        <div className="cards-grid">
-          {filtered.map(doctor => (
-            <div key={doctor._id} className="doctor-card">
-              {/* Card Top */}
-              <div className="card-top">
-                <div className="card-avatar-wrap">
-                  <div className="card-avatar" style={{ background: avatarColor(doctor.fullName) }}>
-                    {initials(doctor.fullName)}
-                  </div>
-                  <div className={`verify-ring ${doctor.doctorProfile?.isVerified ? 'verified' : 'pending'}`} />
-                </div>
-                <div className="card-status-badge">
-                  {doctor.doctorProfile?.isVerified ? (
-                    <span className="badge verified">✓ Verified</span>
-                  ) : doctor.doctorProfile?.isRejected ? (
-                    <span className="badge rejected">✕ Rejected</span>
-                  ) : (
-                    <span className="badge pending">⏳ Pending</span>
-                  )}
-                </div>
-              </div>
+        <div className="table-wrap">
+          <table className="doctors-table">
+            <thead>
+              <tr>
+                <th>Doctor</th>
+                <th>Specialization</th>
+                <th>License</th>
+                <th>Plan</th>
+                <th>Certs</th>
+                <th>Joined</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(doctor => (
+                <tr key={doctor._id} className="table-row">
+                  {/* Doctor */}
+                  <td>
+                    <div className="row-doctor">
+                      <div className="row-avatar-wrap">
+                        {profileImages[doctor._id] ? (
+                          <img
+                            src={`http://localhost:3000${profileImages[doctor._id]}`}
+                            alt={doctor.fullName}
+                            className="row-avatar-img"
+                          />
+                        ) : (
+                          <div className="row-avatar" style={{ background: avatarColor(doctor.fullName) }}>
+                            {initials(doctor.fullName)}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="row-name">Dr. {doctor.fullName}</div>
+                        <div className="row-email">{doctor.email}</div>
+                      </div>
+                    </div>
+                  </td>
 
-              {/* Card Info */}
-              <div className="card-info">
-                <h3 className="card-name">Dr. {doctor.fullName}</h3>
-                <p className="card-spec">{doctor.doctorProfile?.specialization}</p>
-                <p className="card-email">{doctor.email}</p>
-              </div>
+                  {/* Specialization */}
+                  <td><span className="row-spec">{doctor.doctorProfile?.specialization || '—'}</span></td>
 
-              {/* Card Meta */}
-              <div className="card-meta">
-                <div className="meta-item">
-                  <span className="meta-label">License</span>
-                  <span className="meta-val">{doctor.doctorProfile?.licenseNumber}</span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Plan</span>
-                  <span
-                    className="meta-plan"
-                    style={planColors[doctor.subscriptionPlan] || planColors.free_trial}
-                  >
-                    {doctor.subscriptionPlan?.replace('_', ' ')}
-                  </span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Certificates</span>
-                  <span className="meta-val">{doctor.doctorProfile?.certificates?.length || 0} uploaded</span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Joined</span>
-                  <span className="meta-val">
-                    {new Date(doctor.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
-                </div>
-              </div>
+                  {/* License */}
+                  <td><span className="row-license">{doctor.doctorProfile?.licenseNumber || '—'}</span></td>
 
-              {/* Card Actions */}
-              <div className="card-actions">
-                <button className="btn-view-profile" onClick={() => openDoctor(doctor)}>
-                  View Profile
-                </button>
-                {doctor.doctorProfile?.isVerified ? (
-                  <button className="btn-approved" disabled>✓ Approved</button>
-                ) : doctor.doctorProfile?.isRejected ? (
-                  <button className="btn-rejected-badge" disabled>✕ Rejected</button>
-                ) : (
-                  <>
-                    <button
-                      className="btn-approve"
-                      onClick={() => verifyDoctor(doctor._id, doctor.fullName)}
-                      disabled={verifyingId === doctor._id}
-                    >
-                      {verifyingId === doctor._id ? 'Approving...' : '✓ Approve'}
-                    </button>
-                    <button
-                      className="btn-reject"
-                      onClick={() => { setRejectTarget(doctor); setSelectedReason(''); setOtherReason(''); }}
-                    >
-                      ✕
-                    </button>
-                  </>
-                )}
-                <button className="btn-remove" onClick={() => setDeleteTarget(doctor)}>🗑</button>
-              </div>
-            </div>
-          ))}
+                  {/* Plan */}
+                  <td>
+                    <span className="row-plan" style={planColors[doctor.subscriptionPlan] || planColors.free_trial}>
+                      {doctor.subscriptionPlan?.replace(/_/g, ' ') || 'free trial'}
+                    </span>
+                  </td>
+
+                  {/* Certificates */}
+                  <td><span className="row-certs">{doctor.doctorProfile?.certificates?.length || 0}</span></td>
+
+                  {/* Joined */}
+                  <td>
+                    <span className="row-date">
+                      {new Date(doctor.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </td>
+
+                  {/* Status */}
+                  <td>
+                    {doctor.doctorProfile?.isVerified ? (
+                      <span className="badge verified">Verified</span>
+                    ) : doctor.doctorProfile?.isRejected ? (
+                      <span className="badge rejected">Rejected</span>
+                    ) : (
+                      <span className="badge pending">Pending</span>
+                    )}
+                  </td>
+
+                  {/* Actions */}
+                  <td>
+                    <div className="row-actions">
+                      <button className="btn-view-profile" onClick={() => openDoctor(doctor)} title="View Profile">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        View
+                      </button>
+                      {doctor.doctorProfile?.isVerified ? (
+                        <span className="row-approved">✓ Approved</span>
+                      ) : doctor.doctorProfile?.isRejected ? (
+                        <span className="row-rejected-label">✕ Rejected</span>
+                      ) : (
+                        <>
+                          <button
+                            className="btn-approve"
+                            onClick={() => verifyDoctor(doctor._id, doctor.fullName)}
+                            disabled={verifyingId === doctor._id}
+                          >
+                            {verifyingId === doctor._id ? '…' : '✓'}
+                          </button>
+                          <button
+                            className="btn-reject"
+                            onClick={() => { setRejectTarget(doctor); setSelectedReason(''); setOtherReason(''); }}
+                            title="Reject"
+                          >✕</button>
+                        </>
+                      )}
+                      <button className="btn-remove" onClick={() => setDeleteTarget(doctor)} title="Delete">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -623,150 +657,114 @@ export default function DoctorsPage() {
         .toast.error   { background: #fee2e2; color: #991b1b; }
         @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-        /* Header */
-        .page-header { display: flex; align-items: center; justify-content: space-between; }
-        .page-title  { font-size: 22px; font-weight: 800; color: #111; letter-spacing: -0.5px; }
-        .page-sub    { font-size: 13px; color: #888; margin-top: 4px; }
+        /* Top bar */
+        .top-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .top-bar-left  { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .top-bar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .page-title { font-size: 18px; font-weight: 800; color: #111; letter-spacing: -0.3px; white-space: nowrap; }
 
-        .header-stats {
-          display: flex; align-items: center; gap: 0;
-          background: #fff; border: 1px solid #E0E4FF;
-          border-radius: 14px; overflow: hidden;
-        }
-        .hstat { padding: 14px 24px; text-align: center; }
-        .hstat-val   { display: block; font-size: 22px; font-weight: 800; }
-        .hstat-label { display: block; font-size: 11px; color: #888; font-weight: 500; margin-top: 2px; }
-        .hstat-divider { width: 1px; background: #E0E4FF; align-self: stretch; }
-
-        /* Filters */
-        .filters { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-        .tab-group { display: flex; gap: 6px; }
+        .tab-group { display: flex; gap: 4px; }
         .tab {
-          display: flex; align-items: center; gap: 6px;
-          padding: 9px 16px; border-radius: 10px;
-          border: 1px solid #e5e5e5; background: #fff;
-          font-size: 13px; font-weight: 500; color: #666;
+          display: flex; align-items: center; gap: 5px;
+          padding: 6px 12px; border-radius: 8px;
+          border: 1px solid #e5e7eb; background: #fff;
+          font-size: 12px; font-weight: 500; color: #666;
           cursor: pointer; transition: all 0.15s;
         }
         .tab:hover  { border-color: #6B7FED; color: #6B7FED; }
         .tab.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
-        .tab-dot { width: 7px; height: 7px; border-radius: 50%; }
+        .tab-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
         .tab-dot.pending  { background: #d97706; }
         .tab-dot.verified { background: #059669; }
         .tab-dot.rejected { background: #dc2626; }
         .tab.active .tab-dot.pending  { background: #fde68a; }
         .tab.active .tab-dot.verified { background: #6ee7b7; }
         .tab.active .tab-dot.rejected { background: #fca5a5; }
-        .tab-count {
-          background: rgba(0,0,0,0.08); color: inherit;
-          font-size: 11px; font-weight: 700;
-          padding: 1px 7px; border-radius: 20px;
-        }
+        .tab-count { background: rgba(0,0,0,0.08); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 20px; }
         .tab.active .tab-count { background: rgba(255,255,255,0.25); }
 
         .search-wrap {
-          display: flex; align-items: center; gap: 8px;
-          background: #fff; border: 1px solid #e5e5e5;
-          border-radius: 12px; padding: 10px 16px;
-          min-width: 300px;
+          display: flex; align-items: center; gap: 7px;
+          background: #fff; border: 1px solid #e5e7eb;
+          border-radius: 9px; padding: 7px 12px; width: 240px;
         }
-        .search-wrap input { border: none; outline: none; font-size: 14px; color: #333; background: none; flex: 1; }
+        .search-wrap input { border: none; outline: none; font-size: 13px; color: #333; background: none; flex: 1; min-width: 0; }
         .search-wrap input::placeholder { color: #aaa; }
-        .clear-btn { background: none; border: none; cursor: pointer; color: #aaa; font-size: 12px; }
+        .clear-btn { background: none; border: none; cursor: pointer; color: #aaa; font-size: 11px; }
 
-        /* Cards */
-        .cards-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-          gap: 18px;
-        }
-        .doctor-card {
-          background: #fff; border-radius: 18px;
-          border: 1px solid #E0E4FF; padding: 20px;
-          display: flex; flex-direction: column; gap: 16px;
-          transition: transform 0.15s, box-shadow 0.15s;
-        }
-        .doctor-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.07); }
+        .hstat-group { display: flex; align-items: center; gap: 6px; }
+        .hstat-chip { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: #f3f4f6; border: 1px solid #e5e7eb; white-space: nowrap; }
 
-        .card-top { display: flex; align-items: flex-start; justify-content: space-between; }
-        .card-avatar-wrap { position: relative; }
-        .card-avatar {
-          width: 52px; height: 52px; border-radius: 14px;
+        /* Table */
+        .table-wrap { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; overflow: hidden; }
+        .doctors-table { width: 100%; border-collapse: collapse; }
+        .doctors-table thead tr { background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+        .doctors-table th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+        .table-row { border-bottom: 1px solid #f3f4f6; transition: background 0.12s; }
+        .table-row:last-child { border-bottom: none; }
+        .table-row:hover { background: #fafafa; }
+        .doctors-table td { padding: 12px 14px; vertical-align: middle; }
+
+        /* Row doctor cell */
+        .row-doctor { display: flex; align-items: center; gap: 10px; }
+        .row-avatar-wrap { flex-shrink: 0; }
+        .row-avatar {
+          width: 38px; height: 38px; border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
-          font-size: 17px; font-weight: 700; color: #fff;
+          font-size: 13px; font-weight: 700; color: #fff;
         }
-        .verify-ring {
-          position: absolute; bottom: -3px; right: -3px;
-          width: 14px; height: 14px; border-radius: 50%;
-          border: 2px solid #fff;
-        }
-        .verify-ring.verified { background: #059669; }
-        .verify-ring.pending  { background: #d97706; }
+        .row-avatar-img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; display: block; }
+        .row-name  { font-size: 13px; font-weight: 700; color: #111; text-transform: capitalize; }
+        .row-email { font-size: 11px; color: #888; margin-top: 1px; }
+        .row-spec  { font-size: 12px; color: #555; }
+        .row-license { font-size: 12px; color: #555; font-family: monospace; }
+        .row-plan  { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; text-transform: capitalize; white-space: nowrap; }
+        .row-certs { font-size: 12px; color: #555; font-weight: 600; }
+        .row-date  { font-size: 12px; color: #888; white-space: nowrap; }
 
-        .badge {
-          font-size: 11px; font-weight: 700; padding: 4px 10px;
-          border-radius: 20px; display: inline-flex; align-items: center; gap: 4px;
-        }
+        .badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
         .badge.verified { background: #d1fae5; color: #065f46; }
         .badge.pending  { background: #fef3c7; color: #92400e; }
         .badge.rejected { background: #fee2e2; color: #991b1b; }
         .badge.small    { font-size: 10px; padding: 3px 8px; }
 
-        .card-info { }
-        .card-name  { font-size: 16px; font-weight: 700; color: #111; margin-bottom: 3px; }
-        .card-spec  { font-size: 13px; color: #6B7FED; font-weight: 500; margin-bottom: 3px; }
-        .card-email { font-size: 12px; color: #888; }
-
-        .card-meta  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .meta-item  { display: flex; flex-direction: column; gap: 2px; }
-        .meta-label { font-size: 10px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
-        .meta-val   { font-size: 12px; color: #333; font-weight: 500; }
-        .meta-plan  { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; width: fit-content; text-transform: capitalize; }
-
-        .card-actions { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+        /* Row actions */
+        .row-actions { display: flex; align-items: center; gap: 6px; }
         .btn-view-profile {
-          flex: 1; padding: 8px 12px; border-radius: 10px;
-          background: #f3f4f8; color: #333;
-          border: 1px solid #e5e5e5; font-size: 12px; font-weight: 600;
-          cursor: pointer; transition: all 0.15s;
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 6px 11px; border-radius: 8px;
+          background: #f3f4f8; color: #444;
+          border: 1px solid #e5e7eb; font-size: 12px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s; white-space: nowrap;
         }
-        .btn-view-profile:hover { background: #EEF1FF; color: #6B7FED; border-color: #E0E4FF; }
+        .btn-view-profile:hover { background: #EEF1FF; color: #6B7FED; border-color: #C8D0FF; }
         .btn-approve {
-          flex: 1; padding: 8px 12px; border-radius: 10px;
+          width: 30px; height: 30px; border-radius: 8px;
           background: #059669; color: #fff;
-          border: none; font-size: 12px; font-weight: 700;
+          border: none; font-size: 13px; font-weight: 700;
           cursor: pointer; transition: all 0.15s;
+          display: flex; align-items: center; justify-content: center;
         }
         .btn-approve:hover:not(:disabled) { background: #047857; }
-        .btn-approve:disabled { opacity: 0.7; cursor: not-allowed; }
-        .btn-approved {
-          flex: 1; padding: 8px 12px; border-radius: 10px;
-          background: #d1fae5; color: #059669;
-          border: 1px solid #a7f3d0; font-size: 12px; font-weight: 700;
-          cursor: not-allowed;
-        }
+        .btn-approve:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-reject {
-          width: 34px; height: 34px; border-radius: 10px;
+          width: 30px; height: 30px; border-radius: 8px;
           background: #fff1f2; color: #dc2626;
           border: 1px solid #fecaca; font-size: 13px; font-weight: 700;
           cursor: pointer; transition: all 0.15s;
           display: flex; align-items: center; justify-content: center;
         }
         .btn-reject:hover { background: #fee2e2; }
-        .btn-rejected-badge {
-          flex: 1; padding: 8px 12px; border-radius: 10px;
-          background: #fee2e2; color: #dc2626;
-          border: 1px solid #fecaca; font-size: 12px; font-weight: 700;
-          cursor: not-allowed;
-        }
         .btn-remove {
-          width: 34px; height: 34px; border-radius: 10px;
-          background: #fee2e2; color: #dc2626;
-          border: 1px solid #fecaca; font-size: 14px;
+          width: 30px; height: 30px; border-radius: 8px;
+          background: #fff1f2; color: #dc2626;
+          border: 1px solid #fecaca;
           cursor: pointer; transition: all 0.15s;
           display: flex; align-items: center; justify-content: center;
         }
         .btn-remove:hover { background: #dc2626; color: #fff; border-color: #dc2626; }
+        .row-approved      { font-size: 11px; font-weight: 700; color: #059669; white-space: nowrap; }
+        .row-rejected-label { font-size: 11px; font-weight: 700; color: #dc2626; white-space: nowrap; }
 
         /* Loading / Empty */
         .loading-state, .empty-state {

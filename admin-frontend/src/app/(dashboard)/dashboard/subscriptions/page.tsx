@@ -20,6 +20,7 @@ interface Subscription {
   status: 'active' | 'expired' | 'cancelled';
   pricePKR: number;
   paymentMethod?: string;
+  stripePaymentIntentId?: string | null;
   cancelledAt?: string;
   cancelReason?: string;
 }
@@ -125,9 +126,11 @@ export default function SubscriptionsPage() {
             onClick={() => setPlanFilter(planFilter === plan ? 'all' : plan)}
           >
             <div className="plan-chip" style={planColors[plan]}>{plan.replace('_', ' ')}</div>
-            <div className="plan-count">{counts[plan]}</div>
-            <div className="plan-label">doctors</div>
-            <div className="plan-price">PKR {PLAN_PRICES[plan].toLocaleString()}/mo</div>
+            <div className="plan-card-info">
+              <div className="plan-count">{counts[plan]}</div>
+              <div className="plan-label">doctors</div>
+              <div className="plan-price">PKR {PLAN_PRICES[plan].toLocaleString()}/mo</div>
+            </div>
           </div>
         ))}
       </div>
@@ -169,7 +172,7 @@ export default function SubscriptionsPage() {
             <tbody>
               {filtered.map(doctor => (
                 <tr key={doctor._id} className="table-row">
-                  <td><span className="doctor-name">Dr. {doctor.fullName}</span></td>
+                  <td><span className="doctor-name">{doctor.fullName}</span></td>
                   <td><span className="doctor-email">{doctor.email}</span></td>
                   <td>
                     <span className="plan-badge" style={planColors[doctor.subscriptionPlan] || planColors.free_trial}>
@@ -199,7 +202,7 @@ export default function SubscriptionsPage() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h2 className="modal-title">Dr. {selected.fullName}</h2>
+                <h2 className="modal-title">{selected.fullName}</h2>
                 <p className="modal-sub">Subscription History</p>
               </div>
               <button className="modal-close" onClick={() => setSelected(null)}>✕</button>
@@ -228,6 +231,13 @@ export default function SubscriptionsPage() {
                         <span>📅 {new Date(sub.startDate).toLocaleDateString()} → {new Date(sub.endDate).toLocaleDateString()}</span>
                         <span className="sub-price">PKR {sub.pricePKR?.toLocaleString()}</span>
                       </div>
+                      {sub.stripePaymentIntentId && (
+                        <div className="sub-intent">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                          <span className="sub-intent-label">Payment Intent</span>
+                          <code className="sub-intent-id">{sub.stripePaymentIntentId}</code>
+                        </div>
+                      )}
                       {sub.cancelReason && (
                         <div className="sub-cancel-reason">Cancel reason: {sub.cancelReason}</div>
                       )}
@@ -262,19 +272,20 @@ export default function SubscriptionsPage() {
         .rev-val   { display: block; font-size: 22px; font-weight: 800; color: #059669; }
         .rev-label { display: block; font-size: 11px; color: #888; margin-top: 2px; }
 
-        .plan-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        .plan-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
         .plan-card {
-          background: #fff; border-radius: 14px; padding: 16px;
+          background: #fff; border-radius: 12px; padding: 12px 16px;
           border: 2px solid #E0E4FF; cursor: pointer;
-          transition: all 0.15s; text-align: center;
-          display: flex; flex-direction: column; gap: 6px; align-items: center;
+          transition: all 0.15s;
+          display: flex; align-items: center; gap: 12px;
         }
         .plan-card:hover  { border-color: #6B7FED; }
         .plan-card.active { border-color: #6B7FED; background: #F0F4FF; }
-        .plan-chip  { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; }
-        .plan-count { font-size: 28px; font-weight: 800; color: #111; }
-        .plan-label { font-size: 12px; color: #888; }
-        .plan-price { font-size: 11px; color: #6B7FED; font-weight: 600; }
+        .plan-chip  { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; text-transform: capitalize; white-space: nowrap; flex-shrink: 0; }
+        .plan-card-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .plan-count { font-size: 20px; font-weight: 800; color: #111; line-height: 1; }
+        .plan-label { font-size: 10px; color: #888; }
+        .plan-price { font-size: 10px; color: #6B7FED; font-weight: 600; margin-top: 2px; }
 
         .search-wrap {
           display: flex; align-items: center; gap: 8px;
@@ -360,6 +371,9 @@ export default function SubscriptionsPage() {
         .sub-dates { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #666; }
         .sub-price { font-size: 13px; font-weight: 700; color: #059669; }
         .sub-cancel-reason { font-size: 12px; color: #dc2626; background: #fee2e2; border-radius: 8px; padding: 6px 10px; }
+        .sub-intent { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #E0E4FF; border-radius: 8px; padding: 7px 10px; }
+        .sub-intent-label { font-size: 11px; font-weight: 600; color: #888; white-space: nowrap; }
+        .sub-intent-id { font-size: 11px; font-family: monospace; color: #4051b5; word-break: break-all; }
       `}</style>
     </div>
   );

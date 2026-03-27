@@ -9,10 +9,13 @@ export type WalletTxType =
   | 'withdrawal_requested'
   | 'withdrawal_completed'
   | 'withdrawal_rejected';
-export type WithdrawalStatus = 'pending' | 'completed' | 'rejected';
+export type WithdrawalStatus = 'pending' | 'succeeded' | 'rejected';
 
-@Schema({ _id: false })
+@Schema({ timestamps: false })
 export class WalletTransaction {
+  @Prop({ type: Types.ObjectId, default: () => new Types.ObjectId() })
+  _id?: Types.ObjectId;
+
   @Prop({ required: true })
   type: WalletTxType;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const BASE_URL = 'http://localhost:3000/api';
 
@@ -131,160 +131,234 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
-  const [stats, setStats]         = useState<DashboardStats | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [heldAppts, setHeldAppts] = useState<HeldAppointment[]>([]);
-  const [showHeld, setShowHeld]   = useState(false);
+  const [stats, setStats]             = useState<DashboardStats | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [heldAppts, setHeldAppts]     = useState<HeldAppointment[]>([]);
+  const [showHeld, setShowHeld]       = useState(false);
+  const [filterOpen, setFilterOpen]   = useState(false);
+  const [dateFrom, setDateFrom]       = useState('');
+  const [dateTo, setDateTo]           = useState('');
+  const [appliedFrom, setAppliedFrom] = useState('');
+  const [appliedTo, setAppliedTo]     = useState('');
+  const filterRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [usersRes, doctorsRes, pendingPostsRes, walletRes, reportsRes, feedbackRes, heldRes] = await Promise.allSettled([
-          fetch(`${BASE_URL}/users`).then(r => r.json()),
-          fetch(`${BASE_URL}/doctors`).then(r => r.json()),
-          fetch(`${BASE_URL}/posts/pending?limit=100`).then(r => r.json()),
-          fetch(`${BASE_URL}/payment/admin/wallet`).then(r => r.json()),
-          fetch(`${BASE_URL}/reports`).then(r => r.json()),
-          fetch(`${BASE_URL}/feedback`).then(r => r.json()),
-          fetch(`${BASE_URL}/payment/admin/held`).then(r => r.json()),
-        ]);
+  const fetchStats = async (from = '', to = '') => {
+    setLoading(true);
+    // Date range helpers
+    const fromTs = from ? new Date(from).getTime()                  : 0;
+    const toTs   = to   ? new Date(to + 'T23:59:59').getTime()      : Infinity;
+    const inTs   = (v: any) => { const t = new Date(v).getTime(); return !isNaN(t) && t >= fromTs && t <= toTs; };
+    // appointment.date is a YYYY-MM-DD string — compare directly
+    const inDateStr = (s: string) => !!s && s >= from && s <= to;
+    const filterItems = (arr: any[], ...fields: string[]) => {
+      if (!from || !to) return arr;
+      return arr.filter(item => fields.some(f => item[f] && (typeof item[f] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item[f]) ? inDateStr(item[f]) : inTs(item[f]))));
+    };
 
-        const usersRaw     = usersRes.status        === 'fulfilled' ? usersRes.value        : [];
-        const doctorsRaw   = doctorsRes.status      === 'fulfilled' ? doctorsRes.value      : [];
-        const pendingPosts = pendingPostsRes.status === 'fulfilled' ? pendingPostsRes.value : {};
-        const wallet       = walletRes.status       === 'fulfilled' ? walletRes.value       : {};
-        const reportsRaw   = reportsRes.status      === 'fulfilled' ? reportsRes.value      : [];
-        const feedbacksRaw = feedbackRes.status     === 'fulfilled' ? feedbackRes.value     : [];
-        const heldRaw      = heldRes.status         === 'fulfilled' ? heldRes.value         : {};
+    try {
+      const [usersRes, doctorsRes, pendingPostsRes, walletRes, reportsRes, feedbackRes, heldRes, txRes] = await Promise.allSettled([
+        fetch(`${BASE_URL}/users`).then(r => r.json()),
+        fetch(`${BASE_URL}/doctors`).then(r => r.json()),
+        fetch(`${BASE_URL}/posts/pending?limit=100`).then(r => r.json()),
+        fetch(`${BASE_URL}/payment/admin/wallet`).then(r => r.json()),
+        fetch(`${BASE_URL}/reports`).then(r => r.json()),
+        fetch(`${BASE_URL}/feedback`).then(r => r.json()),
+        fetch(`${BASE_URL}/payment/admin/held`).then(r => r.json()),
+        fetch(`${BASE_URL}/payment/admin/transactions`).then(r => r.json()),
+      ]);
 
-        const heldData       = heldRaw.data ?? heldRaw;
-        const heldApptList: HeldAppointment[] = heldData.appointments ?? [];
-        setHeldAppts(heldApptList);
+      const usersRaw     = usersRes.status        === 'fulfilled' ? usersRes.value        : [];
+      const doctorsRaw   = doctorsRes.status      === 'fulfilled' ? doctorsRes.value      : [];
+      const pendingPosts = pendingPostsRes.status === 'fulfilled' ? pendingPostsRes.value : {};
+      const wallet       = walletRes.status       === 'fulfilled' ? walletRes.value       : {};
+      const reportsRaw   = reportsRes.status      === 'fulfilled' ? reportsRes.value      : [];
+      const feedbacksRaw = feedbackRes.status     === 'fulfilled' ? feedbackRes.value     : [];
+      const heldRaw      = heldRes.status         === 'fulfilled' ? heldRes.value         : {};
+      const txRaw        = txRes.status           === 'fulfilled' ? txRes.value           : [];
 
-        const allUsers: any[]   = Array.isArray(usersRaw)     ? usersRaw     : (usersRaw.users     || usersRaw.data   || []);
-        const allDoctors: any[] = Array.isArray(doctorsRaw)   ? doctorsRaw   : (doctorsRaw.doctors  || doctorsRaw.data || []);
-        const reports: any[]    = Array.isArray(reportsRaw)   ? reportsRaw   : (reportsRaw.data     || []);
-        const feedbacks: any[]  = Array.isArray(feedbacksRaw) ? feedbacksRaw : (feedbacksRaw.data   || []);
+      const heldData        = heldRaw.data ?? heldRaw;
+      const allHeldAppts: HeldAppointment[] = heldData.appointments ?? [];
+      const heldApptList    = filterItems(allHeldAppts, 'date', 'createdAt') as HeldAppointment[];
+      setHeldAppts(heldApptList);
 
-        const pendingVerif      = allDoctors.filter(d => !d.doctorProfile?.isVerified).length;
-        const verifiedDocs      = allDoctors.filter(d =>  d.doctorProfile?.isVerified).length;
-        const pendingPostsCount = pendingPosts.pagination?.total || pendingPosts.data?.length || 0;
+      const rawUsers:    any[] = Array.isArray(usersRaw)     ? usersRaw     : (usersRaw.users     || usersRaw.data   || []);
+      const rawDoctors:  any[] = Array.isArray(doctorsRaw)   ? doctorsRaw   : (doctorsRaw.doctors  || doctorsRaw.data || []);
+      const rawReports:  any[] = Array.isArray(reportsRaw)   ? reportsRaw   : (reportsRaw.data     || []);
+      const rawFeedbacks:any[] = Array.isArray(feedbacksRaw) ? feedbacksRaw : (feedbacksRaw.data   || []);
+      const allTx:       any[] = Array.isArray(txRaw)        ? txRaw        : (txRaw.data || txRaw.transactions || []);
 
-        const pendingReports  = reports.filter((r: any) => r.status === 'pending').length;
-        const reviewedReports = reports.filter((r: any) => r.status === 'reviewed').length;
+      const allUsers   = filterItems(rawUsers,    'createdAt');
+      const allDoctors = filterItems(rawDoctors,  'createdAt');
+      const reports    = filterItems(rawReports,  'createdAt');
+      const feedbacks  = filterItems(rawFeedbacks,'createdAt');
+      const filteredTx = filterItems(allTx,       'createdAt');
 
-        const totalFeedbacks  = feedbacks.length;
-        const avgDoctorRating = totalFeedbacks
-          ? Math.round((feedbacks.reduce((s: number, f: any) => s + (f.rating || 0), 0) / totalFeedbacks) * 10) / 10
-          : 0;
-        const ratingMap: Record<string, number[]> = {};
-        feedbacks.forEach((f: any) => {
-          const id = f.doctorId?.toString();
-          if (id) { ratingMap[id] = ratingMap[id] || []; ratingMap[id].push(f.rating); }
+      const pendingVerif      = allDoctors.filter(d => !d.doctorProfile?.isVerified).length;
+      const verifiedDocs      = allDoctors.filter(d =>  d.doctorProfile?.isVerified).length;
+      const pendingPostsCount = pendingPosts.pagination?.total || pendingPosts.data?.length || 0;
+
+      const pendingReports  = reports.filter((r: any) => r.status === 'pending').length;
+      const reviewedReports = reports.filter((r: any) => r.status === 'reviewed').length;
+
+      const totalFeedbacks  = feedbacks.length;
+      const avgDoctorRating = totalFeedbacks
+        ? Math.round((feedbacks.reduce((s: number, f: any) => s + (f.rating || 0), 0) / totalFeedbacks) * 10) / 10
+        : 0;
+      const ratingMap: Record<string, number[]> = {};
+      feedbacks.forEach((f: any) => {
+        const id = f.doctorId?.toString();
+        if (id) { ratingMap[id] = ratingMap[id] || []; ratingMap[id].push(f.rating); }
+      });
+      const lowRatedDoctors = Object.values(ratingMap).filter(
+        ratings => ratings.reduce((a, b) => a + b, 0) / ratings.length < 3
+      ).length;
+
+      // Financials from transactions (filtered by date when active)
+      const txSource = from ? filteredTx : allTx;
+      let totalEarned = 0, totalCommission = 0;
+      if (from) {
+        // Sum from date-filtered transactions
+        txSource.filter((t: any) => t.status === 'succeeded').forEach((t: any) => {
+          totalEarned     += t.amount           || 0;
+          totalCommission += t.commissionAmount || 0;
         });
-        const lowRatedDoctors = Object.values(ratingMap).filter(
-          ratings => ratings.reduce((a, b) => a + b, 0) / ratings.length < 3
-        ).length;
+      } else {
+        const walletData  = (wallet.data || wallet);
+        totalEarned     = walletData.totalEarned     || 0;
+        totalCommission = walletData.totalCommission || 0;
+      }
 
-        let totalApts = 0, completedApts = 0;
-        if (allDoctors.length > 0) {
-          const aptResults = await Promise.allSettled(
-            allDoctors.map(d =>
-              fetch(`${BASE_URL}/booked-appointments/doctor/${d._id}`)
-                .then(r => r.json())
-                .then(r => r.data || r.appointments || [])
-                .catch(() => [])
-            )
-          );
-          aptResults.forEach(r => {
-            if (r.status === 'fulfilled') {
-              totalApts     += r.value.length;
-              completedApts += r.value.filter((a: any) => a.status === 'completed').length;
-            }
-          });
-        }
-
-        const walletData = wallet.data || wallet;
-        setStats({
-          totalPatients:         allUsers.length,
-          totalDoctors:          allDoctors.length,
-          pendingVerifications:  pendingVerif,
-          verifiedDoctors:       verifiedDocs,
-          pendingPosts:          pendingPostsCount,
-          totalAppointments:     totalApts,
-          completedAppointments: completedApts,
-          totalCommission:       walletData.totalCommission || 0,
-          totalEarned:           walletData.totalEarned     || 0,
-          heldBalance:           walletData.heldBalance     || heldData.totalHeld || 0,
-          heldCount:             heldData.count             || heldApptList.length,
-          pendingReports,
-          reviewedReports,
-          totalFeedbacks,
-          avgDoctorRating,
-          lowRatedDoctors,
-          openSupportTickets: 0,
+      // Appointments — date field is YYYY-MM-DD string, use allDoctors (already filtered by createdAt)
+      // but appointments themselves are filtered by their own `date` field
+      let totalApts = 0, completedApts = 0;
+      if (allDoctors.length > 0) {
+        const aptResults = await Promise.allSettled(
+          allDoctors.map(d =>
+            fetch(`${BASE_URL}/booked-appointments/doctor/${d._id}`)
+              .then(r => r.json())
+              .then(r => r.data || r.appointments || [])
+              .catch(() => [])
+          )
+        );
+        aptResults.forEach(r => {
+          if (r.status === 'fulfilled') {
+            const apts = from ? r.value.filter((a: any) => a.date && inDateStr(a.date)) : r.value;
+            totalApts     += apts.length;
+            completedApts += apts.filter((a: any) => a.status === 'completed').length;
+          }
         });
+      }
+
+      setStats({
+        totalPatients:         allUsers.length,
+        totalDoctors:          allDoctors.length,
+        pendingVerifications:  pendingVerif,
+        verifiedDoctors:       verifiedDocs,
+        pendingPosts:          pendingPostsCount,
+        totalAppointments:     totalApts,
+        completedAppointments: completedApts,
+        totalCommission,
+        totalEarned,
+        heldBalance:           heldApptList.reduce((s, a) => s + (a.heldAmount || 0), 0),
+        heldCount:             heldApptList.length,
+        pendingReports,
+        reviewedReports,
+        totalFeedbacks,
+        avgDoctorRating,
+        lowRatedDoctors,
+        openSupportTickets: 0,
+      });
       } catch (e) {
         console.error('Dashboard fetch error:', e);
       } finally {
         setLoading(false);
       }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchStats(); }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
     };
-    fetchStats();
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const applyFilter = () => {
+    setAppliedFrom(dateFrom);
+    setAppliedTo(dateTo);
+    setFilterOpen(false);
+    fetchStats(dateFrom, dateTo);
+  };
+
+  const clearFilter = () => {
+    setDateFrom('');
+    setDateTo('');
+    setAppliedFrom('');
+    setAppliedTo('');
+    setFilterOpen(false);
+    fetchStats();
+  };
+
+  const financeCards = stats ? [
+    {
+      label: 'Total Earned',
+      value: `PKR ${stats.totalEarned.toLocaleString()}`,
+      Icon: Icons.TrendingUp,
+      sub: appliedFrom ? `${appliedFrom} – ${appliedTo}` : 'Total platform revenue',
+      href: '/dashboard/appointments',
+    },
+    {
+      label: 'Commission Earned',
+      value: `PKR ${stats.totalCommission.toLocaleString()}`,
+      Icon: Icons.Wallet,
+      sub: appliedFrom ? `${appliedFrom} – ${appliedTo}` : 'From completed appointments',
+      href: '/dashboard/appointments',
+    },
+  ] : [];
 
   const statCards = stats ? [
     {
       label: 'Total Patients',
       value: stats.totalPatients,
       Icon: Icons.Users,
-      color: '#6B7FED',
-      bg: '#EEF1FF',
-      href: '/dashboard/users',
-      status: 'active',
-      statusLabel: 'Registered',
-      sub: 'Active on platform',
+      href: '/dashboard/users/patients',
+      sub: 'Registered on platform',
+      alert: false,
     },
     {
-      label: 'Pending Verifications',
-      value: stats.pendingVerifications,
-      Icon: Icons.Clock,
-      color: '#d97706',
-      bg: '#fef3c7',
+      label: 'Total Doctors',
+      value: stats.totalDoctors,
+      Icon: Icons.Stethoscope,
       href: '/dashboard/users/doctors',
-      status: stats.pendingVerifications > 0 ? 'action' : 'ok',
-      statusLabel: stats.pendingVerifications > 0 ? 'Action needed' : 'All verified',
-      sub: `${stats.totalDoctors} total doctors`,
+      sub: `${stats.verifiedDoctors} verified`,
+      alert: false,
     },
     {
       label: 'Verified Doctors',
       value: stats.verifiedDoctors,
       Icon: Icons.ShieldCheck,
-      color: '#059669',
-      bg: '#d1fae5',
       href: '/dashboard/users/doctors',
-      status: 'ok',
-      statusLabel: 'Verified',
       sub: `${stats.totalDoctors} total registered`,
+      alert: false,
     },
     {
-      label: 'Commission Earned',
-      value: `PKR ${stats.totalCommission.toLocaleString()}`,
-      Icon: Icons.Wallet,
-      color: '#7B8CDE',
-      bg: '#F0F4FF',
-      href: '/dashboard/subscriptions',
-      status: 'active',
-      statusLabel: 'From appointments',
-      sub: `PKR ${stats.totalEarned.toLocaleString()} total earned`,
+      label: 'Pending Verifications',
+      value: stats.pendingVerifications,
+      Icon: Icons.Clock,
+      href: '/dashboard/users/doctors',
+      sub: stats.pendingVerifications > 0 ? 'Action needed' : 'All verified',
+      alert: stats.pendingVerifications > 0,
     },
   ] : [];
 
   const extraStats = stats ? [
-    { label: 'Total Appointments', value: stats.totalAppointments,     Icon: Icons.Calendar,    color: '#6B7FED', bg: '#EEF1FF',   href: null },
-    { label: 'Completed Sessions', value: stats.completedAppointments, Icon: Icons.CheckCircle, color: '#059669', bg: '#d1fae5',   href: null },
-    { label: 'Posts Pending',      value: stats.pendingPosts,          Icon: Icons.FileText,    color: '#d97706', bg: '#fef3c7',   href: '/dashboard/posts' },
-    { label: 'Total Earned',       value: `PKR ${stats.totalEarned.toLocaleString()}`, Icon: Icons.TrendingUp, color: '#059669', bg: '#d1fae5', href: null },
+    { label: 'Total Appointments', value: stats.totalAppointments,     Icon: Icons.Calendar,    href: null },
+    { label: 'Completed Sessions', value: stats.completedAppointments, Icon: Icons.CheckCircle, href: null },
+    { label: 'Posts Pending',      value: stats.pendingPosts,          Icon: Icons.FileText,    href: '/dashboard/posts' },
+    { label: 'Held Balance',       value: `PKR ${stats.heldBalance.toLocaleString()}`, Icon: Icons.Lock, href: null },
   ] : [];
 
   const moderationCards = stats ? [
@@ -336,15 +410,69 @@ export default function DashboardPage() {
 
   return (
     <div className="page">
+
+      {/* ── Page Header with Filter ── */}
+      <div className="page-header">
+        <div>
+          <div className="page-title">Dashboard</div>
+          {appliedFrom && <div className="page-filter-label">Showing: {appliedFrom} – {appliedTo}</div>}
+        </div>
+        <div className="filter-wrap" ref={filterRef}>
+          <button
+            className={`filter-btn ${appliedFrom ? 'filter-btn-active' : ''}`}
+            onClick={() => setFilterOpen(v => !v)}
+            title="Filter by date"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+            </svg>
+            <span className="filter-btn-label">Filter</span>
+            {appliedFrom && <span className="filter-dot" />}
+          </button>
+          {filterOpen && (
+            <div className="filter-dropdown">
+              <div className="filter-title">Filter by Date</div>
+              <div className="filter-field">
+                <label className="filter-label">From</label>
+                <input className="filter-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              </div>
+              <div className="filter-field">
+                <label className="filter-label">To</label>
+                <input className="filter-input" type="date" value={dateTo} min={dateFrom} onChange={e => setDateTo(e.target.value)} />
+              </div>
+              <div className="filter-actions">
+                {appliedFrom && <button className="filter-clear" onClick={clearFilter}>Clear</button>}
+                <button className="filter-apply" onClick={applyFilter} disabled={!dateFrom || !dateTo}>Apply</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Finance Row (first) ── */}
+      {loading ? (
+        <div className="finance-row"><div className="stat-skeleton" /><div className="stat-skeleton" /></div>
+      ) : (
+        <div className="finance-row">
+          {financeCards.map((f, i) => (
+            <a key={i} href={f.href} className="finance-card" style={{ textDecoration: 'none' }}>
+              <div className="finance-icon"><f.Icon /></div>
+              <div className="finance-body">
+                <div className="finance-label">{f.label}</div>
+                <div className="finance-value">{f.value}</div>
+                <div className="finance-sub">{f.sub}</div>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+
       <div className="bottom-grid">
         {/* ── Left column ── */}
         <div className="stats-section">
           <div className="section-header">
             <h2>Overview</h2>
-            <span className="live-badge">
-              <span className="live-dot" />
-              Live
-            </span>
+            <span className="live-badge"><span className="live-dot" />Live</span>
           </div>
 
           {loading ? (
@@ -355,23 +483,18 @@ export default function DashboardPage() {
             <div className="stats-grid">
               {statCards.map((s, i) => (
                 <a href={s.href} key={i} className="stat-card" style={{ textDecoration: 'none' }}>
-                  {/* Icon + Label row */}
                   <div className="stat-header-row">
-                    <div className="stat-icon-wrap" style={{ background: s.bg, color: s.color }}>
+                    <div className={`stat-icon-wrap ${s.alert ? 'icon-alert' : ''}`}>
                       <s.Icon />
                     </div>
                     <span className="stat-label">{s.label}</span>
                   </div>
-                  {/* Big number */}
-                  <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
-                  {/* Sub-label */}
+                  <div className={`stat-value ${s.alert ? 'val-alert' : ''}`}>{s.value}</div>
                   <div className="stat-sub">{s.sub}</div>
-                  {/* Status chip */}
                   <div className="stat-footer">
-                    <span className={`stat-chip ${s.status}`}>
-                      {s.status === 'action' ? '⚠' : s.status === 'ok' ? '✓' : '↑'} {s.statusLabel}
-                    </span>
-                    <span className="stat-link-arrow" style={{ color: s.color }}>→</span>
+                    <svg className="stat-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                    </svg>
                   </div>
                 </a>
               ))}
@@ -385,16 +508,16 @@ export default function DashboardPage() {
                 {extraStats.map((e, i) => (
                   e.href
                     ? <a key={i} href={e.href} className="extra-stat" style={{ textDecoration: 'none' }}>
-                        <div className="extra-icon-wrap" style={{ background: e.bg, color: e.color }}><e.Icon /></div>
+                        <div className="extra-icon-wrap"><e.Icon /></div>
                         <div>
-                          <div className="extra-val" style={{ color: e.color }}>{e.value}</div>
+                          <div className="extra-val">{e.value}</div>
                           <div className="extra-label">{e.label}</div>
                         </div>
                       </a>
                     : <div key={i} className="extra-stat">
-                        <div className="extra-icon-wrap" style={{ background: e.bg, color: e.color }}><e.Icon /></div>
+                        <div className="extra-icon-wrap"><e.Icon /></div>
                         <div>
-                          <div className="extra-val" style={{ color: e.color }}>{e.value}</div>
+                          <div className="extra-val">{e.value}</div>
                           <div className="extra-label">{e.label}</div>
                         </div>
                       </div>
@@ -468,86 +591,86 @@ export default function DashboardPage() {
             ) : !stats ? null : (
               <>
                 <div className="feed-item">
-                  <div className="feed-icon-wrap" style={{ background: '#EEF1FF', color: '#6B7FED' }}><Icons.Users /></div>
+                  <div className="feed-icon-wrap"><Icons.Users /></div>
                   <div className="feed-content">
                     <div className="feed-msg">{stats.totalPatients} patients registered</div>
                     <div className="feed-time">Total on platform</div>
                   </div>
-                  <div className="feed-tag" style={{ background: '#EEF1FF', color: '#6B7FED' }}>patients</div>
+                  <span className="feed-tag">Patients</span>
                 </div>
 
                 <div className="feed-item">
-                  <div className="feed-icon-wrap" style={{ background: stats.pendingVerifications > 0 ? '#fef3c7' : '#d1fae5', color: stats.pendingVerifications > 0 ? '#d97706' : '#059669' }}>
+                  <div className={`feed-icon-wrap ${stats.pendingVerifications > 0 ? 'feed-icon-warn' : 'feed-icon-ok'}`}>
                     <Icons.Stethoscope />
                   </div>
                   <div className="feed-content">
                     <div className="feed-msg">{stats.pendingVerifications > 0 ? `${stats.pendingVerifications} doctors pending approval` : 'All doctors verified'}</div>
-                    <div className="feed-time">{stats.verifiedDoctors} verified doctors</div>
+                    <div className="feed-time">{stats.verifiedDoctors} verified · {stats.totalDoctors} total</div>
                   </div>
-                  <div className="feed-tag" style={{ background: stats.pendingVerifications > 0 ? '#fef3c7' : '#d1fae5', color: stats.pendingVerifications > 0 ? '#d97706' : '#059669' }}>
-                    {stats.pendingVerifications > 0 ? 'action' : 'verified'}
-                  </div>
+                  <span className={`feed-tag ${stats.pendingVerifications > 0 ? 'feed-tag-warn' : 'feed-tag-ok'}`}>
+                    {stats.pendingVerifications > 0 ? 'Pending' : 'Verified'}
+                  </span>
                 </div>
 
                 <div className="feed-item">
-                  <div className="feed-icon-wrap" style={{ background: '#dbeafe', color: '#1d4ed8' }}><Icons.Calendar /></div>
+                  <div className="feed-icon-wrap"><Icons.Calendar /></div>
                   <div className="feed-content">
                     <div className="feed-msg">{stats.totalAppointments} total appointments</div>
                     <div className="feed-time">{stats.completedAppointments} completed</div>
                   </div>
-                  <div className="feed-tag" style={{ background: '#dbeafe', color: '#1d4ed8' }}>appointments</div>
+                  <span className="feed-tag">Sessions</span>
                 </div>
 
                 {stats.pendingPosts > 0 && (
                   <div className="feed-item">
-                    <div className="feed-icon-wrap" style={{ background: '#fef3c7', color: '#d97706' }}><Icons.FilePlus /></div>
+                    <div className="feed-icon-wrap feed-icon-warn"><Icons.FilePlus /></div>
                     <div className="feed-content">
                       <div className="feed-msg">{stats.pendingPosts} posts pending review</div>
                       <div className="feed-time">Needs moderation</div>
                     </div>
-                    <div className="feed-tag" style={{ background: '#fef3c7', color: '#d97706' }}>posts</div>
+                    <span className="feed-tag feed-tag-warn">Pending</span>
                   </div>
                 )}
 
                 <div className="feed-item">
-                  <div className="feed-icon-wrap" style={{ background: stats.pendingReports > 0 ? '#fee2e2' : '#d1fae5', color: stats.pendingReports > 0 ? '#dc2626' : '#059669' }}>
+                  <div className={`feed-icon-wrap ${stats.pendingReports > 0 ? 'feed-icon-alert' : ''}`}>
                     <Icons.Flag />
                   </div>
                   <div className="feed-content">
                     <div className="feed-msg">{stats.pendingReports > 0 ? `${stats.pendingReports} post reports pending` : 'No pending reports'}</div>
                     <div className="feed-time">{stats.reviewedReports} already reviewed</div>
                   </div>
-                  <div className="feed-tag" style={{ background: stats.pendingReports > 0 ? '#fee2e2' : '#d1fae5', color: stats.pendingReports > 0 ? '#dc2626' : '#059669' }}>reports</div>
+                  <span className={`feed-tag ${stats.pendingReports > 0 ? 'feed-tag-alert' : ''}`}>Reports</span>
                 </div>
 
                 {stats.totalFeedbacks > 0 && (
                   <div className="feed-item">
-                    <div className="feed-icon-wrap" style={{ background: '#fef3c7', color: '#d97706' }}><Icons.Star /></div>
+                    <div className="feed-icon-wrap"><Icons.Star /></div>
                     <div className="feed-content">
                       <div className="feed-msg">Avg doctor rating: {stats.avgDoctorRating} / 5</div>
                       <div className="feed-time">{stats.totalFeedbacks} reviews · {stats.lowRatedDoctors} low-rated</div>
                     </div>
-                    <div className="feed-tag" style={{ background: '#fef3c7', color: '#d97706' }}>feedback</div>
+                    <span className="feed-tag">Ratings</span>
                   </div>
                 )}
 
                 <div className="feed-item">
-                  <div className="feed-icon-wrap" style={{ background: '#d1fae5', color: '#059669' }}><Icons.TrendingUp /></div>
+                  <div className="feed-icon-wrap"><Icons.TrendingUp /></div>
                   <div className="feed-content">
                     <div className="feed-msg">PKR {stats.totalEarned.toLocaleString()} total earned</div>
                     <div className="feed-time">PKR {stats.totalCommission.toLocaleString()} from commissions</div>
                   </div>
-                  <div className="feed-tag" style={{ background: '#d1fae5', color: '#059669' }}>earned</div>
+                  <span className="feed-tag">Revenue</span>
                 </div>
 
                 {stats.heldBalance > 0 && (
                   <div className="feed-item">
-                    <div className="feed-icon-wrap" style={{ background: '#fef3c7', color: '#b45309' }}><Icons.Lock /></div>
+                    <div className="feed-icon-wrap feed-icon-warn"><Icons.Lock /></div>
                     <div className="feed-content">
                       <div className="feed-msg">PKR {stats.heldBalance.toLocaleString()} held for appointments</div>
-                      <div className="feed-time">{stats.heldCount} payment{stats.heldCount !== 1 ? 's' : ''} awaiting release to doctors</div>
+                      <div className="feed-time">{stats.heldCount} payment{stats.heldCount !== 1 ? 's' : ''} awaiting release</div>
                     </div>
-                    <div className="feed-tag" style={{ background: '#fef3c7', color: '#b45309' }}>held</div>
+                    <span className="feed-tag feed-tag-warn">Held</span>
                   </div>
                 )}
               </>
@@ -562,7 +685,7 @@ export default function DashboardPage() {
           <div className="section-header">
             <h2>Moderation &amp; Insights</h2>
             {(stats.pendingReports + stats.openSupportTickets + stats.pendingPosts) > 0
-              ? <span className="alert-badge">⚠ Needs Attention</span>
+              ? <span className="alert-badge">Needs Attention</span>
               : <span className="live-badge"><span className="live-dot" />All Clear</span>
             }
           </div>
@@ -570,19 +693,19 @@ export default function DashboardPage() {
             {moderationCards.map((c, i) => (
               <a href={c.href} key={i} className="mod-card" style={{ textDecoration: 'none' }}>
                 <div className="mod-top-row">
-                  <div className="mod-icon-wrap" style={{ background: c.bg, color: c.color }}>
+                  <div className="mod-icon-wrap">
                     <c.Icon />
                   </div>
                   <span className={`mod-status-chip ${c.urgent ? 'urgent' : 'ok'}`}>
-                    {c.urgent ? '⚠' : '✓'} {c.urgentLabel}
+                    {c.urgentLabel}
                   </span>
                 </div>
-                <div className="mod-value" style={{ color: c.color }}>{c.value}</div>
+                <div className="mod-value">{c.value}</div>
                 <div className="mod-label">{c.label}</div>
                 <div className="mod-sub">{c.sub}</div>
                 <div className="mod-footer">
-                  <span className="mod-link" style={{ color: c.color }}>View all</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <span className="mod-link">View all</span>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
                   </svg>
                 </div>
@@ -594,182 +717,165 @@ export default function DashboardPage() {
 
       <style>{`
         /* ── Layout ── */
-        .page { display: flex; flex-direction: column; gap: 24px; }
-        .bottom-grid { display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
-        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-        .section-header h2 { font-size: 16px; font-weight: 700; color: #1A1D2E; margin: 0; }
+        .page { display: flex; flex-direction: column; gap: 20px; }
+        .page-header { display: flex; align-items: center; justify-content: space-between; }
+        .page-title { font-size: 18px; font-weight: 800; color: #111; letter-spacing: -0.3px; }
+        .page-filter-label { font-size: 11px; color: #6B7FED; font-weight: 600; margin-top: 2px; }
+        .bottom-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .section-header h2 { font-size: 14px; font-weight: 700; color: #111; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
 
         /* Badges */
-        .live-badge  { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #059669; background: #d1fae5; padding: 4px 12px; border-radius: 20px; }
-        .live-dot    { width: 6px; height: 6px; border-radius: 50%; background: #059669; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .alert-badge { font-size: 12px; font-weight: 600; color: #d97706; background: #fef3c7; padding: 4px 12px; border-radius: 20px; }
-
-        /* ── Stat Cards ── */
-        .stats-loading { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .stat-skeleton { height: 148px; background: linear-gradient(90deg, #EEF1FF 25%, #E0E4FF 50%, #EEF1FF 75%); background-size: 200% 100%; border-radius: 16px; animation: shimmer 1.5s infinite; }
+        .live-badge  { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #059669; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 3px 10px; border-radius: 20px; }
+        .live-dot    { width: 5px; height: 5px; border-radius: 50%; background: #059669; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .alert-badge { font-size: 11px; font-weight: 600; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; padding: 3px 10px; border-radius: 20px; }
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        /* ── Finance Row ── */
+        .finance-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .finance-card {
+          background: #fff; border-radius: 14px; padding: 20px 22px;
+          border: 1px solid #e5e7eb;
+          display: flex; align-items: center; gap: 16px;
+          cursor: pointer; text-decoration: none;
+          transition: box-shadow 0.18s, border-color 0.18s;
+        }
+        .finance-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.07); border-color: #C8D0FF; }
+        .finance-icon { width: 44px; height: 44px; border-radius: 12px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .finance-body { display: flex; flex-direction: column; gap: 2px; }
+        .finance-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; }
+        .finance-value { font-size: 22px; font-weight: 800; color: #111; letter-spacing: -0.5px; }
+        .finance-sub   { font-size: 11px; color: #aaa; margin-top: 1px; }
+
+        /* ── Stat Cards ── */
+        .stats-loading { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .stat-skeleton { height: 130px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; border-radius: 14px; animation: shimmer 1.5s infinite; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 
         .stat-card {
-          background: #fff;
-          border-radius: 16px;
-          padding: 20px;
-          border: 1px solid #E0E4FF;
-          display: flex;
-          flex-direction: column;
-          gap: 0;
+          background: #fff; border-radius: 14px; padding: 18px;
+          border: 1px solid #e5e7eb;
+          display: flex; flex-direction: column; gap: 0;
           cursor: pointer;
-          transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
-          position: relative;
-          overflow: hidden;
+          transition: box-shadow 0.18s, border-color 0.18s;
         }
-        .stat-card::before {
-          content: '';
-          position: absolute;
-          top: 0; left: 0; right: 0;
-          height: 3px;
-          background: currentColor;
-          opacity: 0;
-          transition: opacity 0.18s;
-        }
-        .stat-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(107,127,237,0.12); border-color: #C8D0FF; }
-        .stat-card:hover::before { opacity: 1; }
+        .stat-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.07); border-color: #C8D0FF; }
 
-        /* Icon + label in one row */
-        .stat-header-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 14px;
-        }
-        .stat-icon-wrap {
-          width: 40px; height: 40px;
-          border-radius: 10px;
-          display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0;
-        }
-        .stat-label {
-          font-size: 12px;
-          font-weight: 700;
-          color: #555;
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
-          line-height: 1.3;
-        }
-
-        /* Big focal number */
-        .stat-value { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 4px; line-height: 1; }
-
-        .stat-sub { font-size: 11px; color: #aaa; margin-bottom: 14px; }
-
-        .stat-footer { display: flex; align-items: center; justify-content: space-between; }
-        .stat-chip { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
-        .stat-chip.active  { background: #EEF1FF; color: #6B7FED; }
-        .stat-chip.ok      { background: #d1fae5; color: #059669; }
-        .stat-chip.action  { background: #fee2e2; color: #dc2626; }
-        .stat-link-arrow { font-size: 14px; font-weight: 600; opacity: 0; transition: opacity 0.18s; }
-        .stat-card:hover .stat-link-arrow { opacity: 1; }
+        .stat-header-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .stat-icon-wrap { width: 36px; height: 36px; border-radius: 9px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .stat-icon-wrap.icon-alert { background: #fff7ed; color: #b45309; }
+        .stat-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; line-height: 1.3; }
+        .stat-value { font-size: 26px; font-weight: 800; color: #111; letter-spacing: -0.5px; margin-bottom: 3px; line-height: 1; }
+        .stat-value.val-alert { color: #b45309; }
+        .stat-sub { font-size: 11px; color: #aaa; margin-bottom: 12px; }
+        .stat-footer { display: flex; justify-content: flex-end; }
+        .stat-arrow { color: #ccc; transition: color 0.15s, transform 0.15s; }
+        .stat-card:hover .stat-arrow { color: #6B7FED; transform: translateX(2px); }
 
         /* ── Extra Stats ── */
         .extra-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
         .extra-stat {
-          background: #fff;
-          border-radius: 12px;
-          padding: 14px 12px;
-          border: 1px solid #E0E4FF;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          transition: transform 0.15s, box-shadow 0.15s;
-          cursor: default;
+          background: #fff; border-radius: 12px; padding: 13px 12px;
+          border: 1px solid #e5e7eb;
+          display: flex; align-items: center; gap: 10px;
+          transition: box-shadow 0.15s; cursor: default;
         }
         a.extra-stat { cursor: pointer; }
-        a.extra-stat:hover, .extra-stat:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(107,127,237,0.10); }
-        .extra-icon-wrap { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .extra-val   { font-size: 14px; font-weight: 800; }
-        .extra-label { font-size: 10px; color: #888; margin-top: 2px; font-weight: 600; }
+        a.extra-stat:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.07); border-color: #C8D0FF; }
+        .extra-icon-wrap { width: 32px; height: 32px; border-radius: 8px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .extra-val   { font-size: 14px; font-weight: 800; color: #111; }
+        .extra-label { font-size: 10px; color: #888; margin-top: 2px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
 
         /* ── Feed / Platform Summary ── */
-        .feed-section { background: #fff; border-radius: 16px; padding: 20px; border: 1px solid #E0E4FF; display: flex; flex-direction: column; }
-        .feed-list    { display: flex; flex-direction: column; gap: 2px; flex: 1; }
-        .feed-skeleton { height: 52px; background: linear-gradient(90deg, #EEF1FF 25%, #E0E4FF 50%, #EEF1FF 75%); background-size: 200% 100%; border-radius: 10px; animation: shimmer 1.5s infinite; margin-bottom: 4px; }
-        .feed-item    { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-radius: 10px; transition: background 0.15s; }
-        .feed-item:hover { background: #F5F7FF; }
-        .feed-icon-wrap { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .feed-section { background: #fff; border-radius: 14px; padding: 20px; border: 1px solid #e5e7eb; display: flex; flex-direction: column; }
+        .feed-list    { display: flex; flex-direction: column; flex: 1; }
+        .feed-skeleton { height: 48px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; border-radius: 8px; animation: shimmer 1.5s infinite; margin-bottom: 4px; }
+        .feed-item    { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid #f3f4f6; }
+        .feed-item:last-child { border-bottom: none; }
+        .feed-icon-wrap { width: 32px; height: 32px; border-radius: 8px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .feed-icon-warn  { background: #fffbeb; color: #d97706; }
+        .feed-icon-alert { background: #fff1f2; color: #e11d48; }
+        .feed-icon-ok    { background: #f0fdf4; color: #16a34a; }
         .feed-content { flex: 1; min-width: 0; }
-        .feed-msg     { font-size: 13px; color: #1A1D2E; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .feed-msg     { font-size: 12.5px; color: #222; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .feed-time    { font-size: 11px; color: #aaa; margin-top: 2px; }
-        .feed-tag     { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; flex-shrink: 0; }
+        .feed-tag      { font-size: 10px; font-weight: 600; padding: 2px 9px; border-radius: 20px; background: #f3f4f6; color: #555; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; border: 1px solid #e5e7eb; }
+        .feed-tag-warn  { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+        .feed-tag-alert { background: #fff1f2; color: #e11d48; border-color: #fecdd3; }
+        .feed-tag-ok    { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
 
         /* ── Moderation Cards ── */
         .mod-section { display: flex; flex-direction: column; }
-        .mod-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .mod-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
         .mod-card {
-          background: #fff;
-          border-radius: 16px;
-          padding: 20px;
-          border: 1px solid #E0E4FF;
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
+          background: #fff; border-radius: 14px; padding: 18px;
+          border: 1px solid #e5e7eb;
+          display: flex; flex-direction: column; gap: 4px;
           cursor: pointer;
-          transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
-          position: relative;
-          overflow: hidden;
+          transition: box-shadow 0.18s, border-color 0.18s;
         }
-        .mod-card::after {
-          content: '';
-          position: absolute;
-          bottom: 0; left: 0; right: 0;
-          height: 3px;
-          background: currentColor;
-          opacity: 0;
-          transition: opacity 0.18s;
-        }
-        .mod-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(107,127,237,0.12); border-color: #C8D0FF; }
-        .mod-card:hover::after { opacity: 1; }
-
-        .mod-top-row { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
-        .mod-icon-wrap { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .mod-status-chip { font-size: 10px; font-weight: 700; padding: 4px 9px; border-radius: 20px; }
-        .mod-status-chip.urgent { background: #fee2e2; color: #dc2626; }
-        .mod-status-chip.ok     { background: #d1fae5; color: #059669; }
-
-        .mod-value { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
-        .mod-label { font-size: 13px; font-weight: 700; color: #1A1D2E; }
+        .mod-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.07); border-color: #C8D0FF; }
+        .mod-top-row { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+        .mod-icon-wrap { width: 38px; height: 38px; border-radius: 10px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .mod-status-chip { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 20px; }
+        .mod-status-chip.urgent { background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3; }
+        .mod-status-chip.ok     { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+        .mod-value { font-size: 26px; font-weight: 800; color: #111; letter-spacing: -0.5px; }
+        .mod-label { font-size: 13px; font-weight: 600; color: #333; }
         .mod-sub   { font-size: 11px; color: #aaa; }
-        .mod-footer { display: flex; align-items: center; gap: 4px; margin-top: 8px; }
-        .mod-link { font-size: 11px; font-weight: 700; }
+        .mod-footer { display: flex; align-items: center; gap: 4px; margin-top: 10px; color: #aaa; }
+        .mod-link { font-size: 11px; font-weight: 600; color: #6B7FED; }
+        .mod-card:hover .mod-footer { color: #6B7FED; }
 
         /* ── Held Payments Panel ── */
-        .held-panel { background: #fff; border: 1.5px solid #fde68a; border-radius: 14px; overflow: hidden; margin-top: 12px; }
-        .held-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; cursor: pointer; transition: background 0.15s; gap: 12px; }
-        .held-panel-header:hover { background: #fffbeb; }
+        .held-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; margin-top: 12px; }
+        .held-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; cursor: pointer; transition: background 0.15s; gap: 12px; }
+        .held-panel-header:hover { background: #fafafa; }
         .held-panel-left { display: flex; align-items: center; gap: 12px; }
-        .held-icon-wrap { width: 38px; height: 38px; background: #fef3c7; color: #b45309; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .held-icon-wrap { width: 36px; height: 36px; background: #f3f4f6; color: #6B7FED; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .held-panel-title { font-size: 13px; font-weight: 700; color: #111; }
         .held-panel-sub   { font-size: 11px; color: #888; margin-top: 2px; }
         .held-panel-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
-        .held-amount { font-size: 16px; font-weight: 800; color: #b45309; }
+        .held-amount { font-size: 15px; font-weight: 800; color: #111; }
         .held-chevron { color: #aaa; transition: transform 0.2s; }
         .held-chevron.open { transform: rotate(180deg); }
-        .held-list { border-top: 1px solid #fde68a; padding: 0 20px 16px; }
+        .held-list { border-top: 1px solid #f3f4f6; padding: 0 18px 14px; }
         .held-empty { font-size: 13px; color: #aaa; text-align: center; padding: 20px 0; }
-        .held-table-head { display: grid; grid-template-columns: 1.5fr 1.5fr 1.5fr 1fr 0.7fr; gap: 8px; padding: 10px 0 6px; font-size: 10px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #f5f5f5; }
-        .held-row { display: grid; grid-template-columns: 1.5fr 1.5fr 1.5fr 1fr 0.7fr; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid #fafafa; }
+        .held-table-head { display: grid; grid-template-columns: 1.5fr 1.5fr 1.5fr 1fr 0.7fr; gap: 8px; padding: 10px 0 6px; font-size: 10px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #f3f4f6; }
+        .held-row { display: grid; grid-template-columns: 1.5fr 1.5fr 1.5fr 1fr 0.7fr; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid #f9fafb; }
         .held-row:last-of-type { border-bottom: none; }
         .held-cell { font-size: 12px; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .held-amt  { font-weight: 700; color: #b45309; }
-        .held-chip { display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border-radius: 6px; padding: 3px 8px; white-space: nowrap; }
-        .held-total-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0 0; border-top: 1.5px solid #fde68a; margin-top: 4px; font-size: 13px; font-weight: 700; color: #111; }
-        .held-total-amt { font-size: 15px; font-weight: 800; color: #b45309; }
+        .held-amt  { font-weight: 700; color: #111; }
+        .held-chip { display: inline-block; font-size: 10px; font-weight: 600; background: #f3f4f6; color: #555; border-radius: 5px; padding: 2px 7px; }
+        .held-total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 0; border-top: 1px solid #f3f4f6; margin-top: 4px; font-size: 13px; font-weight: 700; color: #111; }
+        .held-total-amt { font-size: 14px; font-weight: 800; color: #111; }
+
+        /* ── Date Filter ── */
+        .filter-wrap { position: relative; }
+        .filter-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; height: 34px; border-radius: 8px; background: #f3f4f6; border: 1px solid #e5e7eb; color: #555; cursor: pointer; transition: all 0.15s; position: relative; flex-shrink: 0; font-size: 12px; font-weight: 600; }
+        .filter-btn-label { line-height: 1; }
+        .filter-btn:hover { background: #EEF1FF; color: #6B7FED; border-color: #C8D0FF; }
+        .filter-btn-active { background: #EEF1FF !important; color: #6B7FED !important; border-color: #C8D0FF !important; }
+        .filter-dot { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: #6B7FED; border: 1.5px solid #fff; }
+        .filter-dropdown { position: absolute; top: calc(100% + 8px); right: 0; width: 220px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.10); padding: 16px; z-index: 100; }
+        .filter-title { font-size: 12px; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .filter-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+        .filter-label { font-size: 10px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.3px; }
+        .filter-input { border: 1px solid #e5e7eb; border-radius: 8px; padding: 7px 10px; font-size: 12px; color: #111; outline: none; width: 100%; box-sizing: border-box; background: #fafafa; }
+        .filter-input:focus { border-color: #6B7FED; background: #fff; }
+        .filter-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+        .filter-clear { font-size: 12px; font-weight: 600; color: #666; background: none; border: 1px solid #e5e7eb; border-radius: 7px; padding: 6px 12px; cursor: pointer; transition: all 0.15s; }
+        .filter-clear:hover { border-color: #aaa; color: #333; }
+        .filter-apply { font-size: 12px; font-weight: 600; color: #fff; background: #6B7FED; border: none; border-radius: 7px; padding: 6px 14px; cursor: pointer; transition: background 0.15s; }
+        .filter-apply:hover:not(:disabled) { background: #5a6fd6; }
+        .filter-apply:disabled { opacity: 0.4; cursor: not-allowed; }
 
         @media (max-width: 1200px) {
           .bottom-grid { grid-template-columns: 1fr; }
           .mod-grid { grid-template-columns: repeat(2, 1fr); }
           .extra-stats { grid-template-columns: repeat(2, 1fr); }
+          .finance-row { grid-template-columns: 1fr; }
           .held-table-head, .held-row { grid-template-columns: 1fr 1fr 1fr; }
           .held-table-head span:nth-child(4), .held-table-head span:nth-child(5),
           .held-row span:nth-child(4), .held-row span:nth-child(5) { display: none; }

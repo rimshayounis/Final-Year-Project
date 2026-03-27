@@ -58,7 +58,6 @@ export class UsersController {
   }
 
   // ── Health Profile & Emergency Contacts ───────────────────────────────────
-
   @Post(':userId/health-profile')
   @HttpCode(HttpStatus.CREATED)
   async createHealthProfile(

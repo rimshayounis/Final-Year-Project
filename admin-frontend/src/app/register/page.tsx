@@ -81,14 +81,14 @@ export default function RegisterPage() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; }
 
-        .page {
-          display: flex; min-height: 100vh;
+        .register-page {
+          display: flex; flex-direction: row; min-height: 100vh;
           font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
         }
 
         /* ─── LEFT PANEL ─── */
         .left {
-          flex: 0 0 400px;
+          flex: 0 0 60%;
           background: #1A1E52;
           position: relative; overflow: hidden;
           display: flex; flex-direction: column;
@@ -175,7 +175,7 @@ export default function RegisterPage() {
 
         /* ─── RIGHT PANEL ─── */
         .right {
-          flex: 1;
+          flex: 0 0 40%;
           background: #f5f5fa;
           display: flex; align-items: center; justify-content: center;
           padding: 48px 60px;
@@ -337,7 +337,7 @@ export default function RegisterPage() {
         }
       `}</style>
 
-      <div className="page">
+      <div className="register-page">
         {/* LEFT */}
         <div className="left">
           <div className="grid-bg" />

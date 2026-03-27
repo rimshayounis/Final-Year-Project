@@ -90,6 +90,7 @@ interface UserProfile {
   userType?: string;
   specialization?: string;
   subscriptionPlan?: string;
+  completedCount?: number;
 }
 
 type ProfileScreenProps = {
@@ -353,6 +354,7 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
 
   const fetchPointsSummary = async () => {
     try {
+      await apiClient.post(`/points-reward/${id}/recalculate`);
       const res = await apiClient.get(`/points-reward/${id}/summary`);
       setPointsSummary(res.data?.data ?? null);
     } catch {

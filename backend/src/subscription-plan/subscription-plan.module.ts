@@ -7,6 +7,7 @@ import {
   SubscriptionPlanSchema,
 } from './schemas/subscription-plan.schema';
 import { Doctor, DoctorSchema } from '../doctors/schemas/doctor.schema';
+import { Transaction, TransactionSchema } from '../payment/schemas/transaction.schema';
 import { PointsRewardModule } from '../points-reward/points-reward.module';
 
 @Module({
@@ -14,6 +15,7 @@ import { PointsRewardModule } from '../points-reward/points-reward.module';
     MongooseModule.forFeature([
       { name: SubscriptionPlanRecord.name, schema: SubscriptionPlanSchema },
       { name: Doctor.name, schema: DoctorSchema },
+      { name: Transaction.name, schema: TransactionSchema },
     ]),
     PointsRewardModule,
   ],
