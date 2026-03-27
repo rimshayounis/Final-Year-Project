@@ -46,7 +46,7 @@ const IconSupport = () => (
   </svg>
 );
 const IconSearch = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
   </svg>
 );
@@ -71,7 +71,7 @@ const IconSend = () => (
   </svg>
 );
 const IconEmpty = () => (
-  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ddd" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
   </svg>
 );
@@ -480,9 +480,8 @@ export default function SupportPage() {
         .sp-page {
           display: flex;
           flex-direction: column;
-          gap: 20px;
-          font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-          color: #0f172a;
+          gap: 24px;
+          position: relative;
         }
 
         /* ── Header ── */
@@ -490,53 +489,49 @@ export default function SupportPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          background: #fff;
-          border-radius: 16px;
-          padding: 22px 28px;
-          border: 1px solid #e8edf5;
           flex-wrap: wrap;
           gap: 16px;
-          box-shadow: 0 1px 4px rgba(15,23,42,0.04);
         }
         .sp-title-row {
           display: flex;
           align-items: center;
-          gap: 14px;
+          gap: 10px;
         }
         .sp-title-icon {
-          width: 46px; height: 46px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+          width: 40px; height: 40px;
+          border-radius: 10px;
+          background: #6B7FED;
           display: flex; align-items: center; justify-content: center;
-          color: #fff;
-          flex-shrink: 0;
-          box-shadow: 0 4px 12px rgba(2,132,199,0.25);
+          color: #fff; flex-shrink: 0;
         }
         .sp-header h1 {
-          font-size: 20px;
+          font-size: 22px;
           font-weight: 800;
-          color: #0f172a;
-          letter-spacing: -0.4px;
+          color: #111;
+          letter-spacing: -0.5px;
+          margin: 0;
         }
         .sp-header p {
           font-size: 13px;
-          color: #64748b;
-          margin-top: 3px;
+          color: #888;
+          margin-top: 4px;
         }
 
         /* Stat cards */
         .sp-stat-cards {
           display: flex;
-          gap: 10px;
+          gap: 14px;
           flex-wrap: wrap;
         }
         .sp-stat-card {
-          background: #f8fafc;
-          border: 1px solid #e8edf5;
-          border-radius: 12px;
-          padding: 12px 18px;
-          min-width: 80px;
+          background: #fff;
+          border: 1px solid #f0f0f5;
+          border-radius: 16px;
+          padding: 18px 22px;
+          min-width: 90px;
+          transition: transform 0.15s, box-shadow 0.15s;
         }
+        .sp-stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
         .sp-stat-top {
           display: flex;
           align-items: center;
@@ -549,16 +544,16 @@ export default function SupportPage() {
           flex-shrink: 0;
         }
         .sp-stat-label {
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 600;
-          color: #64748b;
+          color: #888;
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
         .sp-stat-val {
           font-size: 22px;
           font-weight: 800;
-          color: #0f172a;
+          color: #111;
           line-height: 1;
         }
 
@@ -581,21 +576,21 @@ export default function SupportPage() {
           gap: 6px;
           padding: 7px 13px;
           border-radius: 9px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #e5e5e5;
           background: #fff;
           font-size: 12px;
           font-weight: 600;
-          color: #475569;
+          color: #666;
           cursor: pointer;
           transition: all 0.15s;
           white-space: nowrap;
         }
-        .sp-filter-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+        .sp-filter-btn:hover { background: #f8f8fc; border-color: #ddd; }
         .sp-filter-btn.active {
-          background: #0284c7;
+          background: #6B7FED;
           color: #fff;
-          border-color: #0284c7;
-          box-shadow: 0 2px 8px rgba(2,132,199,0.22);
+          border-color: #6B7FED;
+          box-shadow: 0 2px 8px rgba(107,127,237,0.25);
         }
         .sp-filter-count {
           font-size: 10px;
@@ -611,35 +606,35 @@ export default function SupportPage() {
           align-items: center;
           gap: 8px;
           background: #fff;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #e5e5e5;
           border-radius: 10px;
           padding: 9px 14px;
           transition: border-color 0.15s, box-shadow 0.15s;
         }
         .sp-search:focus-within {
-          border-color: #0284c7;
-          box-shadow: 0 0 0 3px rgba(2,132,199,0.1);
+          border-color: #6B7FED;
+          box-shadow: 0 0 0 3px rgba(107,127,237,0.12);
         }
         .sp-search input {
           border: none;
           outline: none;
           font-size: 13px;
-          color: #0f172a;
+          color: #111;
           width: 230px;
           background: transparent;
         }
-        .sp-search input::placeholder { color: #94a3b8; }
+        .sp-search input::placeholder { color: #aaa; }
         .sp-search-clear {
           background: none;
           border: none;
           cursor: pointer;
-          color: #94a3b8;
+          color: #aaa;
           display: flex;
           align-items: center;
           padding: 2px;
           border-radius: 4px;
         }
-        .sp-search-clear:hover { color: #475569; background: #f1f5f9; }
+        .sp-search-clear:hover { color: #666; background: #EEF1FF; }
 
         /* ── Content grid ── */
         .sp-content {
@@ -656,9 +651,8 @@ export default function SupportPage() {
         .sp-list-wrap {
           background: #fff;
           border-radius: 16px;
-          border: 1px solid #e8edf5;
+          border: 1px solid #E0E4FF;
           overflow: hidden;
-          box-shadow: 0 1px 4px rgba(15,23,42,0.04);
         }
         .sp-loading {
           padding: 20px;
@@ -668,7 +662,7 @@ export default function SupportPage() {
         }
         .sp-skeleton {
           height: 72px;
-          background: linear-gradient(90deg, #f1f5f9 25%, #e8edf5 50%, #f1f5f9 75%);
+          background: linear-gradient(90deg, #EEF1FF 25%, #f0f0f5 50%, #EEF1FF 75%);
           background-size: 200% 100%;
           border-radius: 10px;
           animation: shimmer 1.6s infinite;
@@ -684,8 +678,8 @@ export default function SupportPage() {
           gap: 8px;
           padding: 64px 20px;
         }
-        .sp-empty-title { font-size: 15px; font-weight: 600; color: #475569; }
-        .sp-empty-sub   { font-size: 13px; color: #94a3b8; }
+        .sp-empty-title { font-size: 15px; font-weight: 600; color: #666; }
+        .sp-empty-sub   { font-size: 13px; color: #aaa; }
 
         .sp-list { display: flex; flex-direction: column; }
         .sp-ticket {
@@ -693,14 +687,14 @@ export default function SupportPage() {
           align-items: center;
           gap: 14px;
           padding: 14px 20px;
-          border-bottom: 1px solid #f1f5f9;
+          border-bottom: 1px solid #EEF1FF;
           cursor: pointer;
           transition: background 0.12s;
           position: relative;
         }
         .sp-ticket:last-child { border-bottom: none; }
-        .sp-ticket:hover { background: #f8fafc; }
-        .sp-ticket.selected { background: #f0f9ff; }
+        .sp-ticket:hover { background: #f8f8fc; }
+        .sp-ticket.selected { background: #EEF1FF; }
         .sp-ticket.urgent { border-left: 3px solid #f59e0b; }
 
         /* Avatar */
@@ -720,13 +714,13 @@ export default function SupportPage() {
         .sp-ticket-name {
           font-size: 13px;
           font-weight: 700;
-          color: #0f172a;
+          color: #111;
           display: flex;
           align-items: center;
           gap: 6px;
           flex-wrap: wrap;
         }
-        .sp-ticket-email { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+        .sp-ticket-email { font-size: 11px; color: #aaa; margin-top: 2px; }
 
         /* Role badge */
         .sp-role-badge {
@@ -752,7 +746,7 @@ export default function SupportPage() {
         }
         .sp-ticket-preview {
           font-size: 12px;
-          color: #94a3b8;
+          color: #aaa;
           margin-top: 3px;
           white-space: nowrap;
           overflow: hidden;
@@ -772,7 +766,7 @@ export default function SupportPage() {
           align-items: center;
           gap: 4px;
           font-size: 11px;
-          color: #94a3b8;
+          color: #aaa;
         }
 
         /* Status badge */
@@ -792,7 +786,7 @@ export default function SupportPage() {
         .sp-detail {
           background: #fff;
           border-radius: 16px;
-          border: 1px solid #e8edf5;
+          border: 1px solid #f0f0f5;
           padding: 20px;
           display: flex;
           flex-direction: column;
@@ -804,7 +798,7 @@ export default function SupportPage() {
           box-shadow: 0 1px 4px rgba(15,23,42,0.04);
         }
         .sp-detail::-webkit-scrollbar { width: 4px; }
-        .sp-detail::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
+        .sp-detail::-webkit-scrollbar-thumb { background: #e5e5e5; border-radius: 2px; }
 
         /* Detail head */
         .sp-detail-head {
@@ -821,35 +815,35 @@ export default function SupportPage() {
         .sp-detail-purpose-tag {
           font-size: 14px;
           font-weight: 700;
-          color: #0f172a;
+          color: #111;
         }
         .sp-detail-date {
           display: flex;
           align-items: center;
           gap: 5px;
           font-size: 11px;
-          color: #94a3b8;
+          color: #aaa;
         }
         .sp-detail-close {
-          background: #f1f5f9;
+          background: #EEF1FF;
           border: none;
           border-radius: 8px;
           width: 30px; height: 30px;
           display: flex; align-items: center; justify-content: center;
           cursor: pointer;
-          color: #475569;
+          color: #666;
           flex-shrink: 0;
           transition: background 0.12s;
         }
-        .sp-detail-close:hover { background: #e2e8f0; }
+        .sp-detail-close:hover { background: #e5e5e5; }
 
         /* User card in detail */
         .sp-user-card {
           display: flex;
           align-items: center;
           gap: 12px;
-          background: #f8fafc;
-          border: 1px solid #e8edf5;
+          background: #f8f8fc;
+          border: 1px solid #f0f0f5;
           border-radius: 12px;
           padding: 14px;
         }
@@ -862,10 +856,10 @@ export default function SupportPage() {
         .sp-detail-avatar.doc { background: #EEF1FF; color: #6B7FED; }
         .sp-detail-avatar.usr { background: #dbeafe; color: #1d4ed8; }
         .sp-user-card-info { flex: 1; min-width: 0; }
-        .sp-detail-uname  { font-size: 14px; font-weight: 700; color: #0f172a; }
+        .sp-detail-uname  { font-size: 14px; font-weight: 700; color: #111; }
         .sp-detail-uemail {
           font-size: 11px;
-          color: #94a3b8;
+          color: #aaa;
           margin: 2px 0 5px;
           white-space: nowrap;
           overflow: hidden;
@@ -880,7 +874,7 @@ export default function SupportPage() {
           gap: 6px;
           font-size: 10px;
           font-weight: 700;
-          color: #64748b;
+          color: #888;
           text-transform: uppercase;
           letter-spacing: 0.6px;
         }
@@ -888,10 +882,10 @@ export default function SupportPage() {
           font-size: 13px;
           color: #374151;
           line-height: 1.65;
-          background: #f8fafc;
+          background: #f8f8fc;
           border-radius: 10px;
           padding: 12px 14px;
-          border: 1px solid #e8edf5;
+          border: 1px solid #f0f0f5;
         }
         .sp-admin-note-display {
           font-size: 13px;
@@ -915,22 +909,22 @@ export default function SupportPage() {
           gap: 6px;
           padding: 8px 10px;
           border-radius: 8px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #e5e5e5;
           background: #fff;
           font-size: 12px;
           font-weight: 600;
-          color: #475569;
+          color: #666;
           cursor: pointer;
           transition: all 0.15s;
         }
-        .sp-status-btn:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
+        .sp-status-btn:hover:not(:disabled) { background: #f8f8fc; border-color: #ddd; }
         .sp-status-btn.active { font-weight: 700; }
         .sp-status-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
         /* Reply */
         .sp-reply-box {
           width: 100%;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #e5e5e5;
           border-radius: 10px;
           padding: 12px 14px;
           font-size: 13px;
@@ -944,7 +938,7 @@ export default function SupportPage() {
           background: #F8F9FF;
         }
         .sp-reply-box:focus {
-          border-color: #0284c7;
+          border-color: #6B7FED;
           box-shadow: 0 0 0 3px rgba(2,132,199,0.1);
           background: #fff;
         }
@@ -953,7 +947,7 @@ export default function SupportPage() {
           align-items: center;
           justify-content: center;
           gap: 7px;
-          background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+          background: linear-gradient(135deg, #6B7FED 0%, #6B7FED 100%);
           color: #fff;
           border: none;
           border-radius: 10px;
@@ -983,7 +977,7 @@ export default function SupportPage() {
 
         .sp-detail-footer {
           font-size: 11px;
-          color: #cbd5e1;
+          color: #ddd;
           text-align: center;
           padding-top: 4px;
         }

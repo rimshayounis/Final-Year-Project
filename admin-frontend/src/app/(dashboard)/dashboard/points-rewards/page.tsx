@@ -25,13 +25,21 @@ interface DoctorPoints {
   summary: PointsSummary | null;
 }
 
-const badgeColors: Record<string, { bg: string; color: string; icon: string }> = {
-  none:     { bg: '#f3f4f8', color: '#888',    icon: '—'  },
-  bronze:   { bg: '#fef3c7', color: '#d97706', icon: '🥉' },
-  silver:   { bg: '#f0f0f5', color: '#6b7280', icon: '🥈' },
-  gold:     { bg: '#fef9c3', color: '#ca8a04', icon: '🥇' },
-  platinum: { bg: '#ede9fe', color: '#6d28d9', icon: '💎' },
+const badgeColors: Record<string, { bg: string; color: string }> = {
+  none:     { bg: '#f3f4f8', color: '#CCC'    },
+  bronze:   { bg: '#fff3e0', color: '#8D6E63' },
+  silver:   { bg: '#ECEFF1', color: '#78909C' },
+  gold:     { bg: '#FFF8E1', color: '#F9A825' },
+  platinum: { bg: '#F3E5F5', color: '#7B1FA2' },
 };
+
+function ShieldIcon({ color, size = 16 }: { color: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0 }}>
+      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+    </svg>
+  );
+}
 
 const planColors: Record<string, { bg: string; color: string }> = {
   free_trial:   { bg: '#f3f4f8', color: '#666' },
@@ -86,7 +94,7 @@ export default function PointsRewardsPage() {
     try {
       const res = await fetch(`${BASE_URL}/points-reward/${doctorId}/recalculate`, { method: 'POST' });
       if (res.ok) {
-        showToast(`Wallet recalculated for Dr. ${doctorName}`, 'success');
+        showToast(`Points recalculated for Dr. ${doctorName}`, 'success');
         // Refresh that doctor's data
         const updated = await fetch(`${BASE_URL}/points-reward/${doctorId}`).then(r => r.json());
         setData(prev => prev.map(d =>
@@ -97,7 +105,7 @@ export default function PointsRewardsPage() {
         }
       }
     } catch {
-      showToast('Failed to recalculate wallet', 'error');
+      showToast('Failed to recalculate points', 'error');
     }
   };
 
@@ -132,37 +140,35 @@ export default function PointsRewardsPage() {
           <h1 className="page-title">Points &amp; Rewards</h1>
           <p className="page-sub">Monitor doctor points, trust badges and reward wallets · synced from live appointment data</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="header-stats">
+          <div className="hstat">
+            <span className="hstat-val" style={{ color: '#6B7FED' }}>{totalPoints.toLocaleString()}</span>
+            <span className="hstat-label">Total Points</span>
+          </div>
+          <div className="hstat-divider" />
+          <div className="hstat">
+            <span className="hstat-val" style={{ color: '#059669' }}>PKR {totalCashValue.toLocaleString()}</span>
+            <span className="hstat-label">Cash Value</span>
+          </div>
+          <div className="hstat-divider" />
+          <div className="hstat">
+            <span className="hstat-val" style={{ color: '#d97706' }}>
+              {Object.values(badgeCounts).reduce((a, b) => a + b, 0)}
+            </span>
+            <span className="hstat-label">Badges Earned</span>
+          </div>
+          <div className="hstat-divider" />
           <button
-            className="refresh-btn"
+            className="refresh-icon-btn"
             onClick={() => loadData(true)}
             disabled={refreshing}
-            title="Refresh — re-syncs this month's appointment count from live data"
+            title="Reload — fetches latest saved data from DB (does not recalculate)"
           >
-            <svg style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
             </svg>
-            {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
-          <div className="header-stats">
-            <div className="hstat">
-              <span className="hstat-val" style={{ color: '#6B7FED' }}>{totalPoints.toLocaleString()}</span>
-              <span className="hstat-label">Total Points</span>
-            </div>
-            <div className="hstat-divider" />
-            <div className="hstat">
-              <span className="hstat-val" style={{ color: '#059669' }}>PKR {totalCashValue.toLocaleString()}</span>
-              <span className="hstat-label">Cash Value</span>
-            </div>
-            <div className="hstat-divider" />
-            <div className="hstat">
-              <span className="hstat-val" style={{ color: '#d97706' }}>
-                {Object.values(badgeCounts).reduce((a, b) => a + b, 0)}
-              </span>
-              <span className="hstat-label">Badges Earned</span>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -170,7 +176,7 @@ export default function PointsRewardsPage() {
       <div className="badge-summary">
         {Object.entries(badgeColors).filter(([k]) => k !== 'none').map(([badge, style]) => (
           <div key={badge} className="badge-card">
-            <span className="badge-icon">{style.icon}</span>
+            <ShieldIcon color={style.color} size={22} />
             <span className="badge-count">{badgeCounts[badge as keyof typeof badgeCounts]}</span>
             <span className="badge-name" style={{ color: style.color }}>
               {badge.charAt(0).toUpperCase() + badge.slice(1)}
@@ -243,7 +249,8 @@ export default function PointsRewardsPage() {
                     </td>
                     <td>
                       <span className="badge-chip" style={{ background: badgeColors[badge].bg, color: badgeColors[badge].color }}>
-                        {badgeColors[badge].icon} {badge.charAt(0).toUpperCase() + badge.slice(1)}
+                        <ShieldIcon color={badgeColors[badge].color} size={13} />
+                        {badge === 'none' ? '—' : badge.charAt(0).toUpperCase() + badge.slice(1)}
                       </span>
                     </td>
                     <td>
@@ -265,8 +272,11 @@ export default function PointsRewardsPage() {
                         <button className="btn-view" onClick={() => setSelected({ doctor, summary })}>
                           Details
                         </button>
-                        <button className="btn-recalc" onClick={() => recalculate(doctor._id, doctor.fullName)}>
-                          Recalc
+                        <button className="btn-recalc" onClick={() => recalculate(doctor._id, doctor.fullName)} title="Recalculate — triggers a fresh recalculation of this doctor's points from live DB data">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                          </svg>
                         </button>
                       </div>
                     </td>
@@ -303,10 +313,12 @@ export default function PointsRewardsPage() {
                   <div className="mc-label">Cash Value</div>
                 </div>
                 <div className="modal-card">
-                  <div className="mc-icon" style={{ background: badgeColors[selected.summary?.trustBadge || 'none'].bg, color: badgeColors[selected.summary?.trustBadge || 'none'].color }}>
-                    {badgeColors[selected.summary?.trustBadge || 'none'].icon}
+                  <div className="mc-icon" style={{ background: badgeColors[selected.summary?.trustBadge || 'none'].bg }}>
+                    <ShieldIcon color={badgeColors[selected.summary?.trustBadge || 'none'].color} size={18} />
                   </div>
-                  <div className="mc-val">{selected.summary?.trustBadge || 'none'}</div>
+                  <div className="mc-val" style={{ color: badgeColors[selected.summary?.trustBadge || 'none'].color }}>
+                    {(selected.summary?.trustBadge || 'none').charAt(0).toUpperCase() + (selected.summary?.trustBadge || 'none').slice(1)}
+                  </div>
                   <div className="mc-label">Trust Badge</div>
                 </div>
                 <div className="modal-card">
@@ -360,7 +372,7 @@ export default function PointsRewardsPage() {
                 className="btn-recalc-modal"
                 onClick={() => recalculate(selected.doctor._id, selected.doctor.fullName)}
               >
-                🔄 Recalculate Wallet
+                Recalculate Points Wallet
               </button>
             </div>
           </div>
@@ -434,7 +446,7 @@ export default function PointsRewardsPage() {
         .person-email { font-size: 11px; color: #888; }
 
         .plan-chip { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; }
-        .badge-chip { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: capitalize; }
+        .badge-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: capitalize; }
 
         .points-cell  { display: flex; align-items: baseline; gap: 3px; }
         .points-val   { font-size: 15px; font-weight: 800; color: #6B7FED; }
@@ -456,12 +468,13 @@ export default function PointsRewardsPage() {
         }
         .btn-view:hover { background: #6B7FED; color: #fff; }
         .btn-recalc {
-          padding: 6px 12px; border-radius: 8px;
+          width: 30px; height: 30px; border-radius: 8px;
+          display: inline-flex; align-items: center; justify-content: center;
           background: #f3f4f8; color: #555;
-          border: 1px solid #e5e5e5; font-size: 12px; font-weight: 600;
-          cursor: pointer; transition: all 0.15s;
+          border: 1px solid #e5e5e5;
+          cursor: pointer; transition: all 0.15s; flex-shrink: 0;
         }
-        .btn-recalc:hover { background: #e5e5e5; }
+        .btn-recalc:hover { background: #EEF1FF; color: #6B7FED; border-color: #E0E4FF; }
 
         .loading-state, .empty-state {
           display: flex; flex-direction: column; align-items: center;
@@ -547,15 +560,15 @@ export default function PointsRewardsPage() {
         }
         .btn-recalc-modal:hover { background: #6B7FED; color: #fff; border-color: #6B7FED; }
 
-        .refresh-btn {
-          display: inline-flex; align-items: center; gap: 6px;
-          padding: 8px 16px; border-radius: 10px;
-          background: #EEF1FF; color: #6B7FED;
-          border: 1px solid #E0E4FF; font-size: 13px; font-weight: 600;
-          cursor: pointer; transition: all 0.15s;
+        .refresh-icon-btn {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+          background: transparent; color: #6B7FED;
+          border: none; cursor: pointer; transition: background 0.15s, color 0.15s;
+          margin: 0 10px;
         }
-        .refresh-btn:hover:not(:disabled) { background: #6B7FED; color: #fff; border-color: #6B7FED; }
-        .refresh-btn:disabled { opacity: 0.6; cursor: default; }
+        .refresh-icon-btn:hover:not(:disabled) { background: #EEF1FF; }
+        .refresh-icon-btn:disabled { opacity: 0.5; cursor: default; }
       `}</style>
     </div>
   );

@@ -163,8 +163,8 @@ export default function LoginPage() {
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html,body{height:100%}
-        .page{display:flex;min-height:100vh;font-family:'Plus Jakarta Sans','Segoe UI',sans-serif}
-        .left{flex:1.1;background:#13112e;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:52px 60px}
+        .login-page{display:flex;flex-direction:row;min-height:100vh;font-family:'Plus Jakarta Sans','Segoe UI',sans-serif}
+        .left{flex:0 0 60%;background:#13112e;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:52px 60px}
         .dot-grid{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(circle,rgba(165,180,252,0.15) 1px,transparent 1px);background-size:32px 32px}
         .glow{position:absolute;border-radius:50%;filter:blur(100px);pointer-events:none}
         .g1{width:480px;height:480px;background:rgba(79,70,229,0.2);top:-160px;right:-100px}
@@ -202,7 +202,7 @@ export default function LoginPage() {
         .tagline{display:flex;align-items:center;gap:10px}
         .tline{flex:0 0 32px;height:1px;background:rgba(129,140,248,0.28)}
         .ttext{font-size:11px;color:rgba(129,140,248,0.38);font-weight:500;letter-spacing:2px;text-transform:uppercase}
-        .right{flex:0 0 460px;background:#f6f6fb;display:flex;align-items:center;justify-content:center;padding:52px 44px;position:relative}
+        .right{flex:0 0 40%;background:#f6f6fb;display:flex;align-items:center;justify-content:center;padding:52px 44px;position:relative}
         .right::before{content:'';position:absolute;left:0;top:8%;bottom:8%;width:1px;background:linear-gradient(to bottom,transparent,rgba(107,127,237,0.22),transparent)}
         .fw{width:100%;max-width:348px}
         .ftop{margin-bottom:36px}
@@ -289,7 +289,7 @@ export default function LoginPage() {
         @media(max-width:900px){.left{display:none}.right{flex:1}}
       `}</style>
 
-      <div className="page">
+      <div className="login-page">
 
         {/* LEFT — unchanged */}
         <div className="left">

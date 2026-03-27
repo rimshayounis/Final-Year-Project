@@ -95,6 +95,9 @@ export class PointsReward {
   @Prop({ default: 0 })
   lifetimePointsEarned: number; // never decremented
 
+  @Prop({ default: 0 })
+  pointsSpent: number; // total points converted to cash
+
   @Prop({ default: 'none' })
   trustBadge: TrustBadge; // highest badge earned
 

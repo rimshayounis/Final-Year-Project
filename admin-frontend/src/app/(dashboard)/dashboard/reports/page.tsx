@@ -19,13 +19,14 @@ interface Report {
 type FilterStatus = 'all' | 'pending' | 'reviewed';
 
 export default function ReportsPage() {
-  const [reports, setReports]   = useState<Report[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [filter, setFilter]     = useState<FilterStatus>('all');
-  const [search, setSearch]     = useState('');
-  const [selected, setSelected] = useState<Report | null>(null);
-  const [updating, setUpdating] = useState<string | null>(null);
-  const [toast, setToast]       = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [reports, setReports]         = useState<Report[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [filter, setFilter]           = useState<FilterStatus>('all');
+  const [search, setSearch]           = useState('');
+  const [selected, setSelected]       = useState<Report | null>(null);
+  const [updating, setUpdating]       = useState<string | null>(null);
+  const [profileImages, setProfileImages] = useState<Record<string, string | null>>({});
+  const [toast, setToast]             = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -45,6 +46,31 @@ export default function ReportsPage() {
   };
 
   useEffect(() => { fetchReports(); }, []);
+
+  // Fetch profile images for all unique reporter/reported users after reports load
+  useEffect(() => {
+    if (reports.length === 0) return;
+    const seen = new Set<string>();
+    const entries: { id: string; model: string }[] = [];
+    reports.forEach(r => {
+      const rid  = typeof r.reporterId  === 'string' ? r.reporterId  : r.reporterId?._id;
+      const rdid = typeof r.reportedId  === 'string' ? r.reportedId  : r.reportedId?._id;
+      if (rid  && !seen.has(rid))  { seen.add(rid);  entries.push({ id: rid,  model: r.reporterModel }); }
+      if (rdid && !seen.has(rdid)) { seen.add(rdid); entries.push({ id: rdid, model: r.reportedModel }); }
+    });
+    Promise.allSettled(
+      entries.map(({ id, model }) =>
+        fetch(`${BASE_URL}/profiles/${model === 'Doctor' ? 'doctor' : 'user'}/${id}`)
+          .then(r => r.json())
+          .then(d => ({ id, img: d.data?.profileImage || null }))
+          .catch(() => ({ id, img: null }))
+      )
+    ).then(results => {
+      const map: Record<string, string | null> = {};
+      results.forEach(r => { if (r.status === 'fulfilled') map[r.value.id] = r.value.img; });
+      setProfileImages(map);
+    });
+  }, [reports]);
 
   const markReviewed = async (id: string) => {
     setUpdating(id);
@@ -221,9 +247,7 @@ export default function ReportsPage() {
                   >
                     <td>
                       <div className="rp-user-cell">
-                        <div className="rp-avatar" style={{ background: '#EEF1FF', color: '#6B7FED' }}>
-                          {getName(r.reporterId)[0]?.toUpperCase() || '?'}
-                        </div>
+                        {(() => { const id = typeof r.reporterId === 'string' ? r.reporterId : r.reporterId?._id; const img = id ? profileImages[id] : null; return img ? <img src={`http://localhost:3000${img}`} className="rp-avatar-img" alt="" /> : <div className="rp-avatar" style={{ background: '#EEF1FF', color: '#6B7FED' }}>{getName(r.reporterId)[0]?.toUpperCase() || '?'}</div>; })()}
                         <div>
                           <div className="rp-name">{getName(r.reporterId)}</div>
                           <div className="rp-model-tag" style={{ color: '#6B7FED' }}>{r.reporterModel}</div>
@@ -232,9 +256,7 @@ export default function ReportsPage() {
                     </td>
                     <td>
                       <div className="rp-user-cell">
-                        <div className="rp-avatar" style={{ background: '#fee2e2', color: '#dc2626' }}>
-                          {getName(r.reportedId)[0]?.toUpperCase() || '?'}
-                        </div>
+                        {(() => { const id = typeof r.reportedId === 'string' ? r.reportedId : r.reportedId?._id; const img = id ? profileImages[id] : null; return img ? <img src={`http://localhost:3000${img}`} className="rp-avatar-img" alt="" /> : <div className="rp-avatar" style={{ background: '#fee2e2', color: '#dc2626' }}>{getName(r.reportedId)[0]?.toUpperCase() || '?'}</div>; })()}
                         <div>
                           <div className="rp-name">{getName(r.reportedId)}</div>
                           <div className="rp-model-tag" style={{ color: '#dc2626' }}>{r.reportedModel}</div>
@@ -290,9 +312,7 @@ export default function ReportsPage() {
             <div className="rp-detail-section">
               <div className="rp-detail-label">Filed By (Reporter)</div>
               <div className="rp-detail-user-card" style={{ borderColor: '#6B7FED', background: '#F0F4FF' }}>
-                <div className="rp-detail-avatar" style={{ background: '#EEF1FF', color: '#6B7FED' }}>
-                  {getName(selected.reporterId)[0]?.toUpperCase() || '?'}
-                </div>
+                {(() => { const id = typeof selected.reporterId === 'string' ? selected.reporterId : selected.reporterId?._id; const img = id ? profileImages[id] : null; return img ? <img src={`http://localhost:3000${img}`} className="rp-detail-avatar-img" alt="" /> : <div className="rp-detail-avatar" style={{ background: '#EEF1FF', color: '#6B7FED' }}>{getName(selected.reporterId)[0]?.toUpperCase() || '?'}</div>; })()}
                 <div>
                   <div className="rp-detail-uname">{getName(selected.reporterId)}</div>
                   <div className="rp-detail-utype" style={{ color: '#6B7FED' }}>{selected.reporterModel}</div>
@@ -303,9 +323,7 @@ export default function ReportsPage() {
             <div className="rp-detail-section">
               <div className="rp-detail-label">Reported Party</div>
               <div className="rp-detail-user-card" style={{ borderColor: '#dc2626', background: '#fff8f8' }}>
-                <div className="rp-detail-avatar" style={{ background: '#fee2e2', color: '#dc2626' }}>
-                  {getName(selected.reportedId)[0]?.toUpperCase() || '?'}
-                </div>
+                {(() => { const id = typeof selected.reportedId === 'string' ? selected.reportedId : selected.reportedId?._id; const img = id ? profileImages[id] : null; return img ? <img src={`http://localhost:3000${img}`} className="rp-detail-avatar-img" alt="" /> : <div className="rp-detail-avatar" style={{ background: '#fee2e2', color: '#dc2626' }}>{getName(selected.reportedId)[0]?.toUpperCase() || '?'}</div>; })()}
                 <div>
                   <div className="rp-detail-uname">{getName(selected.reportedId)}</div>
                   <div className="rp-detail-utype" style={{ color: '#dc2626' }}>{selected.reportedModel}</div>
@@ -417,6 +435,7 @@ export default function ReportsPage() {
 
         .rp-user-cell { display: flex; align-items: center; gap: 10px; }
         .rp-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+        .rp-avatar-img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
         .rp-name { font-size: 13px; font-weight: 600; color: #111; }
         .rp-model-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; margin-top: 2px; }
         .rp-reason { font-size: 13px; color: #444; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -452,6 +471,7 @@ export default function ReportsPage() {
         .rp-detail-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
         .rp-detail-user-card { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 10px; border: 1px solid; }
         .rp-detail-avatar { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+        .rp-detail-avatar-img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
         .rp-detail-uname { font-size: 14px; font-weight: 700; color: #111; }
         .rp-detail-utype { font-size: 11px; font-weight: 600; text-transform: uppercase; margin-top: 2px; }
         .rp-detail-reason { font-size: 14px; color: #444; line-height: 1.6; background: #f8f8fc; border-radius: 10px; padding: 12px 14px; border: 1px solid #f0f0f5; }

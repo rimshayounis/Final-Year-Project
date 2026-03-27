@@ -46,12 +46,33 @@ export default function AppointmentsPage() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selected, setSelected] = useState<Appointment | null>(null);
+  const [modalPatientImg, setModalPatientImg] = useState<string | null>(null);
+  const [modalDoctorImg,  setModalDoctorImg]  = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // Fetch profile images when a modal is opened
+  useEffect(() => {
+    if (!selected) { setModalPatientImg(null); setModalDoctorImg(null); return; }
+    const patientId = typeof selected.userId  === 'string' ? selected.userId  : selected.userId?._id;
+    const doctorId  = typeof selected.doctorId === 'string' ? selected.doctorId : selected.doctorId?._id;
+    if (patientId) {
+      fetch(`${BASE_URL}/profiles/user/${patientId}`)
+        .then(r => r.json())
+        .then(d => setModalPatientImg(d.data?.profileImage || null))
+        .catch(() => setModalPatientImg(null));
+    }
+    if (doctorId) {
+      fetch(`${BASE_URL}/profiles/doctor/${doctorId}`)
+        .then(r => r.json())
+        .then(d => setModalDoctorImg(d.data?.profileImage || null))
+        .catch(() => setModalDoctorImg(null));
+    }
+  }, [selected]);
 
   useEffect(() => {
     fetch(`${BASE_URL}/doctors`)
@@ -240,51 +261,106 @@ export default function AppointmentsPage() {
       {selected && (
         <div className="overlay" onClick={() => setSelected(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
+
+            {/* Modal Header */}
             <div className="modal-header">
-              <h2>Appointment Details</h2>
-              <button className="modal-close" onClick={() => setSelected(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="detail-grid">
-                <div className="detail-section">
-                  <h3 className="detail-title">Participants</h3>
-                  <div className="detail-row"><span>Patient</span><strong>{getName(selected.userId)}</strong></div>
-                  <div className="detail-row"><span>Doctor</span><strong>Dr. {getName(selected.doctorId)}</strong></div>
-                </div>
-                <div className="detail-section">
-                  <h3 className="detail-title">Schedule</h3>
-                  <div className="detail-row"><span>Date</span><strong>{selected.date}</strong></div>
-                  <div className="detail-row"><span>Time</span><strong>{selected.time}</strong></div>
-                  <div className="detail-row"><span>Duration</span><strong>{selected.sessionDuration} minutes</strong></div>
-                </div>
-                <div className="detail-section">
-                  <h3 className="detail-title">Health Concern</h3>
-                  <p className="concern-text">{selected.healthConcern}</p>
-                </div>
-                <div className="detail-section">
-                  <h3 className="detail-title">Payment Breakdown</h3>
-                  <div className="detail-row"><span>Consultation Fee</span><strong>PKR {selected.consultationFee?.toLocaleString()}</strong></div>
-                  <div className="detail-row"><span>Held Amount</span><strong>PKR {selected.heldAmount?.toLocaleString()}</strong></div>
-                  <div className="detail-row"><span>Doctor Earning</span><strong>PKR {selected.doctorEarning?.toLocaleString()}</strong></div>
-                  <div className="detail-row commission"><span>Commission</span><strong>PKR {selected.commissionAmount?.toLocaleString()}</strong></div>
-                </div>
-                <div className="detail-section">
-                  <h3 className="detail-title">Status</h3>
-                  <div className="detail-row">
-                    <span>Appointment</span>
-                    <span className="status-badge" style={statusColors[selected.status]}>{selected.status}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span>Payment</span>
-                    <span className="status-badge" style={paymentColors[selected.paymentStatus] || paymentColors.not_required}>
-                      {selected.paymentStatus?.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                  {selected.cancelReason && (
-                    <div className="detail-row"><span>Cancel Reason</span><strong>{selected.cancelReason}</strong></div>
-                  )}
+              <div className="modal-header-left">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <div>
+                  <div className="modal-title">Appointment Details</div>
+                  <div className="modal-date-line">{selected.date} · {selected.time} · {selected.sessionDuration} min</div>
                 </div>
               </div>
+              <div className="modal-header-right">
+                <span className="modal-status-badge" style={statusColors[selected.status]}>{selected.status}</span>
+                <button className="modal-close" onClick={() => setSelected(null)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-body">
+
+              {/* Participants */}
+              <div className="participants-row">
+                <div className="participant-card">
+                  {modalPatientImg
+                    ? <img src={`http://localhost:3000${modalPatientImg}`} alt="" className="participant-avatar-img" />
+                    : <div className="participant-avatar patient-av">{getName(selected.userId).charAt(0).toUpperCase()}</div>
+                  }
+                  <div>
+                    <div className="participant-label">Patient</div>
+                    <div className="participant-name">{getName(selected.userId)}</div>
+                    <div className="participant-email">{getEmail(selected.userId)}</div>
+                  </div>
+                </div>
+                <div className="participant-arrow">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c0c8f0" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </div>
+                <div className="participant-card">
+                  {modalDoctorImg
+                    ? <img src={`http://localhost:3000${modalDoctorImg}`} alt="" className="participant-avatar-img" />
+                    : <div className="participant-avatar doctor-av">{getName(selected.doctorId).charAt(0).toUpperCase()}</div>
+                  }
+                  <div>
+                    <div className="participant-label">Doctor</div>
+                    <div className="participant-name">Dr. {getName(selected.doctorId)}</div>
+                    <div className="participant-email">{getEmail(selected.doctorId)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Health Concern */}
+              {selected.healthConcern && (
+                <div className="concern-block">
+                  <div className="block-label">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Health Concern
+                  </div>
+                  <p className="concern-text">{selected.healthConcern}</p>
+                </div>
+              )}
+
+              {/* Payment Breakdown */}
+              <div className="payment-block">
+                <div className="block-label">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                  Payment Breakdown
+                </div>
+                <div className="payment-grid">
+                  <div className="pay-item">
+                    <span className="pay-label">Consultation Fee</span>
+                    <span className="pay-val">PKR {selected.consultationFee?.toLocaleString() ?? '—'}</span>
+                  </div>
+                  <div className="pay-item">
+                    <span className="pay-label">Held Amount</span>
+                    <span className="pay-val">PKR {selected.heldAmount?.toLocaleString() ?? '—'}</span>
+                  </div>
+                  <div className="pay-item">
+                    <span className="pay-label">Doctor Earning</span>
+                    <span className="pay-val earn">PKR {selected.doctorEarning?.toLocaleString() ?? '—'}</span>
+                  </div>
+                  <div className="pay-item">
+                    <span className="pay-label">Platform Commission</span>
+                    <span className="pay-val comm">PKR {selected.commissionAmount?.toLocaleString() ?? '—'}</span>
+                  </div>
+                </div>
+                <div className="payment-status-row">
+                  <span className="pay-label">Payment Status</span>
+                  <span className="status-badge" style={paymentColors[selected.paymentStatus] || paymentColors.not_required}>
+                    {selected.paymentStatus?.replace(/_/g, ' ')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Cancel Reason */}
+              {selected.cancelReason && (
+                <div className="cancel-block">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <div><span className="cancel-label">Cancellation Reason</span><p className="cancel-text">{selected.cancelReason}</p></div>
+                </div>
+              )}
+
             </div>
           </div>
         </div>
@@ -399,40 +475,100 @@ export default function AppointmentsPage() {
         }
         .modal {
           background: #fff; border-radius: 20px;
-          width: 100%; max-width: 580px; max-height: 85vh;
+          width: 100%; max-width: 560px; max-height: 88vh;
           display: flex; flex-direction: column; overflow: hidden;
           box-shadow: 0 24px 60px rgba(0,0,0,0.18);
           animation: slideUp 0.25s ease;
         }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Modal Header */
         .modal-header {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 20px 24px; border-bottom: 1px solid #E0E4FF;
+          padding: 18px 22px;
           background: linear-gradient(135deg, #6B7FED 0%, #7B8CDE 100%);
+          gap: 12px;
         }
-        .modal-header h2 { font-size: 16px; font-weight: 700; color: #fff; }
+        .modal-header-left { display: flex; align-items: center; gap: 12px; }
+        .modal-title { font-size: 15px; font-weight: 700; color: #fff; }
+        .modal-date-line { font-size: 12px; color: rgba(255,255,255,0.75); margin-top: 2px; }
+        .modal-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .modal-status-badge {
+          font-size: 11px; font-weight: 700; padding: 4px 11px;
+          border-radius: 20px; text-transform: capitalize; white-space: nowrap;
+        }
         .modal-close {
-          width: 30px; height: 30px; border-radius: 8px;
+          width: 28px; height: 28px; border-radius: 8px;
           background: rgba(255,255,255,0.2); border: none; cursor: pointer;
-          font-size: 13px; color: #fff;
+          color: #fff; display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
         }
-        .modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+        .modal-close:hover { background: rgba(255,255,255,0.35); }
 
-        .detail-grid { display: flex; flex-direction: column; gap: 16px; }
-        .detail-section { background: #F0F4FF; border-radius: 12px; padding: 14px 16px; }
-        .detail-title {
-          font-size: 11px; font-weight: 700; color: #888;
-          text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
+        /* Modal Body */
+        .modal-body { flex: 1; overflow-y: auto; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+
+        /* Participants */
+        .participants-row {
+          display: flex; align-items: center; gap: 10px;
+          background: #F5F7FF; border-radius: 14px; padding: 16px;
+          border: 1px solid #E0E4FF;
         }
-        .detail-row {
+        .participant-card { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+        .participant-avatar {
+          width: 42px; height: 42px; border-radius: 50%;
+          font-size: 16px; font-weight: 800; color: #fff;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .patient-av { background: linear-gradient(135deg, #6B7FED, #9b8ef5); }
+        .doctor-av  { background: linear-gradient(135deg, #10b981, #059669); }
+        .participant-avatar-img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 2px solid #E0E4FF; }
+        .participant-label { font-size: 10px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
+        .participant-name  { font-size: 13px; font-weight: 700; color: #111; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .participant-email { font-size: 11px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .participant-arrow { color: #c0c8f0; flex-shrink: 0; }
+
+        /* Concern */
+        .concern-block {
+          background: #fffbeb; border: 1px solid #fde68a;
+          border-radius: 12px; padding: 14px 16px;
+        }
+        .block-label {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 10px; font-weight: 700; color: #888;
+          text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+        }
+        .concern-text { font-size: 13px; color: #444; line-height: 1.55; margin: 0; }
+
+        /* Payment */
+        .payment-block {
+          background: #F5F7FF; border: 1px solid #E0E4FF;
+          border-radius: 12px; padding: 14px 16px;
+        }
+        .payment-grid {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;
+        }
+        .pay-item {
+          background: #fff; border-radius: 10px; padding: 10px 14px;
+          border: 1px solid #E0E4FF; display: flex; flex-direction: column; gap: 3px;
+        }
+        .pay-label { font-size: 10px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.4px; }
+        .pay-val   { font-size: 14px; font-weight: 800; color: #111; }
+        .pay-val.earn { color: #059669; }
+        .pay-val.comm { color: #dc2626; }
+        .payment-status-row {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 6px 0; border-bottom: 1px solid #E0E4FF; font-size: 13px;
+          padding-top: 10px; border-top: 1px solid #E0E4FF;
         }
-        .detail-row:last-child { border-bottom: none; }
-        .detail-row span { color: #888; }
-        .detail-row strong { color: #111; font-weight: 600; }
-        .detail-row.commission strong { color: #dc2626; }
-        .concern-text { font-size: 13px; color: #444; line-height: 1.5; }
+
+        /* Cancel */
+        .cancel-block {
+          display: flex; align-items: flex-start; gap: 10px;
+          background: #fff5f5; border: 1px solid #fecaca;
+          border-radius: 12px; padding: 14px 16px;
+        }
+        .cancel-label { font-size: 11px; font-weight: 700; color: #dc2626; display: block; margin-bottom: 4px; }
+        .cancel-text  { font-size: 13px; color: #444; line-height: 1.5; margin: 0; }
       `}</style>
     </div>
   );

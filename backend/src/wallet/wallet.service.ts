@@ -64,7 +64,7 @@ export class WalletService {
     const [pointsDoc, doctor, completedAppts] = await Promise.all([
       this.pointsRewardModel
         .findOne({ doctorId: new Types.ObjectId(doctorId) })
-        .select('totalPoints')
+        .select('totalPoints lifetimePointsEarned')
         .exec(),
       this.doctorModel
         .findById(doctorId)
@@ -129,6 +129,7 @@ export class WalletService {
       totalEarned: wallet.totalEarned,
       totalWithdrawn: wallet.totalWithdrawn,
       availablePoints: pointsDoc?.totalPoints ?? 0,
+      totalPointsEarned: (pointsDoc as any)?.lifetimePointsEarned ?? 0,
       plan,
       limits: {
         minWithdrawal: MIN_WITHDRAWAL,
@@ -162,6 +163,7 @@ export class WalletService {
     const pkrAmount = +(points * PKR_PER_POINT).toFixed(2);
 
     pointsDoc.totalPoints -= points;
+    pointsDoc.pointsSpent = (pointsDoc.pointsSpent ?? 0) + points;
     await pointsDoc.save();
 
     const wallet = await this.getOrCreateWallet(doctorId);
@@ -244,6 +246,7 @@ export class WalletService {
     wallet.balance = +(wallet.balance - amount).toFixed(2);
     wallet.totalWithdrawn = +(wallet.totalWithdrawn + amount).toFixed(2);
     wallet.transactions.push({
+      _id: new Types.ObjectId(),
       type: 'withdrawal_requested',
       amount,
       pointsUsed: 0,
@@ -258,7 +261,95 @@ export class WalletService {
     return {
       amountRequested: amount,
       newBalance: wallet.balance,
-      message: 'Withdrawal request submitted. Processing within 3-5 business days.',
+      message: 'Withdrawal request submitted. Processing within 24 hours.',
     };
+  }
+
+  // ── Update withdrawal status (admin) ─────────────────────────────────────
+  async updateWithdrawalStatus(
+    doctorId: string,
+    txId: string,
+    status: 'succeeded' | 'rejected',
+  ): Promise<any> {
+    const wallet = await this.walletModel
+      .findOne({ doctorId: new Types.ObjectId(doctorId) })
+      .exec();
+    if (!wallet) throw new NotFoundException('Wallet not found');
+
+    let tx = (wallet.transactions as any[]).find(
+      (t) => t._id?.toString() === txId,
+    );
+
+    // Fallback for legacy transactions stored without _id
+    if (!tx) {
+      const pending = (wallet.transactions as any[]).filter(
+        (t) => t.type === 'withdrawal_requested' && t.status === 'pending',
+      );
+      if (pending.length === 1) tx = pending[0];
+    }
+
+    if (!tx) throw new NotFoundException('Transaction not found');
+    if (tx.type !== 'withdrawal_requested') {
+      throw new BadRequestException('Only withdrawal transactions can be updated');
+    }
+    if (tx.status !== 'pending') {
+      throw new BadRequestException(`Withdrawal is already ${tx.status}`);
+    }
+
+    tx.status = status;
+    tx.type   = status === 'succeeded' ? 'withdrawal_completed' : 'withdrawal_rejected';
+
+    // Restore balance if rejected
+    if (status === 'rejected') {
+      wallet.balance         = +(wallet.balance + tx.amount).toFixed(2);
+      wallet.totalWithdrawn  = +(wallet.totalWithdrawn - tx.amount).toFixed(2);
+    }
+
+    wallet.markModified('transactions');
+    await wallet.save();
+
+    return { txId, status, newBalance: wallet.balance };
+  }
+
+  // ── Admin: get all withdrawal transactions across all doctors ─────────────
+  async getAllWithdrawals(statusFilter?: string): Promise<any[]> {
+    const wallets = await this.walletModel.find().exec();
+
+    const results: any[] = [];
+
+    for (const wallet of wallets) {
+      const doctor = await this.doctorModel
+        .findById(wallet.doctorId)
+        .select('fullName email bankDetails')
+        .exec();
+
+      const withdrawals = (wallet.transactions as any[]).filter((tx) => {
+        const isWithdrawal = tx.type === 'withdrawal_requested' || tx.type === 'withdrawal_completed' || tx.type === 'withdrawal_rejected';
+        if (!isWithdrawal) return false;
+        if (statusFilter && statusFilter !== 'all') return tx.status === statusFilter;
+        return true;
+      });
+
+      for (const tx of withdrawals) {
+        const fee    = +(tx.amount * 0.02).toFixed(2);
+        const payout = +(tx.amount - fee).toFixed(2);
+        results.push({
+          txId:          tx._id?.toString(),
+          doctorId:      wallet.doctorId.toString(),
+          doctorName:    (doctor as any)?.fullName  ?? 'Unknown',
+          doctorEmail:   (doctor as any)?.email     ?? '',
+          bankName:      (doctor as any)?.bankDetails?.bankName      ?? null,
+          accountName:   (doctor as any)?.bankDetails?.accountName   ?? null,
+          accountNumber: (doctor as any)?.bankDetails?.accountNumber ?? null,
+          amount:        tx.amount,
+          fee,
+          payout,
+          status:        tx.status,
+          createdAt:     tx.createdAt,
+        });
+      }
+    }
+
+    return results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 }

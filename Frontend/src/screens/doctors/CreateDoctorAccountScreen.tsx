@@ -35,7 +35,7 @@ interface CertificateFile {
 type ProfessionalType = 'doctor' | 'therapist' | null;
 
 export default function CreateDoctorAccountScreen({ navigation }: Props) {
-  const [professionalType, setProfessionalType] = useState<ProfessionalType>(null);
+  const [professionalType, setProfessionalType] = useState<ProfessionalType>('doctor');
 
   const [formData, setFormData] = useState({
     fullName: '',

@@ -114,27 +114,24 @@ export default function FeedbackPage() {
   return (
     <div className="fb-page">
       <div className="fb-header">
-        <div className="fb-title-row">
-          <span style={{ fontSize: 36 }}>⭐</span>
-          <div>
-            <h1>Doctor Feedback</h1>
-            <p>Monitor patient ratings and reviews for all doctors</p>
-          </div>
+        <div>
+          <h1>Doctor Feedback</h1>
+          <p className="fb-header-sub">Monitor patient ratings and reviews for all doctors</p>
         </div>
         <div className="fb-header-stats">
-          <div className="fb-hstat" style={{ background: '#fef3c7' }}>
-            <div className="fb-hstat-val" style={{ color: '#d97706' }}>{avgPlatformRating || '—'}</div>
+          <div className="fb-hstat">
+            <div className="fb-hstat-val">{avgPlatformRating || '—'}</div>
             <div className="fb-hstat-label">Avg Rating</div>
           </div>
-          <div className="fb-hstat" style={{ background: '#EEF1FF' }}>
-            <div className="fb-hstat-val" style={{ color: '#6B7FED' }}>{totalFeedbacks}</div>
+          <div className="fb-hstat">
+            <div className="fb-hstat-val">{totalFeedbacks}</div>
             <div className="fb-hstat-label">Total Reviews</div>
           </div>
-          <div className="fb-hstat" style={{ background: '#fee2e2' }}>
+          <div className="fb-hstat">
             <div className="fb-hstat-val" style={{ color: '#dc2626' }}>{lowRatedCount}</div>
             <div className="fb-hstat-label">Low Rated</div>
           </div>
-          <div className="fb-hstat" style={{ background: '#d1fae5' }}>
+          <div className="fb-hstat">
             <div className="fb-hstat-val" style={{ color: '#059669' }}>{highRatedCount}</div>
             <div className="fb-hstat-label">Top Rated</div>
           </div>
@@ -286,15 +283,16 @@ export default function FeedbackPage() {
       </div>
 
       <style>{`
-        .fb-page { display: flex; flex-direction: column; gap: 20px; font-family: 'Segoe UI', system-ui, sans-serif; }
-        .fb-header { display: flex; align-items: center; justify-content: space-between; background: #fff; border-radius: 16px; padding: 24px 28px; border: 1px solid #f0f0f5; flex-wrap: wrap; gap: 16px; }
-        .fb-title-row { display: flex; align-items: center; gap: 14px; }
-        .fb-header h1 { font-size: 22px; font-weight: 800; color: #111; letter-spacing: -0.5px; }
-        .fb-header p  { font-size: 13px; color: #888; margin-top: 3px; }
-        .fb-header-stats { display: flex; gap: 10px; }
-        .fb-hstat { padding: 12px 18px; border-radius: 12px; text-align: center; min-width: 80px; }
-        .fb-hstat-val   { font-size: 22px; font-weight: 800; }
-        .fb-hstat-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; margin-top: 2px; }
+        .fb-page { display: flex; flex-direction: column; gap: 24px; position: relative; }
+        .fb-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+        .fb-title-row { display: flex; align-items: center; gap: 10px; }
+        .fb-header h1 { font-size: 22px; font-weight: 800; color: #111; letter-spacing: -0.5px; margin: 0; }
+        .fb-header-sub { font-size: 13px; color: #888; margin-top: 4px; }
+        .fb-header-stats { display: flex; gap: 14px; flex-wrap: wrap; }
+        .fb-hstat { padding: 20px; border-radius: 16px; text-align: center; min-width: 80px; background: #fff; border: 1px solid #f0f0f5; transition: transform 0.15s, box-shadow 0.15s; }
+        .fb-hstat:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+        .fb-hstat-val   { font-size: 22px; font-weight: 800; color: #111; }
+        .fb-hstat-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
         .fb-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .fb-toolbar-left, .fb-toolbar-right { display: flex; align-items: center; gap: 10px; }
         .fb-view-toggle { display: flex; background: #f3f4f8; border-radius: 10px; padding: 3px; }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const BASE_URL = 'http://localhost:3000/api';
 
@@ -62,6 +63,13 @@ export default function PatientsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
 
+  const router = useRouter();
+
+  // Profile images map { patientId -> imageUrl | null }
+  const [profileImages, setProfileImages]   = useState<Record<string, string | null>>({});
+  const [apptCounts, setApptCounts]         = useState<Record<string, number>>({});
+  const [postCounts, setPostCounts]         = useState<Record<string, number>>({});
+
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Patient | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -87,6 +95,60 @@ export default function PatientsPage() {
       .catch(() => showToast('Failed to load patients', 'error'))
       .finally(() => setLoading(false));
   }, []);
+
+  // Fetch profile images for all patients in parallel
+  useEffect(() => {
+    if (patients.length === 0) return;
+    Promise.allSettled(
+      patients.map(p =>
+        fetch(`${BASE_URL}/profiles/user/${p._id}`)
+          .then(r => r.json())
+          .then(data => ({ id: p._id, img: data.data?.profileImage || null }))
+          .catch(() => ({ id: p._id, img: null }))
+      )
+    ).then(results => {
+      const map: Record<string, string | null> = {};
+      results.forEach(r => { if (r.status === 'fulfilled') map[r.value.id] = r.value.img; });
+      setProfileImages(map);
+    });
+  }, [patients]);
+
+  // Fetch appointment counts + post counts in parallel after patients load
+  useEffect(() => {
+    if (patients.length === 0) return;
+    Promise.allSettled(
+      patients.map(p =>
+        fetch(`${BASE_URL}/booked-appointments/user/${p._id}`)
+          .then(r => r.json())
+          .then(d => {
+            const list: any[] = d.data || d.appointments || (Array.isArray(d) ? d : []);
+            return { id: p._id, count: list.filter((a: any) => a.status === 'completed').length };
+          })
+          .catch(() => ({ id: p._id, count: 0 }))
+      )
+    ).then(results => {
+      const map: Record<string, number> = {};
+      results.forEach(r => { if (r.status === 'fulfilled') map[r.value.id] = r.value.count; });
+      setApptCounts(map);
+    });
+
+    Promise.allSettled(
+      patients.map(p =>
+        fetch(`${BASE_URL}/posts/user/${p._id}`)
+          .then(r => r.json())
+          .then(d => {
+            const list: any[] = d.data?.posts || d.data || (Array.isArray(d) ? d : []);
+            return { id: p._id, count: list.length };
+          })
+          .catch(() => ({ id: p._id, count: 0 }))
+      )
+    ).then(results => {
+      const map: Record<string, number> = {};
+      results.forEach(r => { if (r.status === 'fulfilled') map[r.value.id] = r.value.count; });
+      setPostCounts(map);
+    });
+
+  }, [patients]);
 
   // Search + filter
   useEffect(() => {
@@ -195,42 +257,36 @@ export default function PatientsPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="page-header">
-        <div>
+      {/* Top Bar */}
+      <div className="top-bar">
+        <div className="top-bar-left">
           <h1 className="page-title">Patients</h1>
-          <p className="page-sub">Manage all registered patients on TruHealLink</p>
+          <div className="tab-group">
+            {(['all', 'male', 'female'] as const).map(g => (
+              <button
+                key={g}
+                className={`tab ${genderFilter === g ? 'active' : ''}`}
+                onClick={() => setGenderFilter(g)}
+              >
+                {g.charAt(0).toUpperCase() + g.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="header-badge">
-          <span className="badge-count">{filtered.length}</span>
-          <span className="badge-label">Total Patients</span>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="filters">
-        <div className="search-wrap">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-          </svg>
-          <input
-            type="text"
-            placeholder="Search by name or email..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          {search && <button className="clear-btn" onClick={() => setSearch('')}>✕</button>}
-        </div>
-        <div className="filter-tabs">
-          {['all', 'male', 'female'].map(g => (
-            <button
-              key={g}
-              className={`filter-tab ${genderFilter === g ? 'active' : ''}`}
-              onClick={() => setGenderFilter(g)}
-            >
-              {g.charAt(0).toUpperCase() + g.slice(1)}
-            </button>
-          ))}
+        <div className="top-bar-right">
+          <div className="search-wrap">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search by name or email..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            {search && <button className="clear-btn" onClick={() => setSearch('')}>✕</button>}
+          </div>
+          <span className="count-chip">{filtered.length} patients</span>
         </div>
       </div>
 
@@ -254,7 +310,8 @@ export default function PatientsPage() {
                 <th>Patient</th>
                 <th>Age</th>
                 <th>Gender</th>
-                <th>Email</th>
+                <th>Appts</th>
+                <th>Posts</th>
                 <th>Joined</th>
                 <th>Actions</th>
               </tr>
@@ -264,37 +321,51 @@ export default function PatientsPage() {
                 <tr key={patient._id} className="table-row">
                   <td>
                     <div className="patient-cell">
-                      <div
-                        className="avatar"
-                        style={{ background: avatarColor(patient.fullName) }}
-                      >
-                        {initials(patient.fullName)}
+                      <div className="avatar-wrap">
+                        {profileImages[patient._id] ? (
+                          <img src={`http://localhost:3000${profileImages[patient._id]}`} alt={patient.fullName} className="avatar-img" />
+                        ) : (
+                          <div className="avatar" style={{ background: avatarColor(patient.fullName) }}>
+                            {initials(patient.fullName)}
+                          </div>
+                        )}
                       </div>
-                      <span className="patient-name">{patient.fullName}</span>
+                      <div>
+                        <div className="patient-name">{patient.fullName}</div>
+                        <div className="patient-email">{patient.email}</div>
+                      </div>
                     </div>
                   </td>
-                  <td><span className="text-muted">{patient.age}</span></td>
+                  <td><span className="text-muted">{patient.age ?? '—'}</span></td>
+                  <td><span className={`gender-badge ${patient.gender?.toLowerCase()}`}>{patient.gender || '—'}</span></td>
                   <td>
-                    <span className={`gender-badge ${patient.gender?.toLowerCase()}`}>
-                      {patient.gender}
+                    <span className="count-num">
+                      {apptCounts[patient._id] ?? <span className="count-loading" />}
                     </span>
                   </td>
-                  <td><span className="text-muted small">{patient.email}</span></td>
                   <td>
-                    <span className="text-muted small">
-                      {new Date(patient.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
+                    {postCounts[patient._id] !== undefined ? (
+                      postCounts[patient._id] > 0 ? (
+                        <button
+                          className="post-count-btn"
+                          onClick={() => router.push(`/dashboard/posts?userId=${patient._id}&userName=${encodeURIComponent(patient.fullName)}`)}
+                        >
+                          {postCounts[patient._id]}
+                        </button>
+                      ) : (
+                        <span className="count-zero">0</span>
+                      )
+                    ) : <span className="count-loading" />}
                   </td>
+                  <td><span className="text-muted small">{new Date(patient.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></td>
                   <td>
                     <div className="action-btns">
-                      <button className="btn-view" onClick={() => openPatient(patient, 'profile')}>
+                      <button className="btn-view" onClick={() => openPatient(patient, 'profile')} title="View Profile">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                         Profile
                       </button>
-                      <button className="btn-posts" onClick={() => openPatient(patient, 'posts')}>
-                        Posts
-                      </button>
-                      <button className="btn-delete" onClick={() => setDeleteTarget(patient)}>
-                        Remove
+                      <button className="btn-delete" onClick={() => setDeleteTarget(patient)} title="Remove">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                       </button>
                     </div>
                   </td>
@@ -341,13 +412,15 @@ export default function PatientsPage() {
                 className={`modal-tab ${modalView === 'profile' ? 'active' : ''}`}
                 onClick={() => switchModalView('profile')}
               >
-                👤 Profile
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Profile
               </button>
               <button
                 className={`modal-tab ${modalView === 'posts' ? 'active' : ''}`}
                 onClick={() => switchModalView('posts')}
               >
-                📝 Posts
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Posts
               </button>
             </div>
 
@@ -494,109 +567,65 @@ export default function PatientsPage() {
       )}
 
       <style>{`
-        .page { display: flex; flex-direction: column; gap: 24px; position: relative; }
+        .page { display: flex; flex-direction: column; gap: 16px; position: relative; }
 
         /* Toast */
-        .toast {
-          position: fixed; top: 24px; right: 24px; z-index: 9999;
-          padding: 12px 20px; border-radius: 12px;
-          font-size: 14px; font-weight: 600;
-          display: flex; align-items: center; gap: 8px;
-          animation: slideIn 0.3s ease;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-        }
+        .toast { position: fixed; top: 24px; right: 24px; z-index: 9999; padding: 11px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s ease; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
         .toast.success { background: #d1fae5; color: #065f46; }
         .toast.error   { background: #fee2e2; color: #991b1b; }
         @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-        /* Header */
-        .page-header {
-          display: flex; align-items: flex-start; justify-content: space-between;
-        }
-        .page-title { font-size: 22px; font-weight: 800; color: #111; letter-spacing: -0.5px; }
-        .page-sub   { font-size: 13px; color: #888; margin-top: 4px; }
-        .header-badge {
-          background: #fff; border: 1px solid #E0E4FF;
-          border-radius: 14px; padding: 12px 20px;
-          text-align: center;
-        }
-        .badge-count { display: block; font-size: 24px; font-weight: 800; color: #6B7FED; }
-        .badge-label { font-size: 11px; color: #888; font-weight: 500; }
+        /* Top bar */
+        .top-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .top-bar-left  { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .top-bar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .page-title { font-size: 18px; font-weight: 800; color: #111; letter-spacing: -0.3px; white-space: nowrap; }
 
-        /* Filters */
-        .filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .search-wrap {
-          display: flex; align-items: center; gap: 8px;
-          background: #fff; border: 1px solid #e5e5e5;
-          border-radius: 12px; padding: 10px 16px;
-          flex: 1; min-width: 260px; max-width: 400px;
-        }
-        .search-wrap input {
-          border: none; outline: none; font-size: 14px;
-          color: #333; background: none; flex: 1;
-        }
+        .tab-group { display: flex; gap: 4px; }
+        .tab { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; font-size: 12px; font-weight: 500; color: #666; cursor: pointer; transition: all 0.15s; }
+        .tab:hover  { border-color: #6B7FED; color: #6B7FED; }
+        .tab.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
+
+        .search-wrap { display: flex; align-items: center; gap: 7px; background: #fff; border: 1px solid #e5e7eb; border-radius: 9px; padding: 7px 12px; width: 240px; }
+        .search-wrap input { border: none; outline: none; font-size: 13px; color: #333; background: none; flex: 1; min-width: 0; }
         .search-wrap input::placeholder { color: #aaa; }
-        .clear-btn {
-          background: none; border: none; cursor: pointer;
-          color: #aaa; font-size: 12px; padding: 2px 4px;
-        }
-        .filter-tabs { display: flex; gap: 6px; }
-        .filter-tab {
-          padding: 9px 18px; border-radius: 10px;
-          border: 1px solid #e5e5e5; background: #fff;
-          font-size: 13px; font-weight: 500; color: #666;
-          cursor: pointer; transition: all 0.15s;
-        }
-        .filter-tab:hover  { border-color: #6B7FED; color: #6B7FED; }
-        .filter-tab.active { background: #6B7FED; color: #fff; border-color: #6B7FED; }
+        .clear-btn { background: none; border: none; cursor: pointer; color: #aaa; font-size: 11px; }
+        .count-chip { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: #f3f4f6; border: 1px solid #e5e7eb; color: #555; white-space: nowrap; }
 
         /* Table */
-        .table-wrap {
-          background: #fff; border-radius: 16px;
-          border: 1px solid #E0E4FF; overflow: hidden;
-        }
+        .table-wrap { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; overflow: hidden; }
         .table { width: 100%; border-collapse: collapse; }
-        .table thead tr { background: #F0F4FF; }
-        .table th {
-          padding: 14px 20px; text-align: left;
-          font-size: 12px; font-weight: 700;
-          color: #888; text-transform: uppercase; letter-spacing: 0.5px;
-          border-bottom: 1px solid #E0E4FF;
-        }
-        .table-row { border-bottom: 1px solid #EEF1FF; transition: background 0.12s; }
+        .table thead tr { background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+        .table th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+        .table-row { border-bottom: 1px solid #f3f4f6; transition: background 0.12s; }
         .table-row:last-child { border-bottom: none; }
-        .table-row:hover { background: #F5F7FF; }
-        .table td { padding: 14px 20px; vertical-align: middle; }
+        .table-row:hover { background: #fafafa; }
+        .table td { padding: 11px 14px; vertical-align: middle; }
 
         .patient-cell { display: flex; align-items: center; gap: 10px; }
-        .avatar {
-          width: 36px; height: 36px; border-radius: 10px;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0;
-        }
-        .patient-name { font-size: 14px; font-weight: 600; color: #111; }
-        .text-muted  { font-size: 13px; color: #666; }
-        .small       { font-size: 12px; }
+        .avatar-wrap  { flex-shrink: 0; }
+        .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; }
+        .avatar-img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; display: block; }
+        .patient-name  { font-size: 13px; font-weight: 700; color: #111; text-transform: capitalize; }
+        .patient-email { font-size: 11px; color: #888; margin-top: 1px; }
+        .text-muted { font-size: 12px; color: #666; }
+        .small      { font-size: 11px; }
 
-        .gender-badge {
-          font-size: 11px; font-weight: 600; padding: 3px 10px;
-          border-radius: 20px; text-transform: capitalize;
-        }
+        .count-num  { font-size: 13px; font-weight: 700; color: #111; }
+        .count-zero { font-size: 12px; color: #bbb; }
+        .post-count-btn { font-size: 13px; font-weight: 700; color: #6B7FED; background: #EEF1FF; border: 1px solid #C8D0FF; border-radius: 6px; padding: 2px 10px; cursor: pointer; transition: all 0.15s; }
+        .post-count-btn:hover { background: #6B7FED; color: #fff; border-color: #6B7FED; }
+        .count-loading { display: inline-block; width: 20px; height: 8px; border-radius: 4px; background: linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+.gender-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; text-transform: capitalize; }
         .gender-badge.male   { background: #dbeafe; color: #1d4ed8; }
         .gender-badge.female { background: #fce7f3; color: #be185d; }
 
         .action-btns { display: flex; gap: 6px; align-items: center; }
-        .btn-view, .btn-posts, .btn-delete {
-          padding: 6px 12px; border-radius: 8px;
-          font-size: 12px; font-weight: 600; cursor: pointer;
-          border: 1px solid; transition: all 0.15s;
-        }
-        .btn-view   { background: #EEF1FF; color: #6B7FED; border-color: #E0E4FF; }
-        .btn-view:hover { background: #6B7FED; color: #fff; }
-        .btn-posts  { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
-        .btn-posts:hover { background: #1d4ed8; color: #fff; }
-        .btn-delete { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
-        .btn-delete:hover { background: #dc2626; color: #fff; }
+        .btn-view { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid; transition: all 0.15s; background: #f3f4f8; color: #444; border-color: #e5e7eb; }
+        .btn-view:hover  { background: #EEF1FF; color: #6B7FED; border-color: #C8D0FF; }
+        .btn-delete { width: 30px; height: 30px; border-radius: 8px; background: #fff1f2; color: #dc2626; border: 1px solid #fecaca; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+        .btn-delete:hover { background: #dc2626; color: #fff; border-color: #dc2626; }
 
         /* Loading / Empty */
         .loading-state, .empty-state {
@@ -644,14 +673,14 @@ export default function PatientsPage() {
         }
         .modal-patient-info { display: flex; align-items: center; gap: 14px; }
         .modal-avatar {
-          width: 52px; height: 52px; border-radius: 14px;
+          width: 52px; height: 52px; border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
           font-size: 18px; font-weight: 700; color: #fff;
           overflow: hidden; flex-shrink: 0;
         }
         .modal-avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .modal-name  { font-size: 17px; font-weight: 700; color: #fff; }
-        .modal-email { font-size: 13px; color: #fff; margin-top: 2px; }
+        .modal-name  { font-size: 17px; font-weight: 700; color: #fff; text-transform: capitalize; }
+        .modal-email { font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 2px; }
 
         .modal-header-actions { display: flex; align-items: center; gap: 10px; }
         .btn-remove-modal {
@@ -682,6 +711,19 @@ export default function PatientsPage() {
         }
         .modal-tab:hover  { background: #f3f4f8; color: #333; }
         .modal-tab.active { background: #EEF1FF; color: #6B7FED; }
+        .modal-tab { display: inline-flex; align-items: center; gap: 6px; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+          .top-bar { flex-direction: column; align-items: flex-start; }
+          .top-bar-right { width: 100%; justify-content: space-between; }
+          .search-wrap { width: 100%; flex: 1; }
+          .table th:nth-child(2), .table td:nth-child(2),
+          .table th:nth-child(3), .table td:nth-child(3) { display: none; }
+        }
+        @media (max-width: 500px) {
+          .table th:nth-child(4), .table td:nth-child(4) { display: none; }
+        }
 
         .modal-body  { flex: 1; overflow-y: auto; padding: 20px 24px; }
         .modal-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px; color: #888; }

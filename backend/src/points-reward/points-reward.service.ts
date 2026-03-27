@@ -604,6 +604,9 @@ export class PointsRewardService {
       wallet.postMilestones.push({ postId: postObjId, pointMilestones, trustMilestones } as any);
     }
 
+    // Subtract points already converted to cash so they are not re-awarded
+    wallet.totalPoints = Math.max(0, wallet.totalPoints - (wallet.pointsSpent ?? 0));
+
     wallet.transactions.push({
       type: 'wallet_recalculated',
       points: 0,

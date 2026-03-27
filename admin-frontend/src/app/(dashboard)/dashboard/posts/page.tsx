@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 const BASE_URL = 'http://localhost:3000/api';
 
@@ -30,13 +31,21 @@ const statusColors: Record<string, { bg: string; color: string }> = {
 };
 
 export default function PostsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [filtered, setFiltered] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Post | null>(null);
+  const [profileImages, setProfileImages] = useState<Record<string, string | null>>({});
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  // User filter from query params (set when navigating from patients page)
+  const userIdParam   = searchParams.get('userId')   || '';
+  const userNameParam = searchParams.get('userName') || '';
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -72,9 +81,38 @@ export default function PostsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Fetch profile pictures for all post authors
+  useEffect(() => {
+    if (posts.length === 0) return;
+    const seen = new Set<string>();
+    const entries: { id: string; model: string }[] = [];
+    posts.forEach(p => {
+      const id = typeof p.userId === 'string' ? p.userId : p.userId?._id;
+      if (id && !seen.has(id)) { seen.add(id); entries.push({ id, model: p.userModel }); }
+    });
+    Promise.allSettled(
+      entries.map(({ id, model }) =>
+        fetch(`${BASE_URL}/profiles/${model === 'Doctor' ? 'doctor' : 'user'}/${id}`)
+          .then(r => r.json())
+          .then(d => ({ id, img: d.data?.profileImage || null }))
+          .catch(() => ({ id, img: null }))
+      )
+    ).then(results => {
+      const map: Record<string, string | null> = {};
+      results.forEach(r => { if (r.status === 'fulfilled') map[r.value.id] = r.value.img; });
+      setProfileImages(map);
+    });
+  }, [posts]);
+
   useEffect(() => {
     let result = posts;
     if (activeTab !== 'all') result = result.filter(p => p.status === activeTab);
+    if (userIdParam) {
+      result = result.filter(p => {
+        const uid = typeof p.userId === 'string' ? p.userId : p.userId?._id;
+        return uid === userIdParam;
+      });
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(p =>
@@ -84,7 +122,7 @@ export default function PostsPage() {
       );
     }
     setFiltered(result);
-  }, [search, activeTab, posts]);
+  }, [search, activeTab, posts, userIdParam]);
 
   const getName = (ref: any) => {
     if (!ref) return '—';
@@ -171,6 +209,18 @@ export default function PostsPage() {
         </div>
       </div>
 
+      {/* User filter banner */}
+      {userIdParam && (
+        <div className="user-filter-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          <span>Showing posts by: <strong style={{ textTransform: 'capitalize' }}>{userNameParam || 'Unknown user'}</strong></span>
+          <button className="banner-clear" onClick={() => router.replace('/dashboard/posts')}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            Clear filter
+          </button>
+        </div>
+      )}
+
       {/* Posts Grid */}
       {loading ? (
         <div className="loading-state"><div className="spinner" /><p>Loading posts...</p></div>
@@ -198,9 +248,13 @@ export default function PostsPage() {
               {/* Row 3: Author + Role */}
               <div className="post-author-row">
                 <div className="post-author-info">
-                  <span className="post-author-avatar">
-                    {getName(post.userId).charAt(0).toUpperCase()}
-                  </span>
+                  {(() => {
+                    const uid = typeof post.userId === 'string' ? post.userId : post.userId?._id;
+                    const img = uid ? profileImages[uid] : null;
+                    return img
+                      ? <img src={`http://localhost:3000${img}`} alt="" className="post-author-avatar-img" />
+                      : <span className="post-author-avatar">{getName(post.userId).charAt(0).toUpperCase()}</span>;
+                  })()}
                   <span className="post-author-name">{getName(post.userId)}</span>
                 </div>
                 <span className={`post-role-badge ${post.userModel === 'Doctor' ? 'doctor' : 'user'}`}>
@@ -357,6 +411,21 @@ export default function PostsPage() {
         .search-wrap input::placeholder { color: #aaa; }
         .clear-btn { background: none; border: none; cursor: pointer; color: #aaa; font-size: 12px; }
 
+        .user-filter-banner {
+          display: flex; align-items: center; gap: 8px;
+          background: #EEF1FF; border: 1px solid #c7d0fb;
+          border-radius: 12px; padding: 10px 16px;
+          font-size: 13px; color: #4051b5;
+        }
+        .user-filter-banner strong { font-weight: 700; }
+        .banner-clear {
+          margin-left: auto; display: flex; align-items: center; gap: 5px;
+          background: #fff; border: 1px solid #c7d0fb; border-radius: 8px;
+          padding: 5px 11px; font-size: 12px; font-weight: 600; color: #4051b5;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .banner-clear:hover { background: #6B7FED; color: #fff; border-color: #6B7FED; }
+
         .loading-state, .empty-state {
           display: flex; flex-direction: column; align-items: center;
           justify-content: center; padding: 60px 20px; gap: 12px; color: #888;
@@ -402,7 +471,12 @@ export default function PostsPage() {
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
         }
-        .post-author-name { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .post-author-avatar-img {
+          width: 28px; height: 28px; border-radius: 50%;
+          object-fit: cover; flex-shrink: 0;
+          border: 1.5px solid #E0E4FF;
+        }
+        .post-author-name { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: capitalize; }
         .post-role-badge {
           font-size: 11px; font-weight: 700; padding: 3px 10px;
           border-radius: 20px; white-space: nowrap; flex-shrink: 0;

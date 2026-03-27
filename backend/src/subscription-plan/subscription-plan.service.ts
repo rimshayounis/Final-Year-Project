@@ -13,6 +13,7 @@ import {
 } from './schemas/subscription-plan.schema';
 import { CreateSubscriptionDto, CancelSubscriptionDto } from './dto/subscription-plan.dto';
 import { Doctor, DoctorDocument, SubscriptionPlan } from '../doctors/schemas/doctor.schema';
+import { Transaction, TransactionDocument } from '../payment/schemas/transaction.schema';
 import { PointsRewardService } from '../points-reward/points-reward.service';
 
 @Injectable()
@@ -22,6 +23,8 @@ export class SubscriptionPlanService {
     private subscriptionModel: Model<SubscriptionPlanDocument>,
     @InjectModel(Doctor.name)
     private doctorModel: Model<DoctorDocument>,
+    @InjectModel(Transaction.name)
+    private transactionModel: Model<TransactionDocument>,
     private readonly pointsRewardService: PointsRewardService,
   ) {}
 
@@ -119,12 +122,29 @@ export class SubscriptionPlanService {
     const history = await this.subscriptionModel
       .find({ doctorId: new Types.ObjectId(doctorId) })
       .sort({ startDate: -1 })
+      .lean()
       .exec();
+
+    // Attach stripePaymentIntentId from linked Transaction
+    const enriched = await Promise.all(
+      history.map(async (sub) => {
+        let stripePaymentIntentId: string | null = null;
+        if (sub.transactionId) {
+          const tx = await this.transactionModel
+            .findById(sub.transactionId)
+            .select('stripePaymentIntentId')
+            .lean()
+            .exec();
+          stripePaymentIntentId = tx?.stripePaymentIntentId ?? null;
+        }
+        return { ...sub, stripePaymentIntentId };
+      }),
+    );
 
     return {
       success: true,
-      count: history.length,
-      data: history,
+      count: enriched.length,
+      data: enriched,
     };
   }
 

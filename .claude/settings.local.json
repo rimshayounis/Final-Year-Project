@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(mongosh --eval \"db.adminCommand\\({listDatabases:1}\\).databases.forEach\\(d => print\\(d.name\\)\\)\" --quiet)"
+      "Bash(mongosh --eval \"db.adminCommand\\({listDatabases:1}\\).databases.forEach\\(d => print\\(d.name\\)\\)\" --quiet)",
+      "Bash(npx tsc:*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Dell\\OneDrive\\Desktop\\fyp\\Final-Year-Project\\admin-frontend\\src\\app\\(dashboard)\\dashboard\\payments"
     ]
   }
 }

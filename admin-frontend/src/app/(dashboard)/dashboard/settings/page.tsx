@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/services/auth.service'; // ← adjust path if needed
 
@@ -19,7 +19,7 @@ function EyeIcon({ open }: { open: boolean }) {
   );
 }
 
-type ActiveTab = 'profile' | 'password' | 'about';
+type ActiveTab = 'profile' | 'password';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -32,6 +32,8 @@ export default function SettingsPage() {
   const [fullName, setFullName]   = useState('');
   const [username, setUsername]   = useState('');
   const [email, setEmail]         = useState('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [oldPassword, setOldPassword]         = useState('');
   const [newPassword, setNewPassword]         = useState('');
@@ -64,7 +66,31 @@ export default function SettingsPage() {
       setUsername(u.username || '');
       setEmail(u.email || '');
     }
+    const img = localStorage.getItem('admin_profile_image');
+    if (img) setProfileImage(img);
   }, []);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      setProfileImage(base64);
+      localStorage.setItem('admin_profile_image', base64);
+      window.dispatchEvent(new Event('admin-profile-updated'));
+      showToast('Profile photo updated', 'success');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemovePhoto = () => {
+    setProfileImage(null);
+    localStorage.removeItem('admin_profile_image');
+    window.dispatchEvent(new Event('admin-profile-updated'));
+    showToast('Profile photo removed', 'success');
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
@@ -124,10 +150,9 @@ export default function SettingsPage() {
 
   const initials = user?.fullName?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'AD';
 
-  const tabs = [
-    { key: 'profile',  label: 'Profile',        icon: '👤' },
-    { key: 'password', label: 'Change Password', icon: '🔒' },
-    { key: 'about',    label: 'About',           icon: 'ℹ️'  },
+  const tabs: { key: ActiveTab; label: string; icon: React.ReactNode }[] = [
+    { key: 'profile',  label: 'Profile',         icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+    { key: 'password', label: 'Change Password', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> },
   ];
 
   const pwChecks = getPwChecks(newPassword);
@@ -165,10 +190,24 @@ export default function SettingsPage() {
       <div className="settings-layout">
         <div className="settings-sidebar">
           <div className="admin-card">
-            <div className="admin-avatar-lg">{initials}</div>
+            <div className="avatar-wrap" onClick={() => photoInputRef.current?.click()} title="Click to change photo">
+              <div className="admin-avatar-lg">
+                {profileImage
+                  ? <img src={profileImage} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block' }} />
+                  : initials
+                }
+              </div>
+              <div className="avatar-camera-badge">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+              </div>
+            </div>
+            <input ref={photoInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhotoChange} />
             <div className="admin-name-lg">{user?.fullName || 'Admin'}</div>
             <div className="admin-email-sm">{user?.email || ''}</div>
-            <div className="admin-role-badge">⚡ Super Admin</div>
+            <div className="admin-role-badge">Super Admin</div>
           </div>
 
           <nav className="settings-nav">
@@ -187,8 +226,7 @@ export default function SettingsPage() {
 
           <div className="logout-section">
             <button className="btn-logout" onClick={() => setShowLogoutConfirm(true)}>
-              <span>⏻</span>
-              <span>Log Out</span>
+              Log Out
             </button>
             <p className="logout-hint">You'll be redirected to the login page</p>
           </div>
@@ -309,50 +347,6 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {activeTab === 'about' && (
-            <div className="settings-card">
-              <div className="card-header">
-                <h2>About TruHealLink Admin</h2>
-                <p>Platform and system information</p>
-              </div>
-              <div className="about-banner">
-                <div className="about-logo">TH</div>
-                <div>
-                  <div className="about-name">TruHealLink</div>
-                  <div className="about-tagline">Admin Control Center · v1.0.0</div>
-                </div>
-              </div>
-              <div className="about-grid">
-                {[
-                  { label: 'Frontend',        value: 'Next.js 16 + TypeScript' },
-                  { label: 'Admin Backend',   value: 'NestJS (port 3001)'      },
-                  { label: 'Main Backend',    value: 'NestJS (port 3000)'      },
-                  { label: 'Database',        value: 'MongoDB'                 },
-                  { label: 'Mobile App',      value: 'React Native (Expo)'     },
-                  { label: 'Payments',        value: 'Stripe'                  },
-                  { label: 'Notifications',   value: 'Expo Push Notifications' },
-                  { label: 'Real-time',       value: 'Socket.IO'               },
-                ].map((item, i) => (
-                  <div key={i} className="about-item">
-                    <span className="about-label">{item.label}</span>
-                    <span className="about-val">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="about-desc">
-                TruHealLink connects patients with verified medical professionals. This admin dashboard
-                provides full control over patients, doctors, appointments, posts, payments,
-                subscriptions and doctor reward points.
-              </div>
-              <div className="quick-links">
-                <h3>Quick Links</h3>
-                <div className="links-grid">
-                  <a href="http://localhost:3001/api/docs" target="_blank" rel="noopener noreferrer" className="quick-link">📖 Admin API Docs</a>
-                  <a href="http://localhost:3000/api" target="_blank" rel="noopener noreferrer" className="quick-link">🔗 Main Backend API</a>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -380,8 +374,11 @@ export default function SettingsPage() {
         .settings-layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
         .settings-sidebar { display: flex; flex-direction: column; gap: 14px; }
         .admin-card { background: #fff; border-radius: 16px; padding: 22px 20px; border: 1px solid #E0E4FF; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
-        .admin-avatar-lg { width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(135deg, #6B7FED, #7B8CDE); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; }
-        .admin-name-lg   { font-size: 15px; font-weight: 700; color: #111; }
+        .avatar-wrap { position: relative; display: inline-flex; cursor: pointer; margin-bottom: 4px; }
+        .admin-avatar-lg { width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #6B7FED, #7B8CDE); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: #fff; overflow: hidden; border: 3px solid #E0E4FF; flex-shrink: 0; transition: opacity 0.15s; }
+        .avatar-wrap:hover .admin-avatar-lg { opacity: 0.85; }
+        .avatar-camera-badge { position: absolute; bottom: 2px; right: 2px; width: 24px; height: 24px; border-radius: 50%; background: #6B7FED; border: 2px solid #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+        .admin-name-lg   { font-size: 15px; font-weight: 700; color: #111; text-transform: capitalize; }
         .admin-email-sm  { font-size: 12px; color: #888; }
         .admin-role-badge { font-size: 11px; font-weight: 700; background: #EEF1FF; color: #6B7FED; padding: 3px 12px; border-radius: 20px; margin-top: 4px; }
         .settings-nav { display: flex; flex-direction: column; gap: 4px; }
@@ -424,19 +421,6 @@ export default function SettingsPage() {
         .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-reset { padding: 11px 20px; border-radius: 10px; background: #f3f4f8; color: #555; border: 1px solid #e5e5e5; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
         .btn-reset:hover { background: #e5e5e5; }
-        .about-banner { display: flex; align-items: center; gap: 16px; background: linear-gradient(135deg, #1A1E52, #6B7FED); border-radius: 14px; padding: 20px 22px; }
-        .about-logo { width: 50px; height: 50px; border-radius: 14px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; color: #fff; flex-shrink: 0; }
-        .about-name    { font-size: 18px; font-weight: 800; color: #fff; }
-        .about-tagline { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 3px; }
-        .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .about-item { background: #f8f8fc; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
-        .about-label { font-size: 11px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
-        .about-val   { font-size: 13px; font-weight: 600; color: #333; }
-        .about-desc { font-size: 13px; color: #666; line-height: 1.7; background: #f8f8fc; border-radius: 12px; padding: 16px; }
-        .quick-links h3 { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 10px; }
-        .links-grid { display: flex; gap: 10px; flex-wrap: wrap; }
-        .quick-link { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; background: #f3f4f8; color: #6B7FED; border: 1px solid #e5e5e5; font-size: 13px; font-weight: 600; text-decoration: none; transition: all 0.15s; }
-        .quick-link:hover { background: #EEF1FF; border-color: #E0E4FF; }
       `}</style>
     </div>
   );

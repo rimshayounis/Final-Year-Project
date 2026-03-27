@@ -59,8 +59,8 @@ export default function CreateAccountScreen({
       Alert.alert('Error', 'Please enter a valid email');
       return false;
     }
-    if (!formData.password.trim() || formData.password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+    if (!formData.password.trim() || formData.password.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters');
       return false;
     }
     if (!formData.gender) {
