@@ -11,6 +11,7 @@ import { ConvertPointsDto, WithdrawDto } from './dto/wallet.dto';
 import { PointsReward, PointsRewardDocument } from '../points-reward/schemas/points-reward.schema';
 import { Doctor, DoctorDocument } from '../doctors/schemas/doctor.schema';
 import { BookedAppointment, BookedAppointmentDocument } from '../booked-appointment/schemas/booked-appointment.schema';
+import { Transaction, TransactionDocument } from '../payment/schemas/transaction.schema';
 
 const PKR_PER_POINT = 0.1;
 const MIN_WITHDRAWAL = 500;
@@ -34,6 +35,8 @@ export class WalletService {
     private doctorModel: Model<DoctorDocument>,
     @InjectModel(BookedAppointment.name)
     private appointmentModel: Model<BookedAppointmentDocument>,
+    @InjectModel(Transaction.name)
+    private transactionModel: Model<TransactionDocument>,
   ) {}
 
   // ── Get or create wallet ──────────────────────────────────────────────────
@@ -307,6 +310,29 @@ export class WalletService {
 
     wallet.markModified('transactions');
     await wallet.save();
+
+    // Record the 2% processing fee as platform commission in the transactions collection
+    if (status === 'succeeded') {
+      const fee = +(tx.amount * 0.02).toFixed(2);
+      const doctor = await this.doctorModel
+        .findById(wallet.doctorId)
+        .select('fullName')
+        .lean()
+        .exec() as any;
+
+      await this.transactionModel.create({
+        type:             'withdrawal_fee',
+        doctorId:         wallet.doctorId,
+        doctorName:       doctor?.fullName ?? '',
+        description:      `Withdrawal processing fee (2%) on PKR ${tx.amount} withdrawal`,
+        amount:           fee,
+        commissionRate:   0.02,
+        commissionAmount: fee,
+        currency:         'PKR',
+        status:           'succeeded',
+        paymentMethod:    'wallet',
+      });
+    }
 
     return { txId, status, newBalance: wallet.balance };
   }

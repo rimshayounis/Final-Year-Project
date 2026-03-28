@@ -111,12 +111,14 @@ export class PointsRewardService {
         !postEntry.trustMilestones.includes(t.key)
       ) {
         postEntry.trustMilestones.push(t.key);
-        wallet.trustScore += 1;
 
         // Upgrade badge only if this badge is higher than current
         if (BADGE_RANK[t.badge] > BADGE_RANK[wallet.trustBadge]) {
           wallet.trustBadge = t.badge;
         }
+
+        // Trust score = badge rank (1=Bronze, 2=Silver, 3=Gold, 4=Platinum)
+        wallet.trustScore = BADGE_RANK[wallet.trustBadge];
 
         wallet.transactions.push({
           type: 'trust_badge',
@@ -192,7 +194,6 @@ export class PointsRewardService {
       const idx = postEntry.trustMilestones.indexOf(t.key);
       if (currentLikes < t.threshold && idx !== -1) {
         postEntry.trustMilestones.splice(idx, 1);
-        wallet.trustScore = Math.max(0, wallet.trustScore - 1);
         wallet.transactions.push({
           type: 'trust_badge',
           points: 0,
@@ -206,6 +207,8 @@ export class PointsRewardService {
 
     if (changed) {
       wallet.trustBadge = this._recalcTrustBadge(wallet);
+      // Trust score = badge rank (1=Bronze, 2=Silver, 3=Gold, 4=Platinum)
+      wallet.trustScore = BADGE_RANK[wallet.trustBadge];
       wallet.markModified('postMilestones');
       wallet.markModified('transactions');
       await wallet.save();
@@ -272,12 +275,13 @@ export class PointsRewardService {
     }
 
     if (trustMilestonesCount > 0) {
-      wallet.trustScore = Math.max(0, wallet.trustScore - trustMilestonesCount);
       changed = true;
     }
 
     if (changed) {
       wallet.trustBadge = this._recalcTrustBadge(wallet);
+      // Trust score = badge rank (1=Bronze, 2=Silver, 3=Gold, 4=Platinum)
+      wallet.trustScore = BADGE_RANK[wallet.trustBadge];
       wallet.markModified('postMilestones');
       wallet.markModified('transactions');
       await wallet.save();
@@ -594,7 +598,6 @@ export class PointsRewardService {
       for (const t of TRUST_MILESTONES) {
         if (likes >= t.threshold) {
           trustMilestones.push(t.key);
-          wallet.trustScore += 1;
           if (BADGE_RANK[t.badge] > BADGE_RANK[wallet.trustBadge]) {
             wallet.trustBadge = t.badge;
           }
@@ -603,6 +606,9 @@ export class PointsRewardService {
 
       wallet.postMilestones.push({ postId: postObjId, pointMilestones, trustMilestones } as any);
     }
+
+    // Trust score = badge rank derived from highest badge earned
+    wallet.trustScore = BADGE_RANK[wallet.trustBadge];
 
     // Subtract points already converted to cash so they are not re-awarded
     wallet.totalPoints = Math.max(0, wallet.totalPoints - (wallet.pointsSpent ?? 0));

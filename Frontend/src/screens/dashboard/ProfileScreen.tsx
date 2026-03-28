@@ -819,11 +819,10 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
     });
   };
 
-  /* ── Display name: first letter capital only; doctors get "Dr." prefix ── */
+  /* ── Display name: title-cased as entered by user ── */
   const displayName = (name?: string, fallback = "—") => {
     if (!name) return fallback;
-    const capitalized = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-    return role === "doctor" ? `Dr. ${capitalized}` : capitalized;
+    return name.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   };
 
   const publishedCount = posts.filter((p) => p.status === "approved").length;
