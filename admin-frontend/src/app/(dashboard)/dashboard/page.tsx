@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-const BASE_URL = 'http://localhost:3000/api';
+const BASE_URL       = 'http://localhost:3000/api';
+const ADMIN_BASE_URL = 'http://localhost:3001';
 
 // ── SVG Icons ────────────────────────────────────────────────────────────────
 const Icons = {
@@ -120,6 +121,9 @@ interface DashboardStats {
   completedAppointments: number;
   totalCommission: number;
   totalEarned: number;
+  subscriptionRevenue: number;
+  pointsPayoutTotal: number;
+  pointsPayoutPoints: number;
   heldBalance: number;
   heldCount: number;
   pendingReports: number;
@@ -156,7 +160,7 @@ export default function DashboardPage() {
     };
 
     try {
-      const [usersRes, doctorsRes, pendingPostsRes, walletRes, reportsRes, feedbackRes, heldRes, txRes] = await Promise.allSettled([
+      const [usersRes, doctorsRes, pendingPostsRes, walletRes, reportsRes, feedbackRes, heldRes, txRes, withdrawalsRes, pointsPayoutRes] = await Promise.allSettled([
         fetch(`${BASE_URL}/users`).then(r => r.json()),
         fetch(`${BASE_URL}/doctors`).then(r => r.json()),
         fetch(`${BASE_URL}/posts/pending?limit=100`).then(r => r.json()),
@@ -165,6 +169,8 @@ export default function DashboardPage() {
         fetch(`${BASE_URL}/feedback`).then(r => r.json()),
         fetch(`${BASE_URL}/payment/admin/held`).then(r => r.json()),
         fetch(`${BASE_URL}/payment/admin/transactions`).then(r => r.json()),
+        fetch(`${ADMIN_BASE_URL}/wallet/admin/withdrawals`).then(r => r.json()),
+        fetch(`${ADMIN_BASE_URL}/transactions/admin/points-payout`).then(r => r.json()),
       ]);
 
       const usersRaw     = usersRes.status        === 'fulfilled' ? usersRes.value        : [];
@@ -174,7 +180,9 @@ export default function DashboardPage() {
       const reportsRaw   = reportsRes.status      === 'fulfilled' ? reportsRes.value      : [];
       const feedbacksRaw = feedbackRes.status     === 'fulfilled' ? feedbackRes.value     : [];
       const heldRaw      = heldRes.status         === 'fulfilled' ? heldRes.value         : {};
-      const txRaw        = txRes.status           === 'fulfilled' ? txRes.value           : [];
+      const txRaw           = txRes.status            === 'fulfilled' ? txRes.value            : [];
+      const withdrawalsRaw  = withdrawalsRes.status  === 'fulfilled' ? withdrawalsRes.value  : {};
+      const pointsPayoutRaw = pointsPayoutRes.status === 'fulfilled' ? pointsPayoutRes.value : {};
 
       const heldData        = heldRaw.data ?? heldRaw;
       const allHeldAppts: HeldAppointment[] = heldData.appointments ?? [];
@@ -213,20 +221,35 @@ export default function DashboardPage() {
         ratings => ratings.reduce((a, b) => a + b, 0) / ratings.length < 3
       ).length;
 
-      // Financials from transactions (filtered by date when active)
+      // Financials — only count types that represent actual platform income
       const txSource = from ? filteredTx : allTx;
-      let totalEarned = 0, totalCommission = 0;
-      if (from) {
-        // Sum from date-filtered transactions
-        txSource.filter((t: any) => t.status === 'succeeded').forEach((t: any) => {
+      let totalEarned = 0, totalCommission = 0, subscriptionRevenue = 0;
+      txSource.filter((t: any) => t.status === 'succeeded').forEach((t: any) => {
+        if (t.type === 'subscription_payment') {
+          totalEarned += t.amount || 0;
+          subscriptionRevenue += t.amount || 0;
+        } else if (t.type === 'appointment_commission') {
           totalEarned     += t.amount           || 0;
           totalCommission += t.commissionAmount || 0;
-        });
-      } else {
-        const walletData  = (wallet.data || wallet);
-        totalEarned     = walletData.totalEarned     || 0;
-        totalCommission = walletData.totalCommission || 0;
-      }
+        }
+      });
+
+      // Add 2% withdrawal fees from all succeeded withdrawals
+      const allWithdrawals: any[] = Array.isArray(withdrawalsRaw?.data) ? withdrawalsRaw.data : [];
+      const succeededWithdrawals  = from
+        ? allWithdrawals.filter((w: any) => w.status === 'succeeded' && w.createdAt && inTs(w.createdAt))
+        : allWithdrawals.filter((w: any) => w.status === 'succeeded');
+
+      const withdrawalFees = +(succeededWithdrawals.reduce(
+        (sum: number, w: any) => sum + (w.fee ?? +(w.amount * 0.02).toFixed(2)), 0
+      )).toFixed(2);
+      totalEarned     = +(totalEarned     + withdrawalFees).toFixed(2);
+      totalCommission = +(totalCommission + withdrawalFees).toFixed(2);
+
+      // Deduct points-to-cash payouts (platform pays doctors from its revenue)
+      const pointsPayoutTotal: number  = pointsPayoutRaw?.data?.total       ?? 0;
+      const pointsPayoutPoints: number = pointsPayoutRaw?.data?.totalPoints ?? 0;
+      totalEarned = +Math.max(0, totalEarned - pointsPayoutTotal).toFixed(2);
 
       // Appointments — date field is YYYY-MM-DD string, use allDoctors (already filtered by createdAt)
       // but appointments themselves are filtered by their own `date` field
@@ -259,6 +282,9 @@ export default function DashboardPage() {
         completedAppointments: completedApts,
         totalCommission,
         totalEarned,
+        subscriptionRevenue,
+        pointsPayoutTotal,
+        pointsPayoutPoints,
         heldBalance:           heldApptList.reduce((s, a) => s + (a.heldAmount || 0), 0),
         heldCount:             heldApptList.length,
         pendingReports,
@@ -307,15 +333,29 @@ export default function DashboardPage() {
       label: 'Total Earned',
       value: `PKR ${stats.totalEarned.toLocaleString()}`,
       Icon: Icons.TrendingUp,
-      sub: appliedFrom ? `${appliedFrom} – ${appliedTo}` : 'Total platform revenue',
-      href: '/dashboard/appointments',
+      sub: appliedFrom ? `${appliedFrom} – ${appliedTo}` : 'Net platform revenue',
+      href: '/dashboard/transactions',
     },
     {
       label: 'Commission Earned',
       value: `PKR ${stats.totalCommission.toLocaleString()}`,
       Icon: Icons.Wallet,
-      sub: appliedFrom ? `${appliedFrom} – ${appliedTo}` : 'From completed appointments',
+      sub: appliedFrom ? `${appliedFrom} – ${appliedTo}` : 'Appointments + withdrawal fees',
       href: '/dashboard/appointments',
+    },
+    {
+      label: 'Subscription Revenue',
+      value: `PKR ${(stats.subscriptionRevenue ?? 0).toLocaleString()}`,
+      Icon: Icons.Star,
+      sub: appliedFrom ? `${appliedFrom} – ${appliedTo}` : 'From paid plans',
+      href: '/dashboard/subscriptions',
+    },
+    {
+      label: 'Rewards Paid Out',
+      value: `PKR ${(stats.pointsPayoutTotal ?? 0).toLocaleString()}`,
+      Icon: Icons.TrendingUp,
+      sub: appliedFrom ? `${appliedFrom} – ${appliedTo}` : `${(stats.pointsPayoutPoints ?? 0).toLocaleString()} pts converted`,
+      href: '/dashboard/transactions',
     },
   ] : [];
 
@@ -657,11 +697,31 @@ export default function DashboardPage() {
                 <div className="feed-item">
                   <div className="feed-icon-wrap"><Icons.TrendingUp /></div>
                   <div className="feed-content">
-                    <div className="feed-msg">PKR {stats.totalEarned.toLocaleString()} total earned</div>
+                    <div className="feed-msg">PKR {stats.totalEarned.toLocaleString()} net revenue</div>
                     <div className="feed-time">PKR {stats.totalCommission.toLocaleString()} from commissions</div>
                   </div>
                   <span className="feed-tag">Revenue</span>
                 </div>
+
+                <div className="feed-item">
+                  <div className="feed-icon-wrap"><Icons.Wallet /></div>
+                  <div className="feed-content">
+                    <div className="feed-msg">PKR {(stats.subscriptionRevenue ?? 0).toLocaleString()} from subscriptions</div>
+                    <div className="feed-time">Paid subscription plans</div>
+                  </div>
+                  <span className="feed-tag">Subscriptions</span>
+                </div>
+
+                {(stats.pointsPayoutTotal ?? 0) > 0 && (
+                  <div className="feed-item">
+                    <div className="feed-icon-wrap feed-icon-warn"><Icons.TrendingUp /></div>
+                    <div className="feed-content">
+                      <div className="feed-msg">PKR {(stats.pointsPayoutTotal ?? 0).toLocaleString()} paid out via rewards</div>
+                      <div className="feed-time">Points converted to cash by doctors</div>
+                    </div>
+                    <span className="feed-tag feed-tag-warn">Outgoing</span>
+                  </div>
+                )}
 
                 {stats.heldBalance > 0 && (
                   <div className="feed-item">
@@ -733,19 +793,19 @@ export default function DashboardPage() {
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
         /* ── Finance Row ── */
-        .finance-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .finance-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
         .finance-card {
-          background: #fff; border-radius: 14px; padding: 20px 22px;
+          background: #fff; border-radius: 14px; padding: 16px 18px;
           border: 1px solid #e5e7eb;
-          display: flex; align-items: center; gap: 16px;
+          display: flex; align-items: center; gap: 12px;
           cursor: pointer; text-decoration: none;
           transition: box-shadow 0.18s, border-color 0.18s;
         }
         .finance-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.07); border-color: #C8D0FF; }
-        .finance-icon { width: 44px; height: 44px; border-radius: 12px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .finance-body { display: flex; flex-direction: column; gap: 2px; }
-        .finance-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; }
-        .finance-value { font-size: 22px; font-weight: 800; color: #111; letter-spacing: -0.5px; }
+        .finance-icon { width: 38px; height: 38px; border-radius: 10px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .finance-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .finance-label { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .finance-value { font-size: 17px; font-weight: 800; color: #111; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .finance-sub   { font-size: 11px; color: #aaa; margin-top: 1px; }
 
         /* ── Stat Cards ── */
@@ -789,7 +849,7 @@ export default function DashboardPage() {
 
         /* ── Feed / Platform Summary ── */
         .feed-section { background: #fff; border-radius: 14px; padding: 20px; border: 1px solid #e5e7eb; display: flex; flex-direction: column; }
-        .feed-list    { display: flex; flex-direction: column; flex: 1; }
+        .feed-list    { display: flex; flex-direction: column; gap: 0; height: 420px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #e0e4ff transparent; }
         .feed-skeleton { height: 48px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; border-radius: 8px; animation: shimmer 1.5s infinite; margin-bottom: 4px; }
         .feed-item    { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid #f3f4f6; }
         .feed-item:last-child { border-bottom: none; }
@@ -875,7 +935,7 @@ export default function DashboardPage() {
           .bottom-grid { grid-template-columns: 1fr; }
           .mod-grid { grid-template-columns: repeat(2, 1fr); }
           .extra-stats { grid-template-columns: repeat(2, 1fr); }
-          .finance-row { grid-template-columns: 1fr; }
+          .finance-row { grid-template-columns: 1fr 1fr; }
           .held-table-head, .held-row { grid-template-columns: 1fr 1fr 1fr; }
           .held-table-head span:nth-child(4), .held-table-head span:nth-child(5),
           .held-row span:nth-child(4), .held-row span:nth-child(5) { display: none; }

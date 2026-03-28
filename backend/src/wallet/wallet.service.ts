@@ -311,29 +311,6 @@ export class WalletService {
     wallet.markModified('transactions');
     await wallet.save();
 
-    // Record the 2% processing fee as platform commission in the transactions collection
-    if (status === 'succeeded') {
-      const fee = +(tx.amount * 0.02).toFixed(2);
-      const doctor = await this.doctorModel
-        .findById(wallet.doctorId)
-        .select('fullName')
-        .lean()
-        .exec() as any;
-
-      await this.transactionModel.create({
-        type:             'withdrawal_fee',
-        doctorId:         wallet.doctorId,
-        doctorName:       doctor?.fullName ?? '',
-        description:      `Withdrawal processing fee (2%) on PKR ${tx.amount} withdrawal`,
-        amount:           fee,
-        commissionRate:   0.02,
-        commissionAmount: fee,
-        currency:         'PKR',
-        status:           'succeeded',
-        paymentMethod:    'wallet',
-      });
-    }
-
     return { txId, status, newBalance: wallet.balance };
   }
 

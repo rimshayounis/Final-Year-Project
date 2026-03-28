@@ -100,11 +100,23 @@ async getDoctorAvailability(@Param('doctorId') doctorId: string) {
     };
   }
 
-  // Get all doctors with availability
+  // Get all doctors with availability (active only — for patients)
   @Get('doctors')
   async getAllDoctorsWithAvailability() {
     const doctors =
       await this.availabilityService.getAllDoctorsWithAvailability();
+
+    return {
+      success: true,
+      data: doctors,
+    };
+  }
+
+  // Admin: get all availability records including inactive
+  @Get('doctors/all')
+  async getAllDoctorsWithAvailabilityAdmin() {
+    const doctors =
+      await this.availabilityService.getAllDoctorsWithAvailabilityAdmin();
 
     return {
       success: true,

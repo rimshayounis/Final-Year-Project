@@ -529,7 +529,7 @@ export default function WalletScreen() {
                       <View style={s.txExpandDivider} />
 
                       {patientName     && <DetailRow label="Patient"       value={patientName} />}
-                      {doctorName      && <DetailRow label="Doctor"        value={`Dr. ${doctorName}`} />}
+                      {doctorName      && <DetailRow label="Doctor"        value={doctorName} />}
                       {sessionDate     && <DetailRow label="Session Date"  value={sessionDate} />}
                       {sessionTime     && <DetailRow label="Session Time"  value={sessionTime} />}
                       {sessionDuration != null && (

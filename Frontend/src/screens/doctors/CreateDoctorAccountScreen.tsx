@@ -285,7 +285,7 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
       email:          'naveed@example.com',
       password:       'Min. 8 characters',
       specialization: isTherapist ? 'e.g. Clinical Psychologist' : 'e.g. Cardiologist',
-      licenseNumber:  isTherapist ? 'Optional — enter if available' : 'e.g. PMDC-123456',
+      licenseNumber:  isTherapist ? 'Optional — enter if available' : 'e.g. 123456-01-M',
     };
 
     return (

@@ -220,13 +220,13 @@ export default function FeedScreen({
   const [rejectTarget, setRejectTarget] = useState<Post | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [profileImages, setProfileImages] = useState<Record<string, string>>({});
+  const [authorSpecs, setAuthorSpecs] = useState<Record<string, string>>({});
   const [doctorIds, setDoctorIds] = useState<Set<string>>(new Set());
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({});
   const [doctorInfoCache, setDoctorInfoCache] = useState<Record<string, DoctorInfo>>({});
   const [verifiedDropdown, setVerifiedDropdown] = useState<string | null>(null);
   const [slotsRemaining, setSlotsRemaining] = useState<number | null>(null);
   const [doctorPlan, setDoctorPlan] = useState<string>("free_trial");
-  const [doctorSpecialization, setDoctorSpecialization] = useState<string>("");
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [filterVisible, setFilterVisible] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
@@ -285,11 +285,6 @@ export default function FeedScreen({
       const drRes = await apiClient.get(`/doctors/${id}`);
       const dr = drRes.data?.doctor ?? drRes.data ?? {};
       const plan = dr.subscriptionPlan ?? "free_trial";
-      const spec =
-        dr.doctorProfile?.specialization ??
-        dr.specialization ??
-        "";
-      setDoctorSpecialization(spec);
       setDoctorPlan(plan);
       if (plan === "free_trial") { setSlotsRemaining(0); return; }
       const slotsRes = await apiClient.get(`/points-reward/${id}/verification-slots?plan=${plan}`);
@@ -336,6 +331,7 @@ export default function FeedScreen({
       const dSet = new Set<string>();
       const nMap: Record<string, string> = {};
       const iMap: Record<string, string> = {};
+      const sMap: Record<string, string> = {};
 
       await Promise.all(
         uniqueIds.map(async (aid) => {
@@ -344,7 +340,12 @@ export default function FeedScreen({
           try {
             const r = await apiClient.get(`/doctors/${aid}`);
             const d = r.data?.doctor ?? r.data?.data ?? r.data;
-            if (d?.fullName) { name = d.fullName; isDoc = true; }
+            if (d?.fullName) {
+              name = d.fullName;
+              isDoc = true;
+              const spec = d.doctorProfile?.specialization;
+              if (spec) sMap[aid] = spec;
+            }
           } catch { /* not a doctor */ }
           if (!name) {
             try {
@@ -370,6 +371,7 @@ export default function FeedScreen({
       setDoctorIds(dSet);
       setAuthorNames((prev) => ({ ...prev, ...nMap }));
       setProfileImages((prev) => ({ ...prev, ...iMap }));
+      setAuthorSpecs((prev) => ({ ...prev, ...sMap }));
 
       if (selectedCategory !== "All") {
         list = list.filter((p) => p.category?.toLowerCase() === selectedCategory.toLowerCase());
@@ -731,6 +733,9 @@ export default function FeedScreen({
                   </View>
                 ) : null}
               </View>
+              {isDoc && authorSpecs[authorId] ? (
+                <Text style={s.postAuthorSpec}>{authorSpecs[authorId]}</Text>
+              ) : null}
               <View style={s.postMetaRow}>
                 <Text style={s.postTime}>{formatDate(item.createdAt)}</Text>
                 {role === "doctor" && item.status === "pending" ? (
@@ -744,10 +749,7 @@ export default function FeedScreen({
           </TouchableOpacity>
           {(() => {
             if (role !== "doctor" || isOwnPost || item.status !== "pending") return null;
-            const isMentalHealth = item.category?.toLowerCase() === "mental health";
-            const isPsych = doctorSpecialization.trim().toLowerCase() === "psychologist";
-            const canReview = (isMentalHealth && isPsych) || (!isMentalHealth && !isPsych);
-            if (!canReview) return null;
+            if (item.category?.toLowerCase() === "mental health") return null;
             return (
               <View style={s.reviewBtns}>
                 {doctorPlan === "free_trial" ? (
@@ -969,12 +971,6 @@ export default function FeedScreen({
           data={posts.filter((p) => {
             const authorId = typeof p.userId === "object" ? (p.userId as any)?._id : p.userId;
             if (p.isActive === false && authorId !== id) return false;
-            if (
-              role === "doctor" &&
-              doctorSpecialization.trim().toLowerCase() !== "psychologist" &&
-              p.category?.toLowerCase() === "mental health" &&
-              p.status === "pending"
-            ) return false;
             if (searchQuery.trim()) {
               const keywords = searchQuery.trim().toLowerCase().split(/\s+/);
               const haystack = `${p.title} ${p.description}`.toLowerCase();
@@ -1378,6 +1374,7 @@ const s = StyleSheet.create({
   postAvatarText: { fontSize: 17, fontWeight: "700", color: "#FFF" },
   authorNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   postAuthorName: { fontSize: 14, fontWeight: "800", color: "#1A1D2E" },
+  postAuthorSpec: { fontSize: 11, color: "#6B7FED", fontWeight: "600", marginTop: 1 },
   proBadge: {
     flexDirection: "row",
     alignItems: "center",

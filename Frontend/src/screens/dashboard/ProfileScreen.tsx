@@ -891,6 +891,12 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
               <View style={styles.doctorBadge}>
                 <FontAwesome5 name="user-md" size={10} color="#6B7FED" />
                 <Text style={styles.doctorBadgeText}>Verified by PMDC</Text>
+                {userProfile?.specialization ? (
+                  <>
+                    <View style={styles.badgeDivider} />
+                    <Text style={styles.doctorBadgeSpec}>{userProfile.specialization}</Text>
+                  </>
+                ) : null}
               </View>
             )}
 
@@ -2264,6 +2270,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   doctorBadgeText: { fontSize: 11, color: "#6B7FED", fontWeight: "700" },
+  badgeDivider: { width: 1, height: 11, backgroundColor: "#C5CBEF", marginHorizontal: 6 },
+  doctorBadgeSpec: { fontSize: 11, color: "#6B7FED", fontWeight: "700", textTransform: "capitalize" },
   premiumBadge: {
     flexDirection: "row",
     alignItems: "center",

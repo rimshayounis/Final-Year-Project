@@ -328,7 +328,7 @@ export default function DoctorPendingScreen({ navigation, route }: Props) {
             <View style={styles.infoCard}>
               <MaterialIcons name="schedule" size={24} color="#FFA500" />
               <Text style={styles.infoText}>
-                Verification typically takes 24–48 hours. This page refreshes automatically every 15 seconds.
+                Verification typically takes 24–48 hours. Pease wait patiently while we review your documents.
               </Text>
             </View>
 

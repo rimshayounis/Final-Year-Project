@@ -34,7 +34,7 @@ export default function UserSession() {
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
 
-  const doctorName = route.params?.doctorName ?? "Dr. Sarah Ahmed";
+  const doctorName = route.params?.doctorName ?? "Sarah Ahmed";
   const doctorImage =
     route.params?.doctorImage ?? "https://i.pravatar.cc/150?img=12";
   const duration = route.params?.duration ?? 1800;

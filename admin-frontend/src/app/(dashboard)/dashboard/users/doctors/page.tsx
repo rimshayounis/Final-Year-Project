@@ -13,7 +13,7 @@ interface DoctorProfile {
   rejectionReason: string | null;
   registeredAt: string;
 }
-
+  
 interface Doctor {
   _id: string;
   fullName: string;
@@ -147,7 +147,7 @@ export default function DoctorsPage() {
         if (selected?._id === doctorId) {
           setSelected(prev => prev ? { ...prev, doctorProfile: { ...prev.doctorProfile, isVerified: true } } : null);
         }
-        showToast(`Dr. ${doctorName} verified successfully`, 'success');
+        showToast(`${doctorName} verified successfully`, 'success');
       } else {
         showToast('Failed to verify doctor', 'error');
       }
@@ -166,7 +166,7 @@ export default function DoctorsPage() {
       const res = await fetch(`${BASE_URL}/doctors/${deleteTarget._id}`, { method: 'DELETE' });
       if (res.ok) {
         setDoctors(prev => prev.filter(d => d._id !== deleteTarget._id));
-        showToast(`Dr. ${deleteTarget.fullName} removed from platform`, 'success');
+        showToast(`${deleteTarget.fullName} removed from platform`, 'success');
         setDeleteTarget(null);
         if (selected?._id === deleteTarget._id) setSelected(null);
       } else {
@@ -198,7 +198,7 @@ export default function DoctorsPage() {
         if (selected?._id === doctorId) {
           setSelected(prev => prev ? { ...prev, doctorProfile: { ...prev.doctorProfile, isVerified: false, isRejected: true, rejectionReason: reason } } : null);
         }
-        showToast(`Dr. ${doctorName} application rejected`, 'error');
+        showToast(`${doctorName} application rejected`, 'error');
         setRejectTarget(null);
         setSelectedReason('');
         setOtherReason('');
@@ -331,7 +331,7 @@ export default function DoctorsPage() {
                         )}
                       </div>
                       <div>
-                        <div className="row-name">Dr. {doctor.fullName}</div>
+                        <div className="row-name">{doctor.fullName}</div>
                         <div className="row-email">{doctor.email}</div>
                       </div>
                     </div>
@@ -421,14 +421,20 @@ export default function DoctorsPage() {
             {/* Modal Header */}
             <div className="modal-header">
               <div className="modal-doc-info">
-                <div className="modal-avatar" style={{ background: avatarColor(selected.fullName) }}>
-                  {profile?.profileImage ? (
-                    <img src={`http://localhost:3000${profile.profileImage}`} alt={selected.fullName} />
-                  ) : initials(selected.fullName)}
-                </div>
+                {profile?.profileImage ? (
+                  <img
+                    className="modal-avatar-img"
+                    src={`http://localhost:3000${profile.profileImage}`}
+                    alt={selected.fullName}
+                  />
+                ) : (
+                  <div className="modal-avatar" style={{ background: avatarColor(selected.fullName) }}>
+                    {initials(selected.fullName)}
+                  </div>
+                )}
                 <div>
                   <div className="modal-name-row">
-                    <h2 className="modal-name">Dr. {selected.fullName}</h2>
+                    <h2 className="modal-name">{selected.fullName}</h2>
                     {selected.doctorProfile?.isVerified
                       ? <span className="badge verified small">✓ Verified</span>
                       : selected.doctorProfile?.isRejected
@@ -452,34 +458,33 @@ export default function DoctorsPage() {
                   {/* Professional Info */}
                   <div className="info-section">
                     <h3 className="info-title">Professional Information</h3>
-                    <div className="info-grid">
-                      <div className="info-item">
-                        <span className="info-label">License Number</span>
-                        <span className="info-value">{selected.doctorProfile?.licenseNumber}</span>
+                    <div className="detail-grid">
+                      <div className="detail-cell">
+                        <span className="detail-label">License Number</span>
+                        <span className="detail-value">{selected.doctorProfile?.licenseNumber || '—'}</span>
                       </div>
-                      <div className="info-item">
-                        <span className="info-label">Specialization</span>
-                        <span className="info-value">{selected.doctorProfile?.specialization}</span>
+                      <div className="detail-cell">
+                        <span className="detail-label">Specialization</span>
+                        <span className="detail-value">{selected.doctorProfile?.specialization || '—'}</span>
                       </div>
-                      <div className="info-item">
-                        <span className="info-label">Subscription Plan</span>
-                        <span
-                          className="info-value plan-chip"
-                          style={planColors[selected.subscriptionPlan] || planColors.free_trial}
-                        >
-                          {selected.subscriptionPlan?.replace('_', ' ')}
+                      <div className="detail-cell">
+                        <span className="detail-label">Subscription Plan</span>
+                        <span className="detail-value">
+                          <span className="plan-chip" style={planColors[selected.subscriptionPlan] || planColors.free_trial}>
+                            {selected.subscriptionPlan?.replace(/_/g, ' ') || 'free trial'}
+                          </span>
                         </span>
                       </div>
-                      <div className="info-item">
-                        <span className="info-label">Joined</span>
-                        <span className="info-value">
+                      <div className="detail-cell">
+                        <span className="detail-label">Joined</span>
+                        <span className="detail-value">
                           {new Date(selected.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                         </span>
                       </div>
                       {profile?.bio && (
-                        <div className="info-item full">
-                          <span className="info-label">Bio</span>
-                          <span className="info-value">{profile.bio}</span>
+                        <div className="detail-cell full-span">
+                          <span className="detail-label">Bio</span>
+                          <span className="detail-value bio-text">{profile.bio}</span>
                         </div>
                       )}
                     </div>
@@ -572,7 +577,7 @@ export default function DoctorsPage() {
               <div className="reject-modal-icon">⚠️</div>
               <div>
                 <h3>Reject Application</h3>
-                <p>Dr. {rejectTarget.fullName}</p>
+                <p>{rejectTarget.fullName}</p>
               </div>
               <button className="modal-close" onClick={() => setRejectTarget(null)}>✕</button>
             </div>

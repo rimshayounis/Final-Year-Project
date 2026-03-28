@@ -179,6 +179,16 @@ export class AppointmentAvailabilityService {
     return records.map(r => r.toObject());
   }
 
+  // Admin: get all availability records regardless of isActive
+  async getAllDoctorsWithAvailabilityAdmin(): Promise<any[]> {
+    const records = await this.availabilityModel
+      .find()
+      .populate('doctorId', 'fullName email profileImage doctorProfile subscriptionPlan')
+      .exec();
+
+    return records.map(r => r.toObject());
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────────
 
   private validateTimeSlots(specificDates: any[]): void {

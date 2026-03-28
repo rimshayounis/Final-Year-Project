@@ -177,7 +177,7 @@ export default function DoctorAppointmentDetailScreen() {
 
     Alert.alert(
       'Confirm Booking',
-      `Dr. ${doctor.fullName}\n${day}, ${month} ${date}\n${formatTime12h(selectedSlot)}\nDuration: ${sessionDuration} min\nFee: PKR ${consultationFee}\nConcern: ${healthConcern}`,
+      `${doctor.fullName}\n${day}, ${month} ${date}\n${formatTime12h(selectedSlot)}\nDuration: ${sessionDuration} min\nFee: PKR ${consultationFee}\nConcern: ${healthConcern}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

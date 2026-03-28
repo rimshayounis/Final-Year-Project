@@ -11,6 +11,7 @@ interface Post {
   description: string;
   category: string;
   status: 'pending' | 'approved' | 'rejected';
+  isActive: boolean;
   userModel: 'User' | 'Doctor';
   likes: number;
   comments: number;
@@ -24,10 +25,10 @@ interface Post {
 
 type FilterTab = 'all' | 'pending' | 'approved' | 'rejected';
 
-const statusColors: Record<string, { bg: string; color: string }> = {
-  pending:  { bg: '#fef3c7', color: '#d97706' },
-  approved: { bg: '#d1fae5', color: '#059669' },
-  rejected: { bg: '#fee2e2', color: '#dc2626' },
+const statusColors: Record<string, { background: string; color: string }> = {
+  pending:  { background: '#fef3c7', color: '#d97706' },
+  approved: { background: '#d1fae5', color: '#059669' },
+  rejected: { background: '#fee2e2', color: '#dc2626' },
 };
 
 export default function PostsPage() {
@@ -42,6 +43,9 @@ export default function PostsPage() {
   const [selected, setSelected] = useState<Post | null>(null);
   const [profileImages, setProfileImages] = useState<Record<string, string | null>>({});
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [rejectPostId, setRejectPostId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
 
   // User filter from query params (set when navigating from patients page)
   const userIdParam   = searchParams.get('userId')   || '';
@@ -53,31 +57,14 @@ export default function PostsPage() {
   };
 
   useEffect(() => {
-    fetch(`${BASE_URL}/posts/feed?limit=100`)
+    fetch(`${BASE_URL}/posts/admin/all?limit=500`)
       .then(r => r.json())
       .then(data => {
-        setPosts(data.data || []);
-        setFiltered(data.data || []);
+        const list = data.data || [];
+        setPosts(list);
+        setFiltered(list);
       })
       .catch(() => showToast('Failed to load posts', 'error'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  // Also fetch pending posts
-  useEffect(() => {
-    Promise.all([
-      fetch(`${BASE_URL}/posts/feed?limit=100`).then(r => r.json()),
-      fetch(`${BASE_URL}/posts/pending?limit=100`).then(r => r.json()),
-    ]).then(([approved, pending]) => {
-      const all = [
-        ...(approved.data || []),
-        ...(pending.data?.posts || pending.data || []),
-      ];
-      // deduplicate by _id
-      const unique = Array.from(new Map(all.map(p => [p._id, p])).values());
-      setPosts(unique);
-      setFiltered(unique);
-    }).catch(() => showToast('Failed to load posts', 'error'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -135,6 +122,33 @@ export default function PostsPage() {
     pending:  posts.filter(p => p.status === 'pending').length,
     approved: posts.filter(p => p.status === 'approved').length,
     rejected: posts.filter(p => p.status === 'rejected').length,
+  };
+
+  const rejectPost = async () => {
+    if (!selected || !rejectReason.trim()) return;
+    setRejecting(true);
+    try {
+      const res = await fetch(`${BASE_URL}/posts/admin/${selected._id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rejectionReason: rejectReason.trim() }),
+      });
+      if (res.ok) {
+        setPosts(prev => prev.map(p =>
+          p._id === selected._id ? { ...p, status: 'rejected', rejectionReason: rejectReason.trim() } : p
+        ));
+        setSelected(prev => prev ? { ...prev, status: 'rejected', rejectionReason: rejectReason.trim() } : null);
+        setRejectPostId(null);
+        setRejectReason('');
+        showToast('Post rejected successfully', 'success');
+      } else {
+        showToast('Failed to reject post', 'error');
+      }
+    } catch {
+      showToast('Failed to reject post', 'error');
+    } finally {
+      setRejecting(false);
+    }
   };
 
   const deletePost = async (postId: string, userId: string) => {
@@ -234,12 +248,21 @@ export default function PostsPage() {
         <div className="posts-grid">
           {filtered.map(post => (
             <div key={post._id} className="post-card" onClick={() => setSelected(post)}>
-              {/* Row 1: Category + Status */}
+              {/* Row 1: Category + Status + Visibility */}
               <div className="post-card-top">
                 <span className="post-category">{post.category}</span>
-                <span className="post-status" style={statusColors[post.status]}>
-                  {post.status}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className={`post-visibility ${post.isActive ? 'public' : 'private'}`}>
+                    {post.isActive ? (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    ) : (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    )}
+                  </span>
+                  <span className="post-status" style={statusColors[post.status]}>
+                    {post.status}
+                  </span>
+                </div>
               </div>
 
               {/* Row 2: Title */}
@@ -295,6 +318,13 @@ export default function PostsPage() {
                 <h2 className="modal-title">{selected.title}</h2>
                 <div className="modal-meta">
                   <span className="post-category">{selected.category}</span>
+                  <span className={`post-visibility ${selected.isActive ? 'public' : 'private'}`}>
+                    {selected.isActive ? (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    ) : (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    )}
+                  </span>
                   <span className="post-status" style={statusColors[selected.status]}>{selected.status}</span>
                 </div>
               </div>
@@ -302,7 +332,13 @@ export default function PostsPage() {
             </div>
             <div className="modal-body">
               <div className="modal-author">
-                <span className="modal-author-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+                {(() => {
+                  const uid = typeof selected.userId === 'string' ? selected.userId : selected.userId?._id;
+                  const img = uid ? profileImages[uid] : null;
+                  return img
+                    ? <img src={`http://localhost:3000${img}`} alt="" className="modal-author-avatar-img" />
+                    : <span className="modal-author-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>;
+                })()}
                 <div>
                   <div className="author-name">{getName(selected.userId)}</div>
                   <div className="author-date">{new Date(selected.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
@@ -325,24 +361,42 @@ export default function PostsPage() {
                 </div>
               )}
 
-              <div className="modal-stats">
-                <div className="mstat">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e11d48" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                  <strong>{selected.likes}</strong><span>Likes</span>
-                </div>
-                <div className="mstat">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B7FED" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  <strong>{selected.comments}</strong><span>Comments</span>
-                </div>
-                <div className="mstat">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                  <strong>{selected.shares}</strong><span>Shares</span>
-                </div>
+              <div className="modal-stats-row">
+                <span className="mstat-item">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#e11d48" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                  <strong>{selected.likes}</strong> Likes
+                </span>
+                <span className="mstat-item">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7FED" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  <strong>{selected.comments}</strong> Comments
+                </span>
+                <span className="mstat-item">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                  <strong>{selected.shares}</strong> Shares
+                </span>
               </div>
 
               {selected.rejectionReason && (
                 <div className="rejection-reason">
                   <strong>Rejection Reason:</strong> {selected.rejectionReason}
+                </div>
+              )}
+
+              {selected.status !== 'rejected' && (
+                <div className="reject-inline">
+                  <input
+                    className="reject-reason-input"
+                    placeholder="Rejection reason..."
+                    value={rejectReason}
+                    onChange={e => setRejectReason(e.target.value)}
+                  />
+                  <button
+                    className="btn-reject-post"
+                    disabled={rejecting || !rejectReason.trim()}
+                    onClick={rejectPost}
+                  >
+                    {rejecting ? 'Rejecting...' : 'Reject'}
+                  </button>
                 </div>
               )}
 
@@ -457,6 +511,9 @@ export default function PostsPage() {
         .post-card-top { display: flex; align-items: center; justify-content: space-between; }
         .post-category { font-size: 11px; font-weight: 700; color: #6B7FED; background: #EEF1FF; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; }
         .post-status   { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; text-transform: capitalize; }
+        .post-visibility { padding: 4px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; }
+        .post-visibility.public  { background: #d1fae5; color: #065f46; }
+        .post-visibility.private { background: #f3e8ff; color: #7c3aed; }
 
         /* Row 2 */
         .post-title { font-size: 15px; font-weight: 700; color: #111; line-height: 1.35; margin: 0; }
@@ -527,15 +584,30 @@ export default function PostsPage() {
         .modal-desc   { font-size: 14px; color: #444; line-height: 1.6; }
         .modal-images { display: flex; flex-direction: column; gap: 8px; }
         .modal-img    { width: 100%; border-radius: 12px; max-height: 200px; object-fit: cover; }
-        .modal-stats  { display: flex; gap: 16px; background: #F0F4FF; border-radius: 12px; padding: 14px; }
-        .mstat        { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
-        .mstat span   { font-size: 18px; }
-        .mstat strong { font-size: 18px; font-weight: 800; color: #111; }
-        .mstat span:last-child { font-size: 11px; color: #888; font-weight: normal; }
+        .modal-author-avatar-img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .modal-stats-row { display: flex; align-items: center; gap: 16px; padding: 10px 14px; background: #F0F4FF; border-radius: 10px; }
+        .mstat-item { display: flex; align-items: center; gap: 5px; font-size: 13px; color: #555; }
+        .mstat-item strong { color: #111; font-weight: 700; }
         .rejection-reason {
           background: #fee2e2; border-radius: 10px; padding: 12px 14px;
           font-size: 13px; color: #991b1b;
         }
+        .reject-inline { display: flex; gap: 8px; align-items: center; }
+        .reject-reason-input {
+          flex: 1; padding: 9px 14px; border-radius: 10px;
+          border: 1px solid #e5e5e5; font-size: 13px; outline: none;
+          transition: border-color 0.15s;
+        }
+        .reject-reason-input:focus { border-color: #dc2626; }
+        .btn-reject-post {
+          padding: 9px 18px; border-radius: 10px; white-space: nowrap;
+          background: #fee2e2; color: #dc2626;
+          border: 1px solid #fecaca; font-size: 13px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s;
+        }
+        .btn-reject-post:hover:not(:disabled) { background: #dc2626; color: #fff; }
+        .btn-reject-post:disabled { opacity: 0.5; cursor: not-allowed; }
+
         .modal-actions { display: flex; gap: 10px; }
         .btn-delete-post {
           padding: 10px 20px; border-radius: 10px;
