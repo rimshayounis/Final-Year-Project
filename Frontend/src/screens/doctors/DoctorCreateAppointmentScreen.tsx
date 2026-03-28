@@ -362,8 +362,13 @@ export default function DoctorCreateAppointmentScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────────────
    const handleSubmit = async () => {
-    if (!consultationFee || parseFloat(consultationFee) <= 0) {
-      Alert.alert("Error", "Please enter a valid consultation fee");
+    const fee = parseFloat(consultationFee);
+    if (!consultationFee || isNaN(fee) || fee < 500) {
+      Alert.alert("Error", "Consultation fee must be at least PKR 500");
+      return;
+    }
+    if (fee > 2000) {
+      Alert.alert("Error", "Consultation fee cannot exceed PKR 2,000");
       return;
     }
     if (selectedDates.length === 0) {
@@ -511,11 +516,14 @@ export default function DoctorCreateAppointmentScreen() {
             
             <TextInput
               style={[styles.feeInput, { color: t.textPrimary }]}
-              placeholder="Enter fee amount"
+              placeholder="500 – 2,000"
               placeholderTextColor={t.textMuted}
               keyboardType="numeric"
               value={consultationFee}
-              onChangeText={setConsultationFee}
+              onChangeText={(v) => {
+                const n = parseFloat(v);
+                if (!v || isNaN(n) || n <= 2000) setConsultationFee(v);
+              }}
             />
             <Text style={[styles.currencyText, { color: t.textSecondary }]}>
               PKR

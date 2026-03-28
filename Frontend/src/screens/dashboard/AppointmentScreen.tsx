@@ -627,9 +627,14 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
                   <Text style={styles.fbTitle}>How was your experience?</Text>
                   <Text style={styles.fbSub}>
                     {feedbackAppt?.doctorId?.fullName
-                      ? `Dr. ${feedbackAppt.doctorId.fullName}`
+                      ? feedbackAppt.doctorId.fullName
                       : 'Your appointment'}
                   </Text>
+                  {feedbackAppt?.doctorId?.doctorProfile?.specialization ? (
+                    <Text style={styles.fbSpecText}>
+                      {feedbackAppt.doctorId.doctorProfile.specialization}
+                    </Text>
+                  ) : null}
 
                   {/* Stars */}
                   <View style={styles.fbStarsRow}>
@@ -889,7 +894,8 @@ const styles = StyleSheet.create({
   fbThankWrap:             { alignItems: 'center', paddingVertical: 20 },
   fbThankText:             { fontSize: 17, fontWeight: '700', color: '#00B374', marginTop: 14, textAlign: 'center' },
   fbTitle:                 { fontSize: 20, fontWeight: '700', color: '#1A1D2E', marginBottom: 6, textAlign: 'center' },
-  fbSub:                   { fontSize: 14, color: '#888', marginBottom: 20, textAlign: 'center' },
+  fbSub:                   { fontSize: 14, color: '#888', marginBottom: 4, textAlign: 'center' },
+  fbSpecText:              { fontSize: 12, color: '#6B7FED', fontWeight: '600', marginBottom: 16, textAlign: 'center' },
   fbStarsRow:              { flexDirection: 'row', marginBottom: 20 },
   fbInput:                 { width: '100%', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 12, fontSize: 14, color: '#333', minHeight: 80, textAlignVertical: 'top', marginBottom: 20 },
   fbBtnRow:                { flexDirection: 'row', gap: 12, width: '100%' },

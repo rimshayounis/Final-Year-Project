@@ -342,3 +342,119 @@ body {
 .fw-800 { font-weight: 800; }
 .fw-700 { font-weight: 700; }
 .fw-600 { font-weight: 600; }
+
+/* ── Doctor Table Row ── */
+.row-doctor { display: flex; align-items: center; gap: 10px; }
+.row-avatar-wrap {
+  width: 36px; height: 36px; border-radius: 50%;
+  overflow: hidden; flex-shrink: 0;
+}
+.row-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff;
+}
+.row-avatar-img {
+  width: 36px; height: 36px; object-fit: cover; display: block;
+}
+.row-name { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.row-email { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.row-spec { font-size: 12px; color: var(--text-secondary); }
+.row-license { font-size: 12px; color: var(--text-muted); font-family: monospace; }
+.row-certs { font-size: 12px; font-weight: 700; color: var(--brand); }
+.row-date { font-size: 12px; color: var(--text-muted); }
+.row-plan {
+  display: inline-block; padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; text-transform: capitalize;
+}
+
+/* ── Doctor Modal Header ── */
+.modal-doc-info { display: flex; align-items: center; gap: 16px; }
+.modal-avatar {
+  width: 62px; height: 62px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 800; color: #fff;
+}
+.modal-avatar-img {
+  width: 62px; height: 62px; border-radius: 50%;
+  object-fit: cover; display: block; flex-shrink: 0;
+}
+.modal-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
+.modal-name { font-size: 17px; font-weight: 800; color: var(--text-primary); margin: 0; }
+.modal-spec { font-size: 13px; color: var(--text-secondary); margin: 0 0 1px; font-weight: 500; }
+.modal-email { font-size: 12px; color: var(--text-muted); margin: 0; }
+
+/* ── Info section card ── */
+.info-section {
+  background: #fff; border-radius: 14px;
+  padding: 18px 20px; border: 1px solid var(--brand-border);
+}
+.info-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 14px; display: flex; align-items: center; gap: 0;
+}
+
+/* ── 2-column detail grid ── */
+.detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px;
+}
+.detail-cell { display: flex; flex-direction: column; gap: 4px; }
+.detail-cell.full-span { grid-column: 1 / -1; }
+.detail-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-muted);
+}
+.detail-value { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.bio-text { font-weight: 400; line-height: 1.5; color: var(--text-secondary); }
+
+.plan-chip {
+  display: inline-block; padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; text-transform: capitalize;
+}
+
+/* ── Certificates ── */
+.cert-count {
+  display: inline-flex; align-items: center;
+  background: var(--brand-bg-soft); color: var(--brand);
+  font-size: 10px; font-weight: 700; border-radius: 20px;
+  padding: 2px 8px; margin-left: 8px;
+  text-transform: none; letter-spacing: 0;
+  border: 1px solid var(--brand-border);
+}
+.certs-grid { display: flex; flex-direction: column; gap: 8px; }
+.cert-card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--brand-bg-soft); border: 1px solid var(--brand-border);
+  border-radius: 10px; padding: 10px 14px; text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cert-card:hover { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(107,127,237,0.12); }
+.cert-icon { font-size: 20px; flex-shrink: 0; }
+.cert-name { font-size: 13px; font-weight: 600; color: var(--text-primary); display: block; }
+.cert-view { font-size: 12px; color: var(--brand); font-weight: 500; }
+.no-certs { font-size: 13px; color: var(--text-muted); text-align: center; padding: 8px 0; margin: 0; }
+
+/* ── Rejection reason ── */
+.rejection-reason-box {
+  background: var(--danger-bg); border: 1px solid #fca5a5;
+  border-radius: 10px; padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.rejection-reason-label { font-size: 10px; font-weight: 700; color: var(--danger-color); text-transform: uppercase; letter-spacing: 0.08em; }
+.rejection-reason-text { font-size: 13px; color: #991b1b; font-weight: 500; }
+
+/* ── Modal Actions ── */
+.modal-actions { display: flex; gap: 10px; padding-top: 4px; }
+.modal-actions button {
+  flex: 1; padding: 12px 16px; border-radius: 10px;
+  font-size: 13px; font-weight: 700; cursor: pointer; border: none;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.modal-actions button:active { transform: scale(0.97); }
+.btn-approved-modal { background: #d1fae5; color: #065f46; border: 1.5px solid #6ee7b7 !important; cursor: default !important; }
+.btn-approve-modal { background: var(--success-color); color: #fff; }
+.btn-approve-modal:hover { opacity: 0.88; }
+.btn-reject-modal { background: #fff7ed; color: #c2410c; border: 1.5px solid #fed7aa !important; }
+.btn-remove-modal { background: var(--danger-bg); color: var(--danger-color); border: 1.5px solid #fca5a5 !important; flex: 0 0 auto !important; }
+.modal-loading { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 32px 0; color: var(--text-muted); }

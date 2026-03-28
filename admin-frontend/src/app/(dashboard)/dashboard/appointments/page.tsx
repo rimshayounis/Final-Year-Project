@@ -22,7 +22,30 @@ interface Appointment {
   cancelReason?: string;
 }
 
-type FilterTab = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
+type FilterTab = 'all' | 'pending' | 'confirmed' | 'scheduled' | 'completed' | 'cancelled';
+
+interface AvailabilitySlot { start: string; end: string; }
+interface AvailabilityDate { date: string; timeSlots: AvailabilitySlot[]; }
+interface AvailabilityDoctor { _id: string; fullName: string; email: string; }
+interface AppointmentAvailability {
+  _id: string;
+  doctorId: AvailabilityDoctor;
+  sessionDuration: number;
+  consultationFee: number;
+  specificDates: AvailabilityDate[];
+  isActive: boolean;
+  createdAt: string;
+}
+// Flattened row: one per doctor-date pair
+interface ScheduledRow {
+  availId: string;
+  doctor: AvailabilityDoctor;
+  date: string;
+  timeSlots: AvailabilitySlot[];
+  sessionDuration: number;
+  consultationFee: number;
+  isActive: boolean;
+}
 
 const statusColors: Record<string, { bg: string; color: string }> = {
   pending:   { bg: '#fef3c7', color: '#d97706' },
@@ -49,6 +72,8 @@ export default function AppointmentsPage() {
   const [modalPatientImg, setModalPatientImg] = useState<string | null>(null);
   const [modalDoctorImg,  setModalDoctorImg]  = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [scheduledRows, setScheduledRows] = useState<ScheduledRow[]>([]);
+  const [schedLoading, setSchedLoading] = useState(false);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
@@ -104,7 +129,8 @@ export default function AppointmentsPage() {
 
   useEffect(() => {
     let result = appointments;
-    if (activeTab !== 'all') result = result.filter(a => a.status === activeTab);
+    if (activeTab === 'scheduled') result = [];
+    else if (activeTab !== 'all') result = result.filter(a => a.status === activeTab);
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(a =>
@@ -115,6 +141,37 @@ export default function AppointmentsPage() {
     }
     setFiltered(result);
   }, [search, activeTab, appointments]);
+
+  // Fetch scheduled availabilities
+  useEffect(() => {
+    setSchedLoading(true);
+    fetch(`${BASE_URL}/appointment-availability/doctors/all`)
+      .then(r => r.json())
+      .then((res) => {
+        const list: AppointmentAvailability[] = res.data || [];
+        const today2 = new Date(); today2.setHours(0, 0, 0, 0);
+        const rows: ScheduledRow[] = [];
+        list.forEach(av => {
+          av.specificDates
+            .filter(d => new Date(d.date) >= today2)
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .forEach(d => {
+              rows.push({
+                availId: av._id,
+                doctor: av.doctorId,
+                date: d.date,
+                timeSlots: d.timeSlots,
+                sessionDuration: av.sessionDuration,
+                consultationFee: av.consultationFee,
+                isActive: av.isActive,
+              });
+            });
+        });
+        setScheduledRows(rows);
+      })
+      .catch(() => showToast('Failed to load scheduled appointments', 'error'))
+      .finally(() => setSchedLoading(false));
+  }, []);
 
   const getName = (ref: any) => {
     if (!ref) return '—';
@@ -131,6 +188,7 @@ export default function AppointmentsPage() {
     all:       appointments.length,
     pending:   appointments.filter(a => a.status === 'pending').length,
     confirmed: appointments.filter(a => a.status === 'confirmed').length,
+    scheduled: scheduledRows.length,
     completed: appointments.filter(a => a.status === 'completed').length,
     cancelled: appointments.filter(a => a.status === 'cancelled').length,
   };
@@ -150,11 +208,11 @@ export default function AppointmentsPage() {
           <p className="page-sub">Monitor all booked appointments on TruHealLink</p>
         </div>
         <div className="header-stats">
-          {(['all','pending','confirmed','completed','cancelled'] as FilterTab[]).map((tab, i) => (
+          {(['all','pending','confirmed','completed','cancelled','scheduled'] as FilterTab[]).map((tab, i) => (
             <div key={tab}>
               {i > 0 && <div className="hstat-divider" />}
               <div className="hstat" onClick={() => setActiveTab(tab)} style={{ cursor: 'pointer' }}>
-                <span className="hstat-val" style={{ color: tab === 'all' ? '#6B7FED' : statusColors[tab]?.color || '#111' }}>
+                <span className="hstat-val" style={{ color: tab === 'all' ? '#6B7FED' : tab === 'scheduled' ? '#7c3aed' : statusColors[tab]?.color || '#111' }}>
                   {counts[tab]}
                 </span>
                 <span className="hstat-label">{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
@@ -167,7 +225,7 @@ export default function AppointmentsPage() {
       {/* Filters */}
       <div className="filters">
         <div className="tab-group">
-          {(['all','pending','confirmed','completed','cancelled'] as FilterTab[]).map(tab => (
+          {(['all','pending','confirmed','completed','cancelled','scheduled'] as FilterTab[]).map(tab => (
             <button
               key={tab}
               className={`tab ${activeTab === tab ? 'active' : ''}`}
@@ -194,7 +252,63 @@ export default function AppointmentsPage() {
 
       {/* Table */}
       <div className="table-wrap">
-        {loading ? (
+        {activeTab === 'scheduled' ? (
+          schedLoading ? (
+            <div className="loading-state"><div className="spinner" /><p>Loading scheduled appointments...</p></div>
+          ) : scheduledRows.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🗓️</div>
+              <p>No scheduled appointments</p>
+              <span>No upcoming availability set by doctors</span>
+            </div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Doctor</th>
+                  <th>Date</th>
+                  <th>Time Slots</th>
+                  <th>Duration</th>
+                  <th>Fee (PKR)</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scheduledRows.map((row, i) => (
+                  <tr key={`${row.availId}-${row.date}-${i}`} className="table-row">
+                    <td>
+                      <div className="person-cell">
+                        <div className="person-name">{row.doctor?.fullName || '—'}</div>
+                        <div className="person-email">{row.doctor?.email || ''}</div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="date-cell">
+                        <span className="date">{new Date(row.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="slots-cell">
+                        {row.timeSlots.map((slot, j) => (
+                          <span key={j} className="slot-chip">{slot.start} – {slot.end}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td><span className="duration-chip">{row.sessionDuration} min</span></td>
+                    <td><span className="fee">PKR {row.consultationFee?.toLocaleString()}</span></td>
+                    <td>
+                      <span className="status-badge" style={row.isActive
+                        ? { background: '#d1fae5', color: '#059669' }
+                        : { background: '#f3f4f8', color: '#888' }}>
+                        {row.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        ) : loading ? (
           <div className="loading-state"><div className="spinner" /><p>Loading appointments...</p></div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">
@@ -226,7 +340,7 @@ export default function AppointmentsPage() {
                   </td>
                   <td>
                     <div className="person-cell">
-                      <div className="person-name">Dr. {getName(apt.doctorId)}</div>
+                      <div className="person-name">{getName(apt.doctorId)}</div>
                       <div className="person-email">{getEmail(apt.doctorId)}</div>
                     </div>
                   </td>
@@ -304,7 +418,7 @@ export default function AppointmentsPage() {
                   }
                   <div>
                     <div className="participant-label">Doctor</div>
-                    <div className="participant-name">Dr. {getName(selected.doctorId)}</div>
+                    <div className="participant-name">{getName(selected.doctorId)}</div>
                     <div className="participant-email">{getEmail(selected.doctorId)}</div>
                   </div>
                 </div>
@@ -569,6 +683,19 @@ export default function AppointmentsPage() {
         }
         .cancel-label { font-size: 11px; font-weight: 700; color: #dc2626; display: block; margin-bottom: 4px; }
         .cancel-text  { font-size: 13px; color: #444; line-height: 1.5; margin: 0; }
+
+        /* Scheduled table */
+        .slots-cell { display: flex; flex-wrap: wrap; gap: 4px; }
+        .slot-chip {
+          display: inline-block; padding: 3px 8px; border-radius: 6px;
+          background: #EEF1FF; color: #6B7FED;
+          font-size: 11px; font-weight: 600; white-space: nowrap;
+        }
+        .duration-chip {
+          display: inline-block; padding: 3px 10px; border-radius: 20px;
+          background: #f3f4f8; color: #555;
+          font-size: 11px; font-weight: 700;
+        }
       `}</style>
     </div>
   );

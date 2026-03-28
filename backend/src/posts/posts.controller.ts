@@ -142,11 +142,29 @@ export class PostsController {
     const post = await this.postsService.update(id, updatePostDto.userId, updatePostDto);
     return { success: true, message: 'Post updated successfully', data: post };
   }
+  @Get('admin/all')
+  async adminGetAll(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 200,
+  ) {
+    const result = await this.postsService.getAllPostsAdmin(page, limit);
+    return { success: true, data: result.posts, total: result.total };
+  }
+
+  @Post('admin/:id/reject')
+  async adminRejectPost(
+    @Param('id') id: string,
+    @Body('rejectionReason') rejectionReason: string,
+  ) {
+    const post = await this.postsService.adminRejectPost(id, rejectionReason || 'Rejected by admin');
+    return { success: true, message: 'Post rejected', data: post };
+  }
+
   @Delete('admin/:id')
-async adminDelete(@Param('id') id: string) {
-  await this.postsService.adminDelete(id);
-  return { success: true, message: 'Post deleted by admin' };
-}
+  async adminDelete(@Param('id') id: string) {
+    await this.postsService.adminDelete(id);
+    return { success: true, message: 'Post deleted by admin' };
+  }
 
   @Delete(':id/:userId')
   async delete(@Param('id') id: string, @Param('userId') userId: string) {

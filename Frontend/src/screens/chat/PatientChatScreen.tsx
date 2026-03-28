@@ -422,7 +422,7 @@ export default function PatientChatScreen({ route }: Props) {
           {isDoctorOnline && <View style={styles.onlineDot} />}
         </View>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.headerName}>Dr. {doctorName}</Text>
+          <Text style={styles.headerName}>{doctorName}</Text>
           <Text style={styles.headerStatus}>
             {isDoctorTyping ? 'Typing...' : isDoctorOnline ? 'Online' : doctorSpecialty || 'Offline'}
           </Text>

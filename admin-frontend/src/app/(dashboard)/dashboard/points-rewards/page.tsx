@@ -13,6 +13,7 @@ interface Doctor {
 
 interface PointsSummary {
   totalPoints: number;
+  lifetimePointsEarned: number;
   cashValue: number;
   trustBadge: 'none' | 'bronze' | 'silver' | 'gold' | 'platinum';
   trustScore: number;
@@ -94,7 +95,7 @@ export default function PointsRewardsPage() {
     try {
       const res = await fetch(`${BASE_URL}/points-reward/${doctorId}/recalculate`, { method: 'POST' });
       if (res.ok) {
-        showToast(`Points recalculated for Dr. ${doctorName}`, 'success');
+        showToast(`Points recalculated for ${doctorName}`, 'success');
         // Refresh that doctor's data
         const updated = await fetch(`${BASE_URL}/points-reward/${doctorId}`).then(r => r.json());
         setData(prev => prev.map(d =>
@@ -229,7 +230,7 @@ export default function PointsRewardsPage() {
                   <tr key={doctor._id} className="table-row">
                     <td>
                       <div className="person-cell">
-                        <div className="person-name">Dr. {doctor.fullName}</div>
+                        <div className="person-name">{doctor.fullName}</div>
                         <div className="person-email">{doctor.email}</div>
                       </div>
                     </td>
@@ -243,15 +244,21 @@ export default function PointsRewardsPage() {
                         <span className="points-val">{(summary?.totalPoints || 0).toLocaleString()}</span>
                         <span className="points-label">pts</span>
                       </div>
+                      <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>
+                        Lifetime: {(summary?.lifetimePointsEarned || 0).toLocaleString()}
+                      </div>
                     </td>
                     <td>
                       <span className="cash-val">PKR {(summary?.cashValue || 0).toLocaleString()}</span>
                     </td>
                     <td>
-                      <span className="badge-chip" style={{ background: badgeColors[badge].bg, color: badgeColors[badge].color }}>
-                        <ShieldIcon color={badgeColors[badge].color} size={13} />
-                        {badge === 'none' ? '—' : badge.charAt(0).toUpperCase() + badge.slice(1)}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span className="badge-chip" style={{ background: badgeColors[badge].bg, color: badgeColors[badge].color }}>
+                          <ShieldIcon color={badgeColors[badge].color} size={13} />
+                          {badge === 'none' ? '—' : badge.charAt(0).toUpperCase() + badge.slice(1)}
+                        </span>
+                        <span style={{ fontSize: 11, color: '#888' }}>Score: {summary?.trustScore || 0}/4</span>
+                      </div>
                     </td>
                     <td>
                       <div className="booking-cell">
@@ -294,7 +301,7 @@ export default function PointsRewardsPage() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h2 className="modal-title">Dr. {selected.doctor.fullName}</h2>
+                <h2 className="modal-title">{selected.doctor.fullName}</h2>
                 <p className="modal-sub">{selected.doctor.email}</p>
               </div>
               <button className="modal-close" onClick={() => setSelected(null)}>✕</button>
@@ -306,6 +313,9 @@ export default function PointsRewardsPage() {
                   <div className="mc-icon" style={{ background: '#ede9fe', color: '#6B7FED' }}>⭐</div>
                   <div className="mc-val">{(selected.summary?.totalPoints || 0).toLocaleString()}</div>
                   <div className="mc-label">Total Points</div>
+                  <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+                    Lifetime: {(selected.summary?.lifetimePointsEarned || 0).toLocaleString()}
+                  </div>
                 </div>
                 <div className="modal-card">
                   <div className="mc-icon" style={{ background: '#d1fae5', color: '#059669' }}>💵</div>

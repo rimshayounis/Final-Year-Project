@@ -374,6 +374,32 @@ export class PostsService {
 
     return { posts, total, page, totalPages: Math.ceil(total / limit) };
   }
+  // Admin: get all posts including private ones (isActive: false)
+  async getAllPostsAdmin(
+    page = 1,
+    limit = 200,
+  ): Promise<{ posts: PostDocument[]; total: number }> {
+    const skip = (page - 1) * limit;
+    const [posts, total] = await Promise.all([
+      this.postModel.find().sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.postModel.countDocuments(),
+    ]);
+    await this.populateAuthors(posts);
+    return { posts, total };
+  }
+
+  async adminRejectPost(id: string, rejectionReason: string): Promise<PostDocument> {
+    const post = await this.postModel
+      .findByIdAndUpdate(
+        id,
+        { status: 'rejected', rejectionReason },
+        { new: true },
+      )
+      .exec();
+    if (!post) throw new NotFoundException('Post not found');
+    return post;
+  }
+
   async adminDelete(id: string) {
   const post = await this.postModel.findByIdAndDelete(id);
   if (!post) throw new NotFoundException('Post not found');

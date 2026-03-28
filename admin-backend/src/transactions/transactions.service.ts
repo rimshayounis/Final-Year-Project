@@ -274,4 +274,20 @@ export class TransactionsService {
       transactions:        all,
     };
   }
+
+  // Total PKR and points paid out by platform via points-to-cash conversions
+  async getPointsPayoutTotal(): Promise<{ total: number; totalPoints: number }> {
+    const wallets = await this.walletModel.find().lean().exec() as any[];
+    let total = 0;
+    let totalPoints = 0;
+    for (const wallet of wallets) {
+      for (const tx of (wallet.transactions ?? []) as any[]) {
+        if (tx.type === 'points_converted') {
+          total       += tx.amount     ?? 0; // PKR value
+          totalPoints += tx.pointsUsed ?? 0; // points spent
+        }
+      }
+    }
+    return { total: +total.toFixed(2), totalPoints };
+  }
 }

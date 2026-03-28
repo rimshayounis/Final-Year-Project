@@ -341,7 +341,7 @@ export default function BookAppointmentScreen() {
                   <View style={styles.doctorInfo}>
                     <TouchableOpacity onPress={() => handleProfilePress(doctor)} style={styles.nameRow}>
                       <Text style={[styles.doctorName, { color: t.textPrimary }]} numberOfLines={1}>
-                        Dr. {doctor.fullName}
+                        {doctor.fullName}
                       </Text>
                       {/* Blue verified tick — premium only, inline with name */}
                       {isPremium && (
