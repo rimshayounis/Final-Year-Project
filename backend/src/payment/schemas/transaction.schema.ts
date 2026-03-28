@@ -14,7 +14,7 @@ export class Transaction {
    */
   @Prop({
     required: true,
-    enum: ['subscription_payment', 'appointment_payment', 'appointment_release', 'appointment_commission'],
+    enum: ['subscription_payment', 'appointment_payment', 'appointment_release', 'appointment_commission', 'withdrawal_fee'],
     default: 'subscription_payment',
   })
   type: string;

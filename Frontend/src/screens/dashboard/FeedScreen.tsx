@@ -663,7 +663,7 @@ export default function FeedScreen({
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.verifiedDoctorName}>{"Dr. " + info.fullName}</Text>
+                  <Text style={s.verifiedDoctorName}>{info.fullName.split(" ").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</Text>
                   {info.specialization ? (
                     <Text style={s.verifiedDoctorSpec}>{info.specialization}</Text>
                   ) : null}
@@ -694,7 +694,7 @@ export default function FeedScreen({
     const resolvedName = authorNames[authorId] || author?.fullName || "";
     const isDoc = doctorIds.has(authorId);
     const authorName = resolvedName
-      ? (isDoc ? "Dr. " : "") + resolvedName.charAt(0).toUpperCase() + resolvedName.slice(1).toLowerCase()
+      ? resolvedName.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
       : "...";
     const authorInitial = resolvedName ? resolvedName.charAt(0).toUpperCase() : "?";
     const authorImage = profileImages[authorId] ?? null;
