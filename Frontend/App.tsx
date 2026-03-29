@@ -28,6 +28,11 @@ import { StripeProvider } from '@stripe/stripe-react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+// ── SOS imports ────────────────────────────────────────────────────────────
+import { useShakeSOS } from './src/hooks/useShakeSOS';   // 👈 NEW
+import SOSButton from './src/components/SOSButton';       // 👈 NEW
+
 import SplashScreen from './src/screens/SplashScreen';
 import LoginTypeScreen from './src/screens/LoginTypeScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -54,7 +59,7 @@ import TermsOfServiceScreen from './src/screens/settings/TermsOfServiceScreen';
 import HelpFAQScreen from './src/screens/settings/HelpFAQScreen';
 import ContactSupportScreen from './src/screens/settings/ContactSupportScreen';
 
-// ── New forgot-password screens ────────────────────────────────────────────
+// ── Forgot password screens ────────────────────────────────────────────────
 import ForgotPasswordScreen  from './src/screens/ForgotPasswordScreen';
 import OTPVerificationScreen from './src/screens/OtpVerification';
 import ResetPasswordScreen   from './src/screens/ResetPasswordScreen';
@@ -107,6 +112,9 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
+
+  useShakeSOS(); // 👈 NEW — shake × 3 triggers SOS on Android
+
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener((notification) => {
       console.log('[Push] Received:', notification.request.content.title);
@@ -118,6 +126,10 @@ export default function App() {
     <SafeAreaProvider>
       <StripeProvider publishableKey="pk_test_51TCBMfR4G6lL4JOFxa4zONwnxiuq8c59n03D2gyzirdMdlhhv0Ntk9a2I9aw2PUHRDmPjPAvngQzp8PndA5IQxMh003DjzSFS1">
         <NavigationContainer>
+
+          {/* 👇 NEW — red SOS button floats on every screen bottom right */}
+          <SOSButton />
+
           <Stack.Navigator
             initialRouteName="Splash"
             screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
@@ -152,6 +164,7 @@ export default function App() {
             <Stack.Screen name="OTPVerification"      component={OTPVerificationScreen} />
             <Stack.Screen name="ResetPassword"        component={ResetPasswordScreen} />
           </Stack.Navigator>
+
         </NavigationContainer>
       </StripeProvider>
     </SafeAreaProvider>
