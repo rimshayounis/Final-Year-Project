@@ -1,4 +1,14 @@
-import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MinLength,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class RegisterUserDto {
   @IsNotEmpty() @IsString()  fullName:  string;
@@ -22,12 +32,31 @@ export class CreateHealthProfileDto {
   @IsOptional() @IsString() additionalNotes?: string;
 }
 
+// ── Emergency Contact ──────────────────────────────────────────────────────
+
+export class EmergencyContactDto {
+  @IsNotEmpty()
+  @IsString()
+  fullName: string;
+
+  @IsNotEmpty()
+  @IsString()
+  phoneNumber: string;
+
+  @IsNotEmpty()
+  @IsString()
+  relationship: string;
+
+  @IsOptional()   // 👈 optional so signup doesn't break if not provided
+  @IsEmail()
+  email?: string;
+}
+
 export class CreateEmergencyContactsDto {
-  contacts: {
-    fullName:     string;
-    phoneNumber:  string;
-    relationship: string;
-  }[];
+  @IsArray()
+  @ValidateNested({ each: true })  // 👈 validates each contact object
+  @Type(() => EmergencyContactDto) // 👈 transforms plain object to class
+  contacts: EmergencyContactDto[];
 }
 
 // ── Forgot Password DTOs ───────────────────────────────────────────────────

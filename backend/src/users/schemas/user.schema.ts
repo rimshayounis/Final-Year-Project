@@ -22,6 +22,8 @@ export class EmergencyContact {
   @Prop({ required: true }) fullName: string;
   @Prop({ required: true }) phoneNumber: string;
   @Prop({ required: true }) relationship: string;
+  @Prop({ required: false })  // 👈 add this
+  email?: string;
 }
 
 @Schema({ timestamps: true })
