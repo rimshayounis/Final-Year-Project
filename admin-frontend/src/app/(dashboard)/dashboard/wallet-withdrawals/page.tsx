@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/services/auth.service';
+import { MentorLevelBadge, fetchMentorLevels, type MentorLevel } from '@/components/MentorLevelBadge';
 
 interface Withdrawal {
   txId: string;
@@ -74,6 +75,7 @@ export default function WalletWithdrawalsPage() {
   const [tab, setTab]                   = useState<FilterTab>('all');
   const [search, setSearch]             = useState('');
   const [actionId, setActionId]         = useState<string | null>(null);
+  const [mentorLevels, setMentorLevels] = useState<Record<string, MentorLevel>>({});
   const [confirmModal, setConfirmModal] = useState<{
     txId: string; doctorId: string; action: 'succeeded' | 'rejected';
     doctorName: string; doctorPhoto: string | null; amount: number;
@@ -90,7 +92,10 @@ export default function WalletWithdrawalsPage() {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
       const res = await api.get('/wallet/admin/withdrawals');
-      setWithdrawals(res.data?.data ?? []);
+      const list: Withdrawal[] = res.data?.data ?? [];
+      setWithdrawals(list);
+      const ids = [...new Set(list.map(w => w.doctorId))];
+      fetchMentorLevels(ids, 'http://localhost:3000/api').then(setMentorLevels);
     } catch {
       showToast('Failed to load withdrawals', 'error');
     } finally {
@@ -230,6 +235,7 @@ export default function WalletWithdrawalsPage() {
                         <div>
                           <div className="person-name">{w.doctorName}</div>
                           <div className="person-email">{w.doctorEmail}</div>
+                          <MentorLevelBadge level={mentorLevels[w.doctorId]} size="sm" />
                         </div>
                       </div>
                     </td>
@@ -329,6 +335,7 @@ export default function WalletWithdrawalsPage() {
                 <div style={{ flex: 1 }}>
                   <div className="person-name">{confirmModal.doctorName}</div>
                   <div className="person-email">Withdrawal Request</div>
+                  <MentorLevelBadge level={mentorLevels[confirmModal.doctorId]} size="sm" />
                 </div>
                 <span className="status-chip" style={{ background: '#fef3c7', color: '#92400e' }}>Pending</span>
               </div>

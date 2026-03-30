@@ -77,6 +77,121 @@ export class PostsService {
     }
   }
 
+  // ── Interest → post category mapping ─────────────────────────────────────
+  private readonly INTEREST_CATEGORY_MAP: Record<string, string[]> = {
+    'Skin Care':     ['Hair & Skin'],
+    'Hair Care':     ['Hair & Skin'],
+    'Weight Loss':   ['Fitness', 'Nutrition'],
+    'Weight Gain':   ['Fitness', 'Nutrition'],
+    'Mental Health': ['Mental Health'],
+    'Fitness':       ['Fitness'],
+    'Nutrition':     ['Nutrition'],
+    'Sleep Health':  ['General Health'],
+  };
+
+  async getRecommendedFeed(
+    userId: string,
+    page = 1,
+    limit = 10,
+  ): Promise<{ posts: PostDocument[]; total: number; page: number; totalPages: number; isPersonalized: boolean; matchedCategories: string[] }> {
+    // 1. Load user interests
+    const user = await this.userModel
+      .findById(userId)
+      .select('healthProfile')
+      .lean()
+      .exec();
+
+    const interests: string[] = (user as any)?.healthProfile?.interests ?? [];
+
+    // No interests saved → plain chronological feed
+    if (!interests.length) {
+      const base = await this.getApprovedPosts(page, limit);
+      return { ...base, isPersonalized: false, matchedCategories: [] };
+    }
+
+    // 2. Map interests → post categories (deduplicated)
+    const matchedCategories = [
+      ...new Set(interests.flatMap((i) => this.INTEREST_CATEGORY_MAP[i] ?? [])),
+    ];
+
+    // 3. Find other users who share at least one interest
+    const sameInterestUsers = await this.userModel
+      .find({
+        'healthProfile.interests': { $in: interests },
+        _id: { $ne: new Types.ObjectId(userId) },
+      })
+      .select('_id')
+      .lean()
+      .exec();
+
+    const sameInterestUserIds = sameInterestUsers.map((u: any) =>
+      new Types.ObjectId(u._id),
+    );
+
+    // 4. Aggregate: score each post, sort by score desc then newest
+    const skip = (page - 1) * limit;
+
+    const pipeline: any[] = [
+      { $match: { status: 'approved', isActive: true } },
+      {
+        $addFields: {
+          _score: {
+            $add: [
+              // +2 if the post category matches the user's interests
+              {
+                $cond: [{ $in: ['$category', matchedCategories] }, 2, 0],
+              },
+              // +1 if the post author shares at least one interest with this user
+              {
+                $cond: [
+                  sameInterestUserIds.length > 0
+                    ? { $in: ['$userId', sameInterestUserIds] }
+                    : false,
+                  1,
+                  0,
+                ],
+              },
+            ],
+          },
+        },
+      },
+      { $sort: { _score: -1, createdAt: -1 } },
+      {
+        $facet: {
+          paged: [{ $skip: skip }, { $limit: limit }],
+          count:  [{ $count: 'n' }],
+        },
+      },
+    ];
+
+    const [agg] = await this.postModel.aggregate(pipeline).exec();
+    const total     = agg.count[0]?.n ?? 0;
+    const rawPaged  = agg.paged as any[];
+
+    // 5. Re-fetch as proper Mongoose documents (needed for populateAuthors)
+    const orderedIds = rawPaged.map((p: any) => p._id);
+    const docs = await this.postModel
+      .find({ _id: { $in: orderedIds } })
+      .exec();
+
+    // Restore the aggregation sort order
+    const idStr = orderedIds.map((id: any) => id.toString());
+    docs.sort(
+      (a, b) => idStr.indexOf(a._id.toString()) - idStr.indexOf(b._id.toString()),
+    );
+
+    await this.populateAuthors(docs);
+
+    return {
+      posts: docs,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      isPersonalized: true,
+      matchedCategories,
+    };
+  }
+
   async getApprovedPosts(
     page = 1,
     limit = 10,

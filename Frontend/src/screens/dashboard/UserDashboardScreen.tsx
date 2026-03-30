@@ -134,6 +134,7 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
           activeTab={activeTab}
           onTabChange={(tab) => {
             setViewingDoctorId(null);
+            setViewingUserId(null);
             setActiveTab(tab);
           }}
         />

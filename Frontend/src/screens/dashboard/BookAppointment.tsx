@@ -40,6 +40,27 @@ const darkTheme = {
 const SESSION_OPTIONS = [0, 15, 20, 30, 45, 60]; // 0 = All
 const TIME_PERIODS = ['All', 'Morning', 'Afternoon', 'Evening'];
 
+// interest label → specialization keywords (case-insensitive partial match)
+const INTEREST_SPEC_MAP: Record<string, string[]> = {
+  'Skin Care':     ['dermatol'],
+  'Hair Care':     ['dermatol', 'trichol'],
+  'Weight Loss':   ['nutritio', 'dietit', 'endocrinol'],
+  'Weight Gain':   ['nutritio', 'dietit'],
+  'Mental Health': ['psychol', 'psychiatr'],
+  'Fitness':       ['physiother', 'sports', 'orthop'],
+  'Nutrition':     ['nutritio', 'dietit'],
+  'Sleep Health':  ['neurol', 'general'],
+};
+
+function getMatchedKeywords(interests: string[]): string[] {
+  return [...new Set(interests.flatMap((i) => INTEREST_SPEC_MAP[i] ?? []))];
+}
+
+function specializationMatches(spec: string, keywords: string[]): boolean {
+  const lower = spec.toLowerCase();
+  return keywords.some((kw) => lower.includes(kw));
+}
+
 const getTimePeriod = (slot: string): string => {
   const [hStr] = slot.split(':');
   const h = parseInt(hStr, 10);
@@ -52,6 +73,13 @@ const getTimePeriod = (slot: string): string => {
 type SubscriptionPlan = 'free_trial' | 'basic' | 'professional' | 'premium';
 const PLAN_RANK: Record<SubscriptionPlan, number> = { premium: 4, professional: 3, basic: 2, free_trial: 1 };
 const isPremiumPlan = (plan?: SubscriptionPlan) => plan === 'premium';
+
+interface MentorLevel {
+  level:     number;
+  title:     string;
+  score:     number;
+  nextScore: number | null;
+}
 
 interface Doctor {
   _id:               string;
@@ -66,6 +94,7 @@ interface Doctor {
   avgRating?:        number;
   ratingCount?:      number;
   specificDates?:    { date: string; timeSlots: { start: string; end: string }[] }[];
+  mentorLevel?:      MentorLevel;
 }
 
 interface Filters {
@@ -96,6 +125,7 @@ export default function BookAppointmentScreen() {
   const [filterVisible,    setFilterVisible]    = useState(false);
   const [filters,          setFilters]          = useState<Filters>(DEFAULT_FILTERS);
   const [pendingFilters,   setPendingFilters]   = useState<Filters>(DEFAULT_FILTERS);
+  const [matchedKeywords,  setMatchedKeywords]  = useState<string[]>([]);
 
   const searchWidth = useRef(new Animated.Value(0)).current;
 
@@ -109,12 +139,24 @@ export default function BookAppointmentScreen() {
   };
 
   useEffect(() => { loadDoctors(); }, []);
-  useEffect(() => { filterDoctors(); }, [selectedCategory, searchQuery, doctors, filters]);
+  useEffect(() => { filterDoctors(); }, [selectedCategory, searchQuery, doctors, filters, matchedKeywords]);
 
   const loadDoctors = async () => {
     try {
       setIsLoading(true);
-      const response = await appointmentAPI.getAllDoctorsWithAvailability();
+
+      // Fetch user interests and doctor list in parallel
+      const [response, userRes] = await Promise.all([
+        appointmentAPI.getAllDoctorsWithAvailability(),
+        userId ? apiClient.get(`/users/${userId}`).catch(() => null) : Promise.resolve(null),
+      ]);
+
+      const interests: string[] =
+        userRes?.data?.user?.healthProfile?.interests ??
+        userRes?.data?.data?.healthProfile?.interests ?? [];
+      const keywords = getMatchedKeywords(interests);
+      setMatchedKeywords(keywords);
+
       if (response.data?.success) {
         const baseUrl = API_URL.replace('/api', '');
         const doctorsData: Doctor[] = await Promise.all(
@@ -125,13 +167,22 @@ export default function BookAppointmentScreen() {
               const specialization = raw.trim().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
               let profileImage: string | undefined;
-              try {
-                const pr = await apiClient.get(`/profiles/doctor/${item.doctorId._id}`);
-                const pd = pr.data?.data;
+              let mentorLevel: MentorLevel | undefined;
+
+              const [profileRes, mentorRes] = await Promise.allSettled([
+                apiClient.get(`/profiles/doctor/${item.doctorId._id}`),
+                apiClient.get(`/points-reward/${item.doctorId._id}/mentor-level`),
+              ]);
+
+              if (profileRes.status === 'fulfilled') {
+                const pd = profileRes.value.data?.data;
                 if (pd?.profileImage) {
                   profileImage = pd.profileImage.startsWith('http') ? pd.profileImage : baseUrl + pd.profileImage;
                 }
-              } catch { /* no profile */ }
+              }
+              if (mentorRes.status === 'fulfilled') {
+                mentorLevel = mentorRes.value.data?.data ?? undefined;
+              }
 
               return {
                 _id:              item.doctorId._id,
@@ -146,16 +197,20 @@ export default function BookAppointmentScreen() {
                 avgRating:        item.doctorId.avgRating,
                 ratingCount:      item.doctorId.ratingCount,
                 specificDates:    item.specificDates,
+                mentorLevel,
               };
             })
         );
 
-        // Sort: premium/professional first (by plan rank desc), then by completedCount desc
+        // Sort: interest-matched first, then by plan rank, then by mentor level
         doctorsData.sort((a, b) => {
+          const aMatch = keywords.length > 0 && specializationMatches(a.specialization, keywords) ? 1 : 0;
+          const bMatch = keywords.length > 0 && specializationMatches(b.specialization, keywords) ? 1 : 0;
+          if (bMatch !== aMatch) return bMatch - aMatch;
           const planDiff = (PLAN_RANK[b.subscriptionPlan ?? 'free_trial'] ?? 1) -
                            (PLAN_RANK[a.subscriptionPlan ?? 'free_trial'] ?? 1);
           if (planDiff !== 0) return planDiff;
-          return b.completedCount - a.completedCount;
+          return (b.mentorLevel?.level ?? 0) - (a.mentorLevel?.level ?? 0);
         });
 
         setDoctors(doctorsData);
@@ -309,19 +364,30 @@ export default function BookAppointmentScreen() {
           </View>
         ) : (
           filteredDoctors.map(doctor => {
-            const isPremium    = isPremiumPlan(doctor.subscriptionPlan);
+            const isPremium     = isPremiumPlan(doctor.subscriptionPlan);
             const isRecommended = doctor.completedCount >= 30;
+            const isSuggested   = matchedKeywords.length > 0 && specializationMatches(doctor.specialization, matchedKeywords);
             return (
               <View key={doctor._id} style={[
                 styles.doctorCard,
-                { backgroundColor: t.cardBg, borderColor: t.border },
+                { backgroundColor: t.cardBg, borderColor: isSuggested ? '#7B8CDE' : t.border, borderWidth: isSuggested ? 1.5 : 1 },
               ]}>
-                {/* Recommended badge */}
-                {isRecommended && (
-                  <View style={styles.recommendedBadge}>
-                    <MaterialIcons name="verified" size={11} color="#FFF" />
-                    <Text style={styles.recommendedText}>Recommended</Text>
-                    <Text style={styles.recommendedCount}>{doctor.completedCount} sessions</Text>
+                {/* Badges row */}
+                {(isSuggested || isRecommended) && (
+                  <View style={styles.badgesRow}>
+                    {isSuggested && (
+                      <View style={styles.suggestedBadge}>
+                        <Ionicons name="sparkles" size={11} color="#FFF" />
+                        <Text style={styles.suggestedText}>Suggested for you</Text>
+                      </View>
+                    )}
+                    {isRecommended && (
+                      <View style={styles.recommendedBadge}>
+                        <MaterialIcons name="verified" size={11} color="#FFF" />
+                        <Text style={styles.recommendedText}>Recommended</Text>
+                        <Text style={styles.recommendedCount}>{doctor.completedCount} sessions</Text>
+                      </View>
+                    )}
                   </View>
                 )}
 
@@ -369,6 +435,38 @@ export default function BookAppointmentScreen() {
                           <MaterialIcons name="star" size={11} color="#F6A623" />
                           <Text style={[styles.metaChipText, { color: '#B07D00' }]}>
                             {(doctor.avgRating ?? 0).toFixed(1)}
+                          </Text>
+                        </View>
+                      )}
+                      {doctor.mentorLevel && (
+                        <View style={[styles.metaChip, {
+                          backgroundColor:
+                            doctor.mentorLevel.level === 5 ? '#F3E5F5'
+                            : doctor.mentorLevel.level === 4 ? '#FFF8E7'
+                            : doctor.mentorLevel.level === 3 ? '#EEF0FB'
+                            : doctor.mentorLevel.level === 2 ? '#E8F5E9'
+                            : '#F5F5F5',
+                        }]}>
+                          <Ionicons
+                            name="ribbon"
+                            size={11}
+                            color={
+                              doctor.mentorLevel.level === 5 ? '#7B1FA2'
+                              : doctor.mentorLevel.level === 4 ? '#F9A825'
+                              : doctor.mentorLevel.level === 3 ? '#6B7FED'
+                              : doctor.mentorLevel.level === 2 ? '#00B374'
+                              : '#999'
+                            }
+                          />
+                          <Text style={[styles.metaChipText, {
+                            color:
+                              doctor.mentorLevel.level === 5 ? '#7B1FA2'
+                              : doctor.mentorLevel.level === 4 ? '#B07D00'
+                              : doctor.mentorLevel.level === 3 ? '#6B7FED'
+                              : doctor.mentorLevel.level === 2 ? '#00B374'
+                              : '#999',
+                          }]}>
+                            Lv.{doctor.mentorLevel.level} {doctor.mentorLevel.title}
                           </Text>
                         </View>
                       )}
@@ -500,7 +598,10 @@ const styles = StyleSheet.create({
   // Doctor card
   doctorCard:         { padding: 14, borderRadius: 18, borderWidth: 1, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
   premiumCard:        { borderWidth: 1.5, elevation: 4, shadowOpacity: 0.12 },
-  recommendedBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#16A34A', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, marginBottom: 10 },
+  badgesRow:          { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  suggestedBadge:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#7B8CDE', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  suggestedText:      { fontSize: 11, fontWeight: '700', color: '#FFF' },
+  recommendedBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#16A34A', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   recommendedText:    { fontSize: 11, fontWeight: '700', color: '#FFF' },
   recommendedCount:   { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.85)' },
   cardBody:           { flexDirection: 'row', alignItems: 'center' },

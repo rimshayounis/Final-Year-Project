@@ -24,7 +24,7 @@ const ICONS: Record<string, React.ReactNode> = {
 const navItems = [
   { href: '/dashboard',                   label: 'Dashboard',      icon: 'dashboard'    },
   { href: '/dashboard/users/patients',    label: 'Patients',       icon: 'patients'     },
-  { href: '/dashboard/users/doctors',     label: 'Doctors',        icon: 'doctors'      },
+  { href: '/dashboard/users/doctors',     label: 'Professionals',  icon: 'doctors'      },
   { href: '/dashboard/appointments',      label: 'Appointments',   icon: 'appointments' },
   { href: '/dashboard/posts',             label: 'Posts',          icon: 'posts'        },
   { href: '/dashboard/wallet-withdrawals',label: 'Withdrawals',    icon: 'withdrawals'  },

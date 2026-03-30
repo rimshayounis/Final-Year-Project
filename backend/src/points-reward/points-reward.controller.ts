@@ -51,4 +51,11 @@ export class PointsRewardController {
     const result = await this.pointsRewardService.recalculateWallet(doctorId);
     return { success: true, data: result };
   }
+
+  // GET /points-reward/:doctorId/mentor-level
+  @Get(':doctorId/mentor-level')
+  async getMentorLevel(@Param('doctorId') doctorId: string) {
+    const result = await this.pointsRewardService.getMentorLevel(doctorId);
+    return { success: true, data: result };
+  }
 }

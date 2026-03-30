@@ -231,6 +231,8 @@ export default function FeedScreen({
   const [filterVisible, setFilterVisible] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isPersonalized, setIsPersonalized] = useState(false);
+  const [matchedCategories, setMatchedCategories] = useState<string[]>([]);
 
   const [reportPost, setReportPost]           = useState<Post | null>(null);
   const [reportReason, setReportReason]       = useState("");
@@ -316,9 +318,18 @@ export default function FeedScreen({
           );
         }
       } else {
-        const cat = selectedCategory === "All" ? "" : selectedCategory;
-        const url = cat ? `/posts/category/${encodeURIComponent(cat)}` : "/posts/feed";
-        list = (await apiClient.get(url)).data.data || [];
+        if (selectedCategory === "All") {
+          // Use personalized recommended feed for users
+          const res = await apiClient.get(`/posts/feed/recommended?userId=${id}`);
+          list = res.data.data || [];
+          setIsPersonalized(res.data.isPersonalized ?? false);
+          setMatchedCategories(res.data.matchedCategories ?? []);
+        } else {
+          setIsPersonalized(false);
+          setMatchedCategories([]);
+          const url = `/posts/category/${encodeURIComponent(selectedCategory)}`;
+          list = (await apiClient.get(url)).data.data || [];
+        }
       }
 
       const uniqueIds = [
@@ -1302,6 +1313,22 @@ const s = StyleSheet.create({
   emptyWrap: { paddingTop: 80, alignItems: "center", paddingHorizontal: 40 },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: "#2C3E50", marginTop: 16 },
   emptySubtitle: { fontSize: 13, color: "#999", marginTop: 6, textAlign: "center", lineHeight: 20 },
+  personalizedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EEF0FB",
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#D4D9F5",
+  },
+  personalizedText: { fontSize: 12, color: "#555", fontWeight: "500", flex: 1, flexWrap: "wrap" },
+  personalizedCategories: { color: "#7B8CDE", fontWeight: "700" },
   filterWrap: { backgroundColor: "#FFF", marginBottom: 8, borderBottomWidth: 1, borderBottomColor: "#ECEEF5" },
   filterBadge: {
     position: "absolute",

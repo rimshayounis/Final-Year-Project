@@ -15,6 +15,7 @@ export class HealthProfile {
   @Prop({ required: false }) stressLevel:      string;
   @Prop({ required: false }) dietPreference:   string;
   @Prop({ required: false }) additionalNotes?: string;
+  @Prop({ type: [String], default: [] }) interests: string[];
 }
 
 @Schema({ _id: false })

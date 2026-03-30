@@ -64,6 +64,27 @@ export class PostsController {
     return { success: true, data: result.posts, pagination: { page: result.page, limit: Number(limit), total: result.total, totalPages: result.totalPages } };
   }
 
+  // ⚠️ MUST be before @Get(':id')
+  @Get('feed/recommended')
+  async getRecommendedFeed(
+    @Query('userId') userId: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    if (!userId) {
+      const result = await this.postsService.getApprovedPosts(page, limit);
+      return { success: true, data: result.posts, isPersonalized: false, matchedCategories: [], pagination: { page: result.page, limit: Number(limit), total: result.total, totalPages: result.totalPages } };
+    }
+    const result = await this.postsService.getRecommendedFeed(userId, page, limit);
+    return {
+      success: true,
+      data: result.posts,
+      isPersonalized: result.isPersonalized,
+      matchedCategories: result.matchedCategories,
+      pagination: { page: result.page, limit: Number(limit), total: result.total, totalPages: result.totalPages },
+    };
+  }
+
   @Get('user/:userId')
   async getUserPosts(
     @Param('userId') userId: string,

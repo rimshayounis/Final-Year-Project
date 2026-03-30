@@ -49,13 +49,16 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const isTherapist = professionalType === 'psychologist';
+  const isPsychologist = professionalType === 'psychologist';
 
   /* ------------------ PROFESSIONAL TYPE SELECTOR ------------------ */
   const handleSelectProfessionalType = (type: 'doctor' | 'psychologist') => {
     setProfessionalType(type);
-    // Clear fields when switching so nothing carries over
-    setFormData(prev => ({ ...prev, specialization: '', licenseNumber: '' }));
+    setFormData(prev => ({
+      ...prev,
+      specialization: type === 'psychologist' ? 'Psychologist' : '',
+      licenseNumber: '',
+    }));
   };
 
   /* ------------------ INPUT HANDLER ------------------ */
@@ -97,7 +100,7 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
   /* ------------------ VALIDATION ------------------ */
   const validate = () => {
     if (!professionalType)
-      return Alert.alert('Error', 'Please select Doctor or Therapist'), false;
+      return Alert.alert('Error', 'Please select Doctor or Psychologist'), false;
 
     if (!formData.fullName.trim())
       return Alert.alert('Error', 'Full name is required'), false;
@@ -111,7 +114,7 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
     if (!formData.specialization.trim())
       return Alert.alert('Error', 'Specialization is required'), false;
 
-    if (!isTherapist && !formData.licenseNumber.trim())
+    if (!isPsychologist && !formData.licenseNumber.trim())
       return Alert.alert('Error', 'PMDC License No. is required for doctors'), false;
 
     if (certificates.length === 0)
@@ -230,7 +233,7 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
                     color={professionalType === 'psychologist' ? '#fff' : '#6B7FED'}
                   />
                   <Text style={[styles.typeCardText, professionalType === 'psychologist' && styles.typeCardTextActive]}>
-                    Therapist
+                    Psychologist
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -241,7 +244,7 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
               {renderPasswordInput()}
               {renderInput('Specialization', 'specialization', formData.specialization)}
               {renderInput(
-                isTherapist ? 'PPA / HEC Certification No.' : 'PMDC License No.',
+                isPsychologist ? 'PPA / HEC Certification No.' : 'PMDC License No.',
                 'licenseNumber',
                 formData.licenseNumber,
               )}
@@ -284,25 +287,26 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
       fullName:       'name',
       email:          'naveed@example.com',
       password:       'Min. 8 characters',
-      specialization: isTherapist ? 'e.g. Clinical Psychologist' : 'e.g. Cardiologist',
-      licenseNumber:  isTherapist ? 'Optional — enter if available' : 'e.g. 123456-01-M',
+      specialization: isPsychologist ? 'e.g. Clinical Psychologist' : 'e.g. Cardiologist',
+      licenseNumber:  isPsychologist ? 'Optional — enter if available' : 'e.g. 123456-01-M',
     };
 
     return (
       <View style={styles.inputGroup}>
         <Text style={styles.label}>
           {label}
-          {field === 'licenseNumber' && isTherapist && (
+          {field === 'licenseNumber' && isPsychologist && (
             <Text style={styles.optionalTag}> (optional)</Text>
           )}
         </Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, field === 'specialization' && isPsychologist && styles.inputDisabled]}
           value={value}
           placeholder={placeholders[field]}
           placeholderTextColor="#AAAAAA"
           keyboardType={keyboardType}
           autoCapitalize="none"
+          editable={!(field === 'specialization' && isPsychologist)}
           onChangeText={text => handleChange(field, text)}
         />
       </View>

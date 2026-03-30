@@ -5,6 +5,7 @@ import { PointsRewardService } from './points-reward.service';
 import { PointsReward, PointsRewardSchema } from './schemas/points-reward.schema';
 import { Post, PostSchema } from '../posts/schemas/post.schema';
 import { BookedAppointment, BookedAppointmentSchema } from '../booked-appointment/schemas/booked-appointment.schema';
+import { Doctor, DoctorSchema } from '../doctors/schemas/doctor.schema';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { BookedAppointment, BookedAppointmentSchema } from '../booked-appointmen
       { name: PointsReward.name, schema: PointsRewardSchema },
       { name: Post.name, schema: PostSchema },
       { name: BookedAppointment.name, schema: BookedAppointmentSchema },
+      { name: Doctor.name, schema: DoctorSchema },
     ]),
   ],
   controllers: [PointsRewardController],

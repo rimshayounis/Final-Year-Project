@@ -13,7 +13,7 @@ type TxType =
   | 'withdrawal_rejected'
   | 'likes_1k' | 'likes_5k' | 'likes_10k'
   | 'likes_1k_reversed' | 'likes_5k_reversed' | 'likes_10k_reversed'
-  | 'post_deleted' | 'booking_monthly' | 'trust_badge' | 'wallet_recalculated' | 'points_converted'
+  | 'post_deleted' | 'booking_monthly' | 'wallet_recalculated' | 'points_converted'
   | 'withdrawal_fee';
 
 type TxStatus = 'succeeded' | 'pending' | 'failed' | 'rejected' | 'earned' | 'deducted';
@@ -77,7 +77,6 @@ const TYPE_LABELS: Record<string, string> = {
   likes_10k_reversed:     'Likes 10K Reversed',
   post_deleted:           'Post Deleted',
   booking_monthly:        'Monthly Booking',
-  trust_badge:            'Trust Badge',
   points_converted:       'Points → Cash',
   withdrawal_fee:         'Withdrawal Fee',
 };
@@ -98,54 +97,9 @@ const TYPE_COLORS: Record<string, { bg: string; color: string }> = {
   likes_10k_reversed:     { bg: '#F3F4F6', color: '#6B7280' },
   post_deleted:           { bg: '#FEE2E2', color: '#991B1B' },
   booking_monthly:        { bg: '#DBEAFE', color: '#1D4ED8' },
-  trust_badge:            { bg: '#F5D0FE', color: '#7E22CE' },
   points_converted:       { bg: '#D1FAE5', color: '#065F46' },
   withdrawal_fee:         { bg: '#FEF3C7', color: '#92400E' },
 };
-
-const TRUST_BADGE_COLORS: Record<string, { bg: string; color: string }> = {
-  none:     { bg: '#F3F4F6', color: '#6B7280' },
-  bronze:   { bg: '#FDE68A', color: '#78350F' },
-  silver:   { bg: '#E5E7EB', color: '#374151' },
-  gold:     { bg: '#FEF3C7', color: '#92400E' },
-  platinum: { bg: '#EDE9FE', color: '#6D28D9' },
-};
-
-// Same colors as the mobile app (ProfileScreen.tsx Ionicons shield-checkmark)
-const BADGE_ICON_COLOR: Record<string, string> = {
-  platinum: '#7B1FA2',
-  gold:     '#F9A825',
-  silver:   '#78909C',
-  bronze:   '#8D6E63',
-  none:     '#CCC',
-};
-
-function ShieldBadge({ badge, score }: { badge: string; score?: number | null }) {
-  const color = BADGE_ICON_COLOR[badge] ?? '#CCC';
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
-      <svg width="15" height="15" viewBox="0 0 512 512" style={{ flexShrink: 0 }}>
-        {/* shield fill */}
-        <path
-          fill={color}
-          d="M256 32L48 152v112c0 131.4 90.4 254.3 208 288 117.6-33.7 208-156.6 208-288V152L256 32z"
-        />
-        {/* checkmark */}
-        <polyline
-          points="160,256 220,316 352,184"
-          fill="none"
-          stroke="white"
-          strokeWidth="44"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      {score != null && (
-        <span style={{ fontSize: 11, color: '#888' }}>Score: {score}</span>
-      )}
-    </div>
-  );
-}
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   succeeded: { bg: '#D1FAE5', color: '#065F46' },
@@ -202,7 +156,7 @@ export default function TransactionsPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const [pointsSubFilter, setPointsSubFilter] = useState<'all' | 'gained' | 'converted' | 'trust_badge'>('all');
+  const [pointsSubFilter, setPointsSubFilter] = useState<'all' | 'gained' | 'converted'>('all');
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
@@ -232,14 +186,14 @@ export default function TransactionsPage() {
   const filtered = useMemo(() => {
     const txs = summary?.transactions ?? [];
     return txs.filter(tx => {
+      // Always hide trust_badge transactions
+      if (tx.type === 'trust_badge') return false;
+
       // Sub-filter when on Points & Rewards tab
-      if (typeFilter === 'points' && pointsSubFilter !== 'all') {
-        if (pointsSubFilter === 'trust_badge') {
-          // Must be a trust_badge type transaction
-          if (tx.type !== 'trust_badge') return false;
-          // Exclude reversal events — they contain "reversed" or "dropped below" in description
-          const desc = (tx.description ?? '').toLowerCase();
-          if (desc.includes('reversed') || desc.includes('dropped below')) return false;
+      if (typeFilter === 'points') {
+        // Default: only show points gained (likes milestones + booking monthly)
+        if (pointsSubFilter === 'all') {
+          if (!POINTS_GAINED_TYPES.has(tx.type)) return false;
         } else if (pointsSubFilter === 'converted') {
           if (tx.type !== 'points_converted') return false;
         } else if (pointsSubFilter === 'gained') {
@@ -335,12 +289,10 @@ export default function TransactionsPage() {
           <select
             className="status-select"
             value={pointsSubFilter}
-            onChange={e => setPointsSubFilter(e.target.value as typeof pointsSubFilter)}
+            onChange={e => setPointsSubFilter(e.target.value as 'all' | 'gained' | 'converted')}
           >
-            <option value="all">All Points</option>
-            <option value="gained">Points Gained</option>
+            <option value="all">Points Gained</option>
             <option value="converted">Points → Cash</option>
-            <option value="trust_badge">Trust Badge</option>
           </select>
         )}
 
@@ -413,9 +365,6 @@ export default function TransactionsPage() {
                             <span className={tx.amount >= 0 ? 'earning-text' : 'commission-text'}>
                               {tx.amount >= 0 ? '+' : ''}{tx.amount} pts
                             </span>
-                            {tx.trustBadge && tx.trustBadge !== 'none' && (
-                              <ShieldBadge badge={tx.trustBadge} score={tx.trustScore} />
-                            )}
                           </div>
                         ) : (
                           <>
@@ -502,16 +451,6 @@ export default function TransactionsPage() {
                 {detail.type === 'points_converted' && detail.pkrAmount != null && <>
                   <span className="dk">PKR Received</span>
                   <span className="dv earning-text">PKR {fmt(detail.pkrAmount)}</span>
-                </>}
-
-                {detail._source === 'points' && detail.trustBadge && detail.trustBadge !== 'none' && <>
-                  <span className="dk">Trust Badge</span>
-                  <span className="dv" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <ShieldBadge badge={detail.trustBadge} score={detail.trustScore} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: BADGE_ICON_COLOR[detail.trustBadge] }}>
-                      {detail.trustBadge.charAt(0).toUpperCase() + detail.trustBadge.slice(1)}
-                    </span>
-                  </span>
                 </>}
 
                 {detail._source === 'points' && detail.totalPoints != null && <>

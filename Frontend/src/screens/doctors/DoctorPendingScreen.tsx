@@ -258,7 +258,7 @@ export default function DoctorPendingScreen({ navigation, route }: Props) {
               <Text style={styles.fieldLabel}>Specialization *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Cardiologist, Therapist..."
+                placeholder="e.g. Cardiologist, Psychologist..."
                 value={specialization}
                 onChangeText={setSpecialization}
                 placeholderTextColor="#aaa"
@@ -321,7 +321,7 @@ export default function DoctorPendingScreen({ navigation, route }: Props) {
               <MaterialIcons name="celebration" size={60} color="#6B7FED" />
               <Text style={styles.successTitle}>Registration Submitted!</Text>
               <Text style={styles.successText}>
-                Your doctor account has been created successfully. We're reviewing your credentials and will update this page once verification is complete.
+                Your  account has been created successfully. We're reviewing your credentials and will update this page once verification is complete.
               </Text>
             </View>
 

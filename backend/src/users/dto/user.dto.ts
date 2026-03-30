@@ -31,6 +31,7 @@ export class CreateHealthProfileDto {
   @IsOptional() @IsString() stressLevel?:     string;
   @IsOptional() @IsString() dietPreference?:  string;
   @IsOptional() @IsString() additionalNotes?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) interests?: string[];
 }
 
 // ── Emergency Contact ──────────────────────────────────────────────────────
