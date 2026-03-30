@@ -11,19 +11,18 @@ export class UserNotificationSettings {
 
 @Schema({ _id: false })
 export class HealthProfile {
-  @Prop({ required: false }) sleepDuration: number;
-  @Prop({ required: false }) stressLevel: string;
-  @Prop({ required: false }) dietPreference: string;
+  @Prop({ required: false }) sleepDuration:    number;
+  @Prop({ required: false }) stressLevel:      string;
+  @Prop({ required: false }) dietPreference:   string;
   @Prop({ required: false }) additionalNotes?: string;
 }
 
 @Schema({ _id: false })
 export class EmergencyContact {
-  @Prop({ required: true }) fullName: string;
-  @Prop({ required: true }) phoneNumber: string;
-  @Prop({ required: true }) relationship: string;
-  @Prop({ required: false })  // 👈 add this
-  email?: string;
+  @Prop({ required: true  }) fullName:     string;
+  @Prop({ required: true  }) phoneNumber:  string;
+  @Prop({ required: true  }) relationship: string;
+  @Prop({ required: false }) email?:       string;
 }
 
 @Schema({ timestamps: true })
@@ -46,6 +45,9 @@ export class User {
   @Prop({ required: true })
   userType: string;
 
+  @Prop({ required: false })
+  phoneNumber?: string;
+
   @Prop({ type: HealthProfile, required: false })
   healthProfile?: HealthProfile;
 
@@ -61,7 +63,14 @@ export class User {
   @Prop({ type: String, default: null })
   expoPushToken: string | null;
 
-  // ── OTP fields for forgot password ────────────────────────────────────────
+  // 👇 NEW — custom SOS message
+  @Prop({
+    type:    String,
+    default: 'I need emergency help! Please contact me immediately.',
+  })
+  sosMessage: string;
+
+  // ── OTP fields ─────────────────────────────────────────────────────────
   @Prop({ type: String, default: null })
   otpCode: string | null;
 

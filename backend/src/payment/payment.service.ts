@@ -23,8 +23,9 @@ import {
 import { Wallet, WalletDocument } from '../wallet/schemas/wallet.schema';
 import { Doctor, DoctorDocument } from '../doctors/schemas/doctor.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
+import { NotificationService } from '../notification/notification.service';
 
-/** Subscription plan prices in PKR */
+// ── Subscription plan prices ──────────────────────────────────────────────────
 const PLAN_PRICES: Record<string, number> = {
   basic:        1500,
   professional: 3500,
@@ -37,22 +38,25 @@ const PLAN_LABELS: Record<string, string> = {
   premium:      'Premium Plan — 1 Month',
 };
 
+// ── Commission rate ───────────────────────────────────────────────────────────
 /**
  * Tiered commission rate based on appointment fee and doctor's plan.
  *
  * Fee range      | Basic | Professional (-2%) | Premium (-3%)
+ * PKR  < 500     |  10%  |        8%          |      7%
  * PKR  500 – 800 |  10%  |        8%          |      7%
  * PKR  801 –1200 |  15%  |       13%          |     12%
  * PKR 1201 –2000 |  20%  |       18%          |     17%
+ * PKR  > 2000    |  20%  |       18%          |     17%
  */
 function getCommissionRate(fee: number, plan: string): number {
   let base: number;
 
-  if (fee >= 500 && fee <= 800)        base = 0.10;
-  else if (fee >= 801 && fee <= 1200)  base = 0.15;
-  else if (fee >= 1201 && fee <= 2000) base = 0.20;
-  else if (fee < 500)                  base = 0.10; // below range → lowest tier
-  else                                 base = 0.20; // above range → highest tier
+  if (fee < 500)                       base = 0.10; // below range  → lowest tier
+  else if (fee <= 800)                 base = 0.10; // PKR 500–800
+  else if (fee <= 1200)                base = 0.15; // PKR 801–1200
+  else if (fee <= 2000)                base = 0.20; // PKR 1201–2000
+  else                                 base = 0.20; // above range  → highest tier
 
   if (plan === 'professional') return +(base - 0.02).toFixed(4);
   if (plan === 'premium')      return +(base - 0.03).toFixed(4);
@@ -77,13 +81,14 @@ export class PaymentService {
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
     private subscriptionPlanService: SubscriptionPlanService,
+    private readonly notificationService: NotificationService,
   ) {
     this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
       apiVersion: '2026-02-25.clover',
     });
   }
 
-  // ── Get or create the single admin wallet doc ─────────────────────────────
+  // ── Get or create admin wallet ─────────────────────────────────────────────
   private async getAdminWallet(): Promise<AdminWalletDocument> {
     const existing = await this.adminWalletModel.findOne().exec();
     if (existing) return existing;
@@ -96,7 +101,9 @@ export class PaymentService {
       .findOne({ doctorId: new Types.ObjectId(doctorId) })
       .exec();
     if (existing) return existing;
-    return new this.walletModel({ doctorId: new Types.ObjectId(doctorId) }).save();
+    return new this.walletModel({
+      doctorId: new Types.ObjectId(doctorId),
+    }).save();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -105,24 +112,25 @@ export class PaymentService {
 
   async createPaymentIntent(dto: CreatePaymentIntentDto): Promise<any> {
     const { plan } = dto;
-    const amount = PLAN_PRICES[plan];
+    const amount   = PLAN_PRICES[plan];
     if (!amount) throw new BadRequestException(`Invalid plan: ${plan}`);
 
     try {
       const intent = await this.stripe.paymentIntents.create({
-        amount: amount * 100,
-        currency: 'pkr',
+        amount:               amount * 100,
+        currency:             'pkr',
         payment_method_types: ['card'],
-        metadata: { doctorId: dto.doctorId, plan, type: 'subscription' },
-        description: PLAN_LABELS[plan],
+        metadata:             { doctorId: dto.doctorId, plan, type: 'subscription' },
+        description:          PLAN_LABELS[plan],
       });
+
       return {
-        clientSecret: intent.client_secret,
+        clientSecret:    intent.client_secret,
         paymentIntentId: intent.id,
         amount,
-        currency: 'PKR',
+        currency:        'PKR',
         plan,
-        description: PLAN_LABELS[plan],
+        description:     PLAN_LABELS[plan],
       };
     } catch (err: any) {
       throw new InternalServerErrorException(`Stripe error: ${err.message}`);
@@ -136,38 +144,44 @@ export class PaymentService {
     try {
       intent = await this.stripe.paymentIntents.retrieve(paymentIntentId);
     } catch (err: any) {
-      throw new BadRequestException(`Could not retrieve payment: ${err.message}`);
+      throw new BadRequestException(
+        `Could not retrieve payment: ${err.message}`,
+      );
     }
 
     if (intent.status !== 'succeeded') {
-      throw new BadRequestException(`Payment not completed. Status: ${intent.status}`);
+      throw new BadRequestException(
+        `Payment not completed. Status: ${intent.status}`,
+      );
     }
 
+    // Prevent double processing
     const existing = await this.transactionModel
       .findOne({ stripePaymentIntentId: paymentIntentId })
       .exec();
-    if (existing) return { alreadyProcessed: true, transactionId: existing._id };
+    if (existing) {
+      return { alreadyProcessed: true, transactionId: existing._id };
+    }
 
-    const amount = PLAN_PRICES[plan];
-
+    const amount      = PLAN_PRICES[plan];
     const transaction = await this.transactionModel.create({
-      type: 'subscription_payment',
-      doctorId: new Types.ObjectId(doctorId),
-      doctorName: doctorName ?? '',
-      userId: null,
-      appointmentId: null,
+      type:                  'subscription_payment',
+      doctorId:              new Types.ObjectId(doctorId),
+      doctorName:            doctorName ?? '',
+      userId:                null,
+      appointmentId:         null,
       plan,
-      description: PLAN_LABELS[plan],
+      description:           PLAN_LABELS[plan],
       amount,
-      currency: 'PKR',
+      currency:              'PKR',
       stripePaymentIntentId: paymentIntentId,
-      status: 'succeeded',
-      paymentMethod: 'card',
+      status:                'succeeded',
+      paymentMethod:         'card',
     });
 
     const adminWallet = await this.getAdminWallet();
     adminWallet.totalBalance      = +(adminWallet.totalBalance + amount).toFixed(2);
-    adminWallet.totalEarned       = +(adminWallet.totalEarned + amount).toFixed(2);
+    adminWallet.totalEarned       = +(adminWallet.totalEarned  + amount).toFixed(2);
     adminWallet.totalTransactions += 1;
     await adminWallet.save();
 
@@ -179,11 +193,11 @@ export class PaymentService {
     });
 
     return {
-      success: true,
+      success:       true,
       transactionId: transaction._id,
       plan,
       amount,
-      description: PLAN_LABELS[plan],
+      description:   PLAN_LABELS[plan],
     };
   }
 
@@ -191,7 +205,9 @@ export class PaymentService {
   //  APPOINTMENT PAYMENT
   // ─────────────────────────────────────────────────────────────────────────
 
-  async createAppointmentPaymentIntent(dto: CreateAppointmentPaymentDto): Promise<any> {
+  async createAppointmentPaymentIntent(
+    dto: CreateAppointmentPaymentDto,
+  ): Promise<any> {
     const { appointmentId } = dto;
 
     const appt = await this.appointmentModel
@@ -200,51 +216,60 @@ export class PaymentService {
       .exec();
 
     if (!appt) throw new NotFoundException('Appointment not found');
-    if (appt.status !== 'confirmed') throw new BadRequestException('Appointment is not confirmed yet');
-    if (appt.paymentStatus !== 'pending_payment') {
+    if (appt.status !== 'confirmed')
+      throw new BadRequestException('Appointment is not confirmed yet');
+    if (appt.paymentStatus !== 'pending_payment')
       throw new BadRequestException(`Payment already ${appt.paymentStatus}`);
-    }
 
     const amount = appt.consultationFee;
-    if (!amount || amount <= 0) throw new BadRequestException('Invalid consultation fee');
+    if (!amount || amount <= 0)
+      throw new BadRequestException('Invalid consultation fee');
 
     try {
       const intent = await this.stripe.paymentIntents.create({
-        amount: amount * 100,
-        currency: 'pkr',
+        amount:               amount * 100,
+        currency:             'pkr',
         payment_method_types: ['card'],
         metadata: {
           appointmentId,
           doctorId: appt.doctorId.toString(),
-          type: 'appointment',
+          type:     'appointment',
         },
-        description: `Appointment with Dr. ${(appt.doctorId as any)?.fullName ?? ''} on ${appt.date}`,
+        description: `Appointment with Dr. ${
+          (appt.doctorId as any)?.fullName ?? ''
+        } on ${appt.date}`,
       });
 
       return {
-        clientSecret: intent.client_secret,
+        clientSecret:    intent.client_secret,
         paymentIntentId: intent.id,
         amount,
-        currency: 'PKR',
-        description: `Appointment on ${appt.date} at ${appt.time}`,
+        currency:        'PKR',
+        description:     `Appointment on ${appt.date} at ${appt.time}`,
       };
     } catch (err: any) {
       throw new InternalServerErrorException(`Stripe error: ${err.message}`);
     }
   }
 
-  async confirmAppointmentPayment(dto: ConfirmAppointmentPaymentDto): Promise<any> {
+  async confirmAppointmentPayment(
+    dto: ConfirmAppointmentPaymentDto,
+  ): Promise<any> {
     const { appointmentId, paymentIntentId, userId } = dto;
 
     let intent: Stripe.PaymentIntent;
     try {
       intent = await this.stripe.paymentIntents.retrieve(paymentIntentId);
     } catch (err: any) {
-      throw new BadRequestException(`Could not retrieve payment: ${err.message}`);
+      throw new BadRequestException(
+        `Could not retrieve payment: ${err.message}`,
+      );
     }
 
     if (intent.status !== 'succeeded') {
-      throw new BadRequestException(`Payment not completed. Status: ${intent.status}`);
+      throw new BadRequestException(
+        `Payment not completed. Status: ${intent.status}`,
+      );
     }
 
     // Prevent double processing
@@ -260,18 +285,18 @@ export class PaymentService {
 
     // Record payment held transaction
     await this.transactionModel.create({
-      type: 'appointment_payment',
-      doctorId: appt.doctorId,
-      doctorName: '',
-      userId: userId ? new Types.ObjectId(userId) : null,
-      appointmentId: new Types.ObjectId(appointmentId),
-      plan: null,
-      description: `Appointment payment held — ${appt.date} at ${appt.time}`,
+      type:                  'appointment_payment',
+      doctorId:              appt.doctorId,
+      doctorName:            '',
+      userId:                userId ? new Types.ObjectId(userId) : null,
+      appointmentId:         new Types.ObjectId(appointmentId),
+      plan:                  null,
+      description:           `Appointment payment held — ${appt.date} at ${appt.time}`,
       amount,
-      currency: 'PKR',
+      currency:              'PKR',
       stripePaymentIntentId: paymentIntentId,
-      status: 'succeeded',
-      paymentMethod: 'card',
+      status:                'succeeded',
+      paymentMethod:         'card',
     });
 
     // Hold in admin wallet — do NOT count as earned yet
@@ -287,11 +312,24 @@ export class PaymentService {
     appt.heldAmount      = amount;
     await appt.save();
 
+    // ✅ Notify doctor that payment was received (fire-and-forget, safe null handling)
+    this.notificationService
+      .notifyDoctorPaymentReceived({
+        doctorId:        appt.doctorId?.toString() ?? '',
+        userId:          appt.userId?.toString()   ?? '',   // ✅ safe optional chaining
+        date:            appt.date,
+        time:            appt.time,
+        consultationFee: amount,
+      })
+      .catch((e) =>
+        console.error('[Notification] Payment notify failed:', e.message),
+      );
+
     return {
-      success: true,
+      success:      true,
       appointmentId,
-      amountHeld: amount,
-      message: 'Payment held. Will be released to doctor after session completes.',
+      amountHeld:   amount,
+      message:      'Payment held. Will be released to doctor after session completes.',
     };
   }
 
@@ -306,8 +344,14 @@ export class PaymentService {
     const doctorId = appt.doctorId.toString();
 
     const [doctor, patient] = await Promise.all([
-      this.doctorModel.findById(doctorId).select('subscriptionPlan fullName').exec(),
-      this.userModel.findById(appt.userId.toString()).select('fullName').exec(),
+      this.doctorModel
+        .findById(doctorId)
+        .select('subscriptionPlan fullName')
+        .exec(),
+      this.userModel
+        .findById(appt.userId.toString())
+        .select('fullName')
+        .exec(),
     ]);
 
     const plan           = (doctor as any)?.subscriptionPlan ?? 'free_trial';
@@ -315,28 +359,28 @@ export class PaymentService {
     const commissionRate = getCommissionRate(heldAmount, plan);
     const commissionAmt  = +(heldAmount * commissionRate).toFixed(2);
     const doctorEarning  = +(heldAmount - commissionAmt).toFixed(2);
-    const patientName    = (patient as any)?.fullName ?? 'Patient';
-    const doctorFullName = (doctor as any)?.fullName ?? '';
+    const patientName    = (patient as any)?.fullName  ?? 'Patient';
+    const doctorFullName = (doctor as any)?.fullName   ?? '';
 
     // Transfer to doctor wallet
     const doctorWallet = await this.getDoctorWallet(doctorId);
-    doctorWallet.balance     = +(doctorWallet.balance + doctorEarning).toFixed(2);
+    doctorWallet.balance     = +(doctorWallet.balance     + doctorEarning).toFixed(2);
     doctorWallet.totalEarned = +(doctorWallet.totalEarned + doctorEarning).toFixed(2);
     doctorWallet.transactions.push({
-      type: 'appointment_earning',
-      amount: doctorEarning,
-      pointsUsed: 0,
-      description: `Appointment fee — ${patientName} · ${appt.date}`,
-      status: null,
-      createdAt: new Date(),
+      type:             'appointment_earning',
+      amount:           doctorEarning,
+      pointsUsed:       0,
+      description:      `Appointment fee — ${patientName} · ${appt.date}`,
+      status:           null,
+      createdAt:        new Date(),
       patientName,
-      doctorName:      doctorFullName,
-      sessionDate:     appt.date,
-      sessionTime:     appt.time,
-      sessionDuration: appt.sessionDuration,
+      doctorName:       doctorFullName,
+      sessionDate:      appt.date,
+      sessionTime:      appt.time,
+      sessionDuration:  appt.sessionDuration,
       commissionRate,
       commissionAmount: commissionAmt,
-      appointmentId:   appointmentId,
+      appointmentId,
     } as any);
     doctorWallet.markModified('transactions');
     await doctorWallet.save();
@@ -344,45 +388,48 @@ export class PaymentService {
     // Update admin wallet — clear held, keep commission as earned
     const adminWallet = await this.getAdminWallet();
     adminWallet.totalBalance    = +(adminWallet.totalBalance - doctorEarning).toFixed(2);
-    adminWallet.heldBalance     = +Math.max(0, (adminWallet.heldBalance || 0) - heldAmount).toFixed(2);
+    adminWallet.heldBalance     = +Math.max(
+      0,
+      (adminWallet.heldBalance || 0) - heldAmount,
+    ).toFixed(2);
     adminWallet.totalCommission = +(adminWallet.totalCommission + commissionAmt).toFixed(2);
-    adminWallet.totalEarned     = +(adminWallet.totalEarned + commissionAmt).toFixed(2);
+    adminWallet.totalEarned     = +(adminWallet.totalEarned    + commissionAmt).toFixed(2);
     await adminWallet.save();
 
     // Record release transaction
     await this.transactionModel.create({
-      type: 'appointment_release',
-      doctorId: new Types.ObjectId(doctorId),
-      doctorName: doctorFullName,
-      userId: appt.userId,
-      appointmentId: new Types.ObjectId(appointmentId),
-      plan: null,
-      description: `Payment released to Dr. ${doctorFullName} — PKR ${doctorEarning}`,
-      amount: doctorEarning,
+      type:                  'appointment_release',
+      doctorId:              new Types.ObjectId(doctorId),
+      doctorName:            doctorFullName,
+      userId:                appt.userId,
+      appointmentId:         new Types.ObjectId(appointmentId),
+      plan:                  null,
+      description:           `Payment released to Dr. ${doctorFullName} — PKR ${doctorEarning}`,
+      amount:                doctorEarning,
       commissionRate,
-      commissionAmount: commissionAmt,
-      currency: 'PKR',
+      commissionAmount:      commissionAmt,
+      currency:              'PKR',
       stripePaymentIntentId: appt.paymentIntentId,
-      status: 'succeeded',
-      paymentMethod: 'card',
+      status:                'succeeded',
+      paymentMethod:         'card',
     });
 
     // Record commission transaction
     await this.transactionModel.create({
-      type: 'appointment_commission',
-      doctorId: new Types.ObjectId(doctorId),
-      doctorName: doctorFullName,
-      userId: appt.userId,
-      appointmentId: new Types.ObjectId(appointmentId),
-      plan: null,
-      description: `Commission (${Math.round(commissionRate * 100)}%) from appointment — PKR ${commissionAmt}`,
-      amount: commissionAmt,
+      type:                  'appointment_commission',
+      doctorId:              new Types.ObjectId(doctorId),
+      doctorName:            doctorFullName,
+      userId:                appt.userId,
+      appointmentId:         new Types.ObjectId(appointmentId),
+      plan:                  null,
+      description:           `Commission (${Math.round(commissionRate * 100)}%) from appointment — PKR ${commissionAmt}`,
+      amount:                commissionAmt,
       commissionRate,
-      commissionAmount: commissionAmt,
-      currency: 'PKR',
+      commissionAmount:      commissionAmt,
+      currency:              'PKR',
       stripePaymentIntentId: appt.paymentIntentId,
-      status: 'succeeded',
-      paymentMethod: 'card',
+      status:                'succeeded',
+      paymentMethod:         'card',
     });
 
     // Update appointment
@@ -412,14 +459,15 @@ export class PaymentService {
   async getAllTransactions(): Promise<any> {
     return this.transactionModel.find().sort({ createdAt: -1 }).exec();
   }
+
   async getHeldPayments(): Promise<any> {
-  const held = await this.appointmentModel
-    .find({ paymentStatus: 'payment_held' })
-    .populate('userId', 'fullName email')
-    .populate('doctorId', 'fullName email')
-    .sort({ createdAt: -1 })
-    .exec();
-  const totalHeld = held.reduce((sum, a) => sum + (a.heldAmount || 0), 0);
-  return { totalHeld, count: held.length, appointments: held };
-}
+    const held = await this.appointmentModel
+      .find({ paymentStatus: 'payment_held' })
+      .populate('userId',   'fullName email')
+      .populate('doctorId', 'fullName email')
+      .sort({ createdAt: -1 })
+      .exec();
+    const totalHeld = held.reduce((sum, a) => sum + (a.heldAmount || 0), 0);
+    return { totalHeld, count: held.length, appointments: held };
+  }
 }

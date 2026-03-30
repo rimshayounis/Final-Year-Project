@@ -5,7 +5,7 @@ export type DoctorDocument = Doctor & Document;
 
 @Schema({ _id: false })
 export class DoctorProfile {
-  @Prop({ required: true, enum: ['doctor', 'therapist'] }) professionalType: string;
+  @Prop({ required: true, enum: ['doctor', 'psychologist'] }) professionalType: string;
   @Prop({ type: String, default: null }) licenseNumber: string | null;
   @Prop({ required: true }) specialization: string;
   @Prop({ type: [String], default: [] }) certificates: string[];

@@ -12,21 +12,23 @@ import {
 import { Wallet, WalletSchema } from '../wallet/schemas/wallet.schema';
 import { Doctor, DoctorSchema } from '../doctors/schemas/doctor.schema';
 import { User, UserSchema } from '../users/schemas/user.schema';
+import { NotificationModule } from '../notification/notification.module'; // 👈 NEW
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: AdminWallet.name,        schema: AdminWalletSchema },
-      { name: Transaction.name,        schema: TransactionSchema },
-      { name: BookedAppointment.name,  schema: BookedAppointmentSchema },
-      { name: Wallet.name,             schema: WalletSchema },
-      { name: Doctor.name,             schema: DoctorSchema },
-      { name: User.name,               schema: UserSchema },
+      { name: AdminWallet.name,       schema: AdminWalletSchema },
+      { name: Transaction.name,       schema: TransactionSchema },
+      { name: BookedAppointment.name, schema: BookedAppointmentSchema },
+      { name: Wallet.name,            schema: WalletSchema },
+      { name: Doctor.name,            schema: DoctorSchema },
+      { name: User.name,              schema: UserSchema },
     ]),
     SubscriptionPlanModule,
+    NotificationModule, // 👈 NEW
   ],
   controllers: [PaymentController],
-  providers: [PaymentService],
-  exports: [PaymentService],
+  providers:   [PaymentService],
+  exports:     [PaymentService],
 })
 export class PaymentModule {}

@@ -4,7 +4,7 @@ export class RegisterDoctorDto {
   @IsNotEmpty() @IsString()  fullName:         string;
   @IsNotEmpty() @IsEmail()   email:            string;
   @IsNotEmpty() @IsString()  @MinLength(8) password: string;
-  @IsNotEmpty() @IsString()  @IsIn(['doctor', 'therapist']) professionalType: string;
+  @IsNotEmpty() @IsString()  @IsIn(['doctor', 'psychologist']) professionalType: string;
   @IsNotEmpty() @IsString()  specialization:   string;
   @IsOptional() @IsString()  licenseNumber?:   string;
   @IsOptional() certificates?: string[];

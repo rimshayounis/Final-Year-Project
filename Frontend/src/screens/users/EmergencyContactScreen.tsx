@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import {
   View,
@@ -25,10 +23,11 @@ type EmergencyContactScreenProps = {
 };
 
 interface EmergencyContact {
-  id: string;
-  fullName: string;
-  phoneNumber: string;
+  id:           string;
+  fullName:     string;
+  phoneNumber:  string;
   relationship: string;
+  email:        string; // 👈 NEW
 }
 
 export default function EmergencyContactScreen({
@@ -37,12 +36,12 @@ export default function EmergencyContactScreen({
 }: EmergencyContactScreenProps) {
   const { userId } = route.params;
   const [contacts, setContacts] = useState<EmergencyContact[]>([
-    { id: '1', fullName: '', phoneNumber: '', relationship: '' },
+    { id: '1', fullName: '', phoneNumber: '', relationship: '', email: '' },
   ]);
   const [loading, setLoading] = useState(false);
 
   const handleContactChange = (
-    id: string,
+    id:    string,
     field: keyof EmergencyContact,
     value: string
   ) => {
@@ -58,10 +57,11 @@ export default function EmergencyContactScreen({
       setContacts([
         ...contacts,
         {
-          id: Date.now().toString(),
-          fullName: '',
-          phoneNumber: '',
+          id:           Date.now().toString(),
+          fullName:     '',
+          phoneNumber:  '',
           relationship: '',
+          email:        '', // 👈 NEW
         },
       ]);
     }
@@ -87,6 +87,14 @@ export default function EmergencyContactScreen({
         Alert.alert('Error', 'Please select relationship');
         return false;
       }
+      // 👈 NEW — validate email format if provided
+      if (contact.email.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(contact.email.trim())) {
+          Alert.alert('Error', `Please enter a valid email for ${contact.fullName}`);
+          return false;
+        }
+      }
     }
     return true;
   };
@@ -97,10 +105,11 @@ export default function EmergencyContactScreen({
     setLoading(true);
     try {
       const contactsData: EmergencyContactData[] = contacts.map(
-        ({ fullName, phoneNumber, relationship }) => ({
+        ({ fullName, phoneNumber, relationship, email }) => ({
           fullName,
           phoneNumber,
           relationship,
+          email: email.trim() || undefined, // 👈 only send if provided
         })
       );
 
@@ -108,7 +117,10 @@ export default function EmergencyContactScreen({
 
       if (response.data.success) {
         Alert.alert('Success', 'Account created successfully!', [
-          { text: 'OK', onPress: () => navigation.navigate('Dashboard', { id: userId, role: 'user' }) },
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('Dashboard', { id: userId, role: 'user' }),
+          },
         ]);
       }
     } catch (error: any) {
@@ -122,269 +134,351 @@ export default function EmergencyContactScreen({
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <MaterialIcons name="phone" size={32} color="#FFFFFF" />
-        </View>
-        
-        <Text style={styles.headerTitle}>Emergency Contact</Text>
-
-        <Text style={styles.stepIndicator}>Step 3/3</Text>
-      </View>
-
-      <View style={styles.form}>
-        {contacts.map((contact, index) => (
-          <View key={contact.id} style={styles.contactCard}>
-            <View style={styles.contactHeader}>
-              <Text style={styles.contactTitle}>Contact {index + 1}</Text>
-              {contacts.length > 1 && (
-                <TouchableOpacity onPress={() => removeContact(contact.id)}>
-                  <MaterialIcons name="close" size={24} color="#FF6B6B" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Full Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter Contact Name"
-                value={contact.fullName}
-                onChangeText={(value) =>
-                  handleContactChange(contact.id, 'fullName', value)
-                }
-                placeholderTextColor="#999"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Phone Number</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="+923145161073"
-                value={contact.phoneNumber}
-                onChangeText={(value) =>
-                  handleContactChange(contact.id, 'phoneNumber', value)
-                }
-                keyboardType="phone-pad"
-                placeholderTextColor="#999"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Relationship</Text>
-              <View style={styles.relationshipContainer}>
-                {['Parent', 'Sibling', 'Spouse', 'Friend', 'Other'].map((rel) => (
-                  <TouchableOpacity
-                    key={rel}
-                    style={[
-                      styles.relationshipChip,
-                      contact.relationship === rel && styles.relationshipChipActive,
-                    ]}
-                    onPress={() =>
-                      handleContactChange(contact.id, 'relationship', rel)
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.relationshipText,
-                        contact.relationship === rel &&
-                          styles.relationshipTextActive,
-                      ]}
-                    >
-                      {rel}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Header ── */}
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <MaterialIcons name="phone" size={32} color="#FFFFFF" />
           </View>
-        ))}
+          <Text style={styles.headerTitle}>Emergency Contact</Text>
+          <Text style={styles.stepIndicator}>Step 3/3</Text>
+        </View>
 
-        {contacts.length < 3 && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={addAnotherContact}
-          >
-            <MaterialIcons name="add" size={24} color="#7B8CDE" />
-            <Text style={styles.addButtonText}>Add Another Contact</Text>
-          </TouchableOpacity>
-        )}
+        {/* ── Form ── */}
+        <View style={styles.form}>
+          {contacts.map((contact, index) => (
+            <View key={contact.id} style={styles.contactCard}>
 
-        <TouchableOpacity
-          style={styles.continueButton}
-          onPress={handleContinue}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.continueButtonText}>Continue</Text>
+              {/* Contact header */}
+              <View style={styles.contactHeader}>
+                <Text style={styles.contactTitle}>Contact {index + 1}</Text>
+                {contacts.length > 1 && (
+                  <TouchableOpacity onPress={() => removeContact(contact.id)}>
+                    <MaterialIcons name="close" size={24} color="#FF6B6B" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Full Name */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Full Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter Contact Name"
+                  value={contact.fullName}
+                  onChangeText={(value) =>
+                    handleContactChange(contact.id, 'fullName', value)
+                  }
+                  placeholderTextColor="#999"
+                />
+              </View>
+
+              {/* Phone Number */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Phone Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="+923145161073"
+                  value={contact.phoneNumber}
+                  onChangeText={(value) =>
+                    handleContactChange(contact.id, 'phoneNumber', value)
+                  }
+                  keyboardType="phone-pad"
+                  placeholderTextColor="#999"
+                />
+              </View>
+
+              {/* Email — NEW */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Email Address</Text>
+                  <Text style={styles.optionalTag}>Optional</Text>
+                </View>
+                <View style={styles.inputWithIcon}>
+                  <MaterialIcons
+                    name="email"
+                    size={20}
+                    color="#999"
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.inputFlex}
+                    placeholder="contact@gmail.com"
+                    value={contact.email}
+                    onChangeText={(value) =>
+                      handleContactChange(contact.id, 'email', value)
+                    }
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    placeholderTextColor="#999"
+                  />
+                </View>
+                {/* SOS hint */}
+                <Text style={styles.emailHint}>
+                  📧 SOS alerts will be sent to this email in emergencies
+                </Text>
+              </View>
+
+              {/* Relationship */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Relationship</Text>
+                <View style={styles.relationshipContainer}>
+                  {['Parent', 'Sibling', 'Spouse', 'Friend', 'Other'].map((rel) => (
+                    <TouchableOpacity
+                      key={rel}
+                      style={[
+                        styles.relationshipChip,
+                        contact.relationship === rel && styles.relationshipChipActive,
+                      ]}
+                      onPress={() =>
+                        handleContactChange(contact.id, 'relationship', rel)
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.relationshipText,
+                          contact.relationship === rel && styles.relationshipTextActive,
+                        ]}
+                      >
+                        {rel}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+            </View>
+          ))}
+
+          {/* Add another contact */}
+          {contacts.length < 3 && (
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={addAnotherContact}
+            >
+              <MaterialIcons name="add" size={24} color="#7B8CDE" />
+              <Text style={styles.addButtonText}>Add Another Contact</Text>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
 
-        <Text style={styles.requiredNote}>Please complete all required fields</Text>
-      </View>
-    </ScrollView>
+          {/* Continue button */}
+          <TouchableOpacity
+            style={styles.continueButton}
+            onPress={handleContinue}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.continueButtonText}>Continue</Text>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.requiredNote}>
+            Please complete all required fields
+          </Text>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flex:            1,
     backgroundColor: '#F5F5F5',
   },
   header: {
-    backgroundColor: '#6B7FED',
-    paddingTop: 50,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 30,
+    backgroundColor:       '#6B7FED',
+    paddingTop:            50,
+    paddingBottom:         30,
+    paddingHorizontal:     20,
+    borderBottomLeftRadius:  30,
     borderBottomRightRadius: 30,
   },
-
   headerTop: {
-    flexDirection: 'row',
+    flexDirection:  'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
+    alignItems:     'center',
+    marginBottom:   15,
   },
-
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width:           40,
+    height:          40,
+    borderRadius:    20,
     backgroundColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems:      'center',
+    justifyContent:  'center',
   },
-
   headerTitle: {
-    fontSize: 24,
-    color: '#FFFFFF',
+    fontSize:   24,
+    color:      '#FFFFFF',
     fontWeight: '700',
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign:  'center',
   },
-
   stepIndicator: {
-    fontSize: 13,
-    color: '#FFFFFF',
+    fontSize:   13,
+    color:      '#FFFFFF',
     fontWeight: '500',
-    textAlign: 'center',
-    opacity: 0.85,
+    textAlign:  'center',
+    opacity:    0.85,
   },
   form: {
     padding: 30,
   },
   contactCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius:    20,
+    padding:         20,
+    marginBottom:    20,
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 2 },
+    shadowOpacity:   0.1,
+    shadowRadius:    8,
+    elevation:       3,
   },
   contactHeader: {
-    flexDirection: 'row',
+    flexDirection:  'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
+    alignItems:     'center',
+    marginBottom:   15,
   },
   contactTitle: {
-    fontSize: 18,
+    fontSize:   18,
     fontWeight: '700',
-    color: '#2C3E50',
+    color:      '#2C3E50',
   },
   inputGroup: {
     marginBottom: 15,
   },
+  labelRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    marginBottom:   8,
+  },
   label: {
-    fontSize: 14,
-    color: '#2C3E50',
+    fontSize:   14,
+    color:      '#2C3E50',
     fontWeight: '600',
     marginBottom: 8,
   },
+  optionalTag: {
+    fontSize:        11,
+    color:           '#fff',
+    fontWeight:      '600',
+    backgroundColor: '#7B8CDE',
+    paddingHorizontal: 8,
+    paddingVertical:   2,
+    borderRadius:    10,
+    marginLeft:      8,
+    marginBottom:    8,
+  },
   input: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
+    backgroundColor:  '#F5F5F5',
+    borderRadius:     12,
     paddingHorizontal: 15,
-    height: 50,
+    height:           50,
+    fontSize:         15,
+    color:            '#2C3E50',
+  },
+  // 👇 NEW — input with email icon
+  inputWithIcon: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    backgroundColor:  '#F5F5F5',
+    borderRadius:     12,
+    paddingHorizontal: 15,
+    height:           50,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  inputFlex: {
+    flex:     1,
     fontSize: 15,
-    color: '#2C3E50',
+    color:    '#2C3E50',
+  },
+  // 👇 NEW — hint below email field
+  emailHint: {
+    fontSize:   11,
+    color:      '#7B8CDE',
+    marginTop:  6,
+    fontWeight: '500',
   },
   relationshipContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap:      'wrap',
   },
   relationshipChip: {
-    backgroundColor: '#F5F5F5',
-    paddingVertical: 8,
+    backgroundColor:  '#F5F5F5',
+    paddingVertical:  8,
     paddingHorizontal: 16,
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
+    borderRadius:     20,
+    marginRight:      8,
+    marginBottom:     8,
   },
   relationshipChipActive: {
     backgroundColor: '#7B8CDE',
   },
   relationshipText: {
-    fontSize: 13,
-    color: '#666',
+    fontSize:   13,
+    color:      '#666',
     fontWeight: '600',
   },
   relationshipTextActive: {
     color: '#FFFFFF',
   },
   addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection:  'row',
+    alignItems:     'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#7B8CDE',
-    borderStyle: 'dashed',
-    borderRadius: 15,
+    borderWidth:    2,
+    borderColor:    '#7B8CDE',
+    borderStyle:    'dashed',
+    borderRadius:   15,
     paddingVertical: 15,
-    marginBottom: 30,
+    marginBottom:   30,
   },
   addButtonText: {
-    fontSize: 16,
-    color: '#7B8CDE',
+    fontSize:   16,
+    color:      '#7B8CDE',
     fontWeight: '600',
     marginLeft: 8,
   },
   continueButton: {
     backgroundColor: '#7B8CDE',
     paddingVertical: 16,
-    borderRadius: 15,
-    alignItems: 'center',
-    shadowColor: '#7B8CDE',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    borderRadius:    15,
+    alignItems:      'center',
+    shadowColor:     '#7B8CDE',
+    shadowOffset:    { width: 0, height: 4 },
+    shadowOpacity:   0.3,
+    shadowRadius:    8,
+    elevation:       5,
   },
   continueButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color:      '#FFFFFF',
+    fontSize:   18,
     fontWeight: '700',
   },
   requiredNote: {
-    fontSize: 12,
-    color: '#999',
+    fontSize:  12,
+    color:     '#999',
     textAlign: 'center',
     marginTop: 15,
   },

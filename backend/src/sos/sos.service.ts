@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { MailService } from '../mail/mail.service';
-import { ChatMessage, ContactResult } from './sos.types'; // 👈 import from types file
+import { ChatMessage, ContactResult } from './sos.types';
 
 @Injectable()
 export class SosService {
@@ -19,20 +19,20 @@ export class SosService {
       lng:          number;
       chatHistory?: ChatMessage[];
     },
-  ): Promise<{                    // 👈 explicit return type
+  ): Promise<{
     success:   boolean;
     message:   string;
     location?: string;
     notified?: ContactResult[];
   }> {
-    // ── 1. Find user in MongoDB ──────────────────────────────────────────────
+    // 1. Find user
     const user = await this.userModel
       .findById(userId)
       .select('-password -otpCode -otpExpiry');
 
     if (!user) throw new NotFoundException('User not found');
 
-    // ── 2. Check emergency contacts ──────────────────────────────────────────
+    // 2. Check emergency contacts
     if (!user.emergencyContacts || user.emergencyContacts.length === 0) {
       return {
         success: false,
@@ -40,19 +40,14 @@ export class SosService {
       };
     }
 
-    // ── 3. Build Google Maps link ────────────────────────────────────────────
+    // 3. Build Google Maps link
     const locationUrl = `https://maps.google.com/?q=${data.lat},${data.lng}`;
 
-    // ── 4. Build chat summary (last 3 messages) ──────────────────────────────
-    const chatSummary =
-      data.chatHistory && data.chatHistory.length > 0
-        ? data.chatHistory
-            .slice(-3)
-            .map((m) => `${m.role}: ${m.text}`)
-            .join('\n')
-        : 'No recent chat history';
+    // 4. Get custom SOS message (or default)
+    const sosMessage = user.sosMessage ||
+      'I need emergency help! Please contact me immediately.';
 
-    // ── 5. Send confirmation email to user himself ───────────────────────────
+    // 5. Send confirmation email to user himself
     try {
       await this.mailService.sendSosConfirmationToUser(
         user.email,
@@ -64,7 +59,7 @@ export class SosService {
       console.error('❌ User confirmation email failed:', err.message);
     }
 
-    // ── 6. Send alert to each emergency contact ──────────────────────────────
+    // 6. Send alert to each emergency contact
     const results: ContactResult[] = [];
 
     for (const contact of user.emergencyContacts) {
@@ -82,17 +77,13 @@ export class SosService {
             contact.email,
             contact.fullName,
             contact.relationship,
-            {
-              fullName:      user.fullName,
-              age:           user.age,
-              gender:        user.gender,
-              healthProfile: user.healthProfile,
-            },
+            user.fullName,
+            user.phoneNumber ?? 'Not provided',
+            sosMessage,
             locationUrl,
-            chatSummary,
           );
           contactResult.emailStatus = 'sent ✅';
-          console.log(`✅ SOS email sent to ${contact.fullName} — ${contact.email}`);
+          console.log(`✅ SOS email sent to ${contact.fullName}`);
         } catch (err) {
           contactResult.emailStatus = 'failed ❌';
           console.error(`❌ SOS email failed for ${contact.fullName}:`, err.message);
@@ -102,7 +93,7 @@ export class SosService {
       results.push(contactResult);
     }
 
-    // ── 7. Return result ─────────────────────────────────────────────────────
+    // 7. Return result
     return {
       success:  true,
       message:  `SOS alert processed for ${results.length} contact(s)`,

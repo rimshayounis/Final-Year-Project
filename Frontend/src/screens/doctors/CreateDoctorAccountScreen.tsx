@@ -32,7 +32,7 @@ interface CertificateFile {
   mimeType: string;
 }
 
-type ProfessionalType = 'doctor' | 'therapist' | null;
+type ProfessionalType = 'doctor' | 'psychologist' | null;
 
 export default function CreateDoctorAccountScreen({ navigation }: Props) {
   const [professionalType, setProfessionalType] = useState<ProfessionalType>('doctor');
@@ -49,10 +49,10 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const isTherapist = professionalType === 'therapist';
+  const isTherapist = professionalType === 'psychologist';
 
   /* ------------------ PROFESSIONAL TYPE SELECTOR ------------------ */
-  const handleSelectProfessionalType = (type: 'doctor' | 'therapist') => {
+  const handleSelectProfessionalType = (type: 'doctor' | 'psychologist') => {
     setProfessionalType(type);
     // Clear fields when switching so nothing carries over
     setFormData(prev => ({ ...prev, specialization: '', licenseNumber: '' }));
@@ -221,15 +221,15 @@ export default function CreateDoctorAccountScreen({ navigation }: Props) {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.typeCard, professionalType === 'therapist' && styles.typeCardActive]}
-                  onPress={() => handleSelectProfessionalType('therapist')}
+                  style={[styles.typeCard, professionalType === 'psychologist' && styles.typeCardActive]}
+                  onPress={() => handleSelectProfessionalType('psychologist')}
                 >
                   <MaterialIcons
                     name="psychology"
                     size={20}
-                    color={professionalType === 'therapist' ? '#fff' : '#6B7FED'}
+                    color={professionalType === 'psychologist' ? '#fff' : '#6B7FED'}
                   />
-                  <Text style={[styles.typeCardText, professionalType === 'therapist' && styles.typeCardTextActive]}>
+                  <Text style={[styles.typeCardText, professionalType === 'psychologist' && styles.typeCardTextActive]}>
                     Therapist
                   </Text>
                 </TouchableOpacity>

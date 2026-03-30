@@ -15,6 +15,7 @@ import {
   RegisterUserDto,
   CreateHealthProfileDto,
   CreateEmergencyContactsDto,
+  UpdateSosMessageDto,
   LoginDto,
   ForgotPasswordDto,
   VerifyOtpDto,
@@ -38,7 +39,6 @@ export class UsersController {
   }
 
   // ── Forgot Password flow ───────────────────────────────────────────────────
-
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -76,8 +76,17 @@ export class UsersController {
     return this.usersService.createEmergencyContacts(userId, emergencyContactsDto);
   }
 
-  // ── CRUD ───────────────────────────────────────────────────────────────────
+  // ── SOS Message ───────────────────────────────────────────────────────────
+  @Patch(':userId/sos-message')
+  @HttpCode(HttpStatus.OK)
+  async updateSosMessage(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateSosMessageDto,
+  ) {
+    return this.usersService.updateSosMessage(userId, dto.sosMessage);
+  }
 
+  // ── CRUD ───────────────────────────────────────────────────────────────────
   @Get(':userId')
   async getUserById(@Param('userId') userId: string) {
     return this.usersService.getUserById(userId);
@@ -89,7 +98,10 @@ export class UsersController {
   }
 
   @Put(':userId')
-  async updateUser(@Param('userId') userId: string, @Body() updateData: any) {
+  async updateUser(
+    @Param('userId') userId: string,
+    @Body() updateData: any,
+  ) {
     return this.usersService.updateUser(userId, updateData);
   }
 
@@ -103,7 +115,11 @@ export class UsersController {
     @Param('userId') userId: string,
     @Body() body: { oldPassword: string; newPassword: string },
   ) {
-    return this.usersService.changePassword(userId, body.oldPassword, body.newPassword);
+    return this.usersService.changePassword(
+      userId,
+      body.oldPassword,
+      body.newPassword,
+    );
   }
 
   @Patch(':userId/change-email')
@@ -111,7 +127,11 @@ export class UsersController {
     @Param('userId') userId: string,
     @Body() body: { password: string; newEmail: string },
   ) {
-    return this.usersService.changeEmail(userId, body.password, body.newEmail);
+    return this.usersService.changeEmail(
+      userId,
+      body.password,
+      body.newEmail,
+    );
   }
 
   @Get(':userId/notification-settings')

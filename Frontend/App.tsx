@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
@@ -25,13 +25,13 @@ if (Platform.OS === 'android') {
 }
 
 import { StripeProvider } from '@stripe/stripe-react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// ── SOS imports ────────────────────────────────────────────────────────────
-import { useShakeSOS } from './src/hooks/useShakeSOS';   // 👈 NEW
-import SOSButton from './src/components/SOSButton';       // 👈 NEW
+// ── SOS ───────────────────────────────────────────────────────────────────
+import { useShakeSOS } from './src/hooks/useShakeSOS';
+import SOSButton from './src/components/SOSButton';
 
 import SplashScreen from './src/screens/SplashScreen';
 import LoginTypeScreen from './src/screens/LoginTypeScreen';
@@ -58,8 +58,6 @@ import PrivacyPolicyScreen from './src/screens/settings/PrivacyPolicyScreen';
 import TermsOfServiceScreen from './src/screens/settings/TermsOfServiceScreen';
 import HelpFAQScreen from './src/screens/settings/HelpFAQScreen';
 import ContactSupportScreen from './src/screens/settings/ContactSupportScreen';
-
-// ── Forgot password screens ────────────────────────────────────────────────
 import ForgotPasswordScreen  from './src/screens/ForgotPasswordScreen';
 import OTPVerificationScreen from './src/screens/OtpVerification';
 import ResetPasswordScreen   from './src/screens/ResetPasswordScreen';
@@ -103,17 +101,42 @@ export type RootStackParamList = {
     doctorId: string; doctorName: string; doctorAvatar?: string;
     doctorSpecialty?: string; conversationId: string;
   };
-  // ── Forgot password screens ──────────────────────────────────────────────
   ForgotPassword:  { userType: 'user' | 'doctor' };
   OTPVerification: { email: string; userType: 'user' | 'doctor' };
   ResetPassword:   { email: string; otpCode: string; userType: 'user' | 'doctor' };
 };
 
+// ── Screens where SOS button is HIDDEN ───────────────────────────────────
+const HIDE_SOS_SCREENS = [
+  'Splash',
+  'LoginType',
+  'Login',
+  'CreateAccount',
+  'CreateDoctorAccount',
+  'DoctorSubscription',
+  'DoctorUnverified',
+  'HealthProfile',
+  'EmergencyContact',
+  'ForgotPassword',
+  'OTPVerification',
+  'ResetPassword',
+];
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
 
-  useShakeSOS(); // 👈 NEW — shake × 3 triggers SOS on Android
+  useShakeSOS(); // shake × 3 triggers SOS globally
+
+  // Track current screen name
+  const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
+  const [currentScreen, setCurrentScreen] = useState<string>('Splash');
+  const [userRole, setUserRole]           = useState<string | null>(null);
+
+  // Check if SOS button should be visible
+  const showSOS =
+    !HIDE_SOS_SCREENS.includes(currentScreen) &&
+    userRole === 'user'; // 👈 only show for users not doctors
 
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener((notification) => {
@@ -125,10 +148,24 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StripeProvider publishableKey="pk_test_51TCBMfR4G6lL4JOFxa4zONwnxiuq8c59n03D2gyzirdMdlhhv0Ntk9a2I9aw2PUHRDmPjPAvngQzp8PndA5IQxMh003DjzSFS1">
-        <NavigationContainer>
+        <NavigationContainer
+          ref={navigationRef}
+          onStateChange={() => {
+            // Track current screen on every navigation change
+            const current = navigationRef.current?.getCurrentRoute();
+            if (current?.name) {
+              setCurrentScreen(current.name);
 
-          {/* 👇 NEW — red SOS button floats on every screen bottom right */}
-          <SOSButton />
+              // Track role from Dashboard params
+              if (current.name === 'Dashboard') {
+                const params = current.params as { role?: string };
+                setUserRole(params?.role ?? null);
+              }
+            }
+          }}
+        >
+          {/* 👇 SOS button — only shows on post-login screens for users */}
+          {showSOS && <SOSButton />}
 
           <Stack.Navigator
             initialRouteName="Splash"
@@ -159,7 +196,6 @@ export default function App() {
             <Stack.Screen name="TermsOfService"       component={TermsOfServiceScreen} />
             <Stack.Screen name="HelpFAQ"              component={HelpFAQScreen} />
             <Stack.Screen name="ContactSupport"       component={ContactSupportScreen} />
-            {/* ── Forgot password flow ─────────────────────────────────── */}
             <Stack.Screen name="ForgotPassword"       component={ForgotPasswordScreen} />
             <Stack.Screen name="OTPVerification"      component={OTPVerificationScreen} />
             <Stack.Screen name="ResetPassword"        component={ResetPasswordScreen} />

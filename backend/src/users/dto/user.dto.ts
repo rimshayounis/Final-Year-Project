@@ -17,11 +17,12 @@ export class RegisterUserDto {
   @IsNotEmpty() @IsString()  @MinLength(8) password: string;
   @IsNotEmpty() @IsString()  gender:    string;
   @IsNotEmpty() @IsString()  userType:  string;
+  @IsOptional() @IsString()  phoneNumber?: string;
 }
 
 export class LoginDto {
-  @IsNotEmpty() @IsEmail()  email:    string;
-  @IsNotEmpty() @IsString() password: string;
+  @IsNotEmpty() @IsEmail()  email:     string;
+  @IsNotEmpty() @IsString() password:  string;
   @IsOptional() @IsString() userType?: string;
 }
 
@@ -33,34 +34,35 @@ export class CreateHealthProfileDto {
 }
 
 // ── Emergency Contact ──────────────────────────────────────────────────────
-
 export class EmergencyContactDto {
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty() @IsString()
   fullName: string;
 
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty() @IsString()
   phoneNumber: string;
 
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty() @IsString()
   relationship: string;
 
-  @IsOptional()   // 👈 optional so signup doesn't break if not provided
-  @IsEmail()
+  @IsOptional() @IsEmail()
   email?: string;
 }
 
 export class CreateEmergencyContactsDto {
   @IsArray()
-  @ValidateNested({ each: true })  // 👈 validates each contact object
-  @Type(() => EmergencyContactDto) // 👈 transforms plain object to class
+  @ValidateNested({ each: true })
+  @Type(() => EmergencyContactDto)
   contacts: EmergencyContactDto[];
 }
 
-// ── Forgot Password DTOs ───────────────────────────────────────────────────
+// ── SOS Message ────────────────────────────────────────────────────────────
+export class UpdateSosMessageDto {
+  @IsNotEmpty()
+  @IsString()
+  sosMessage: string;
+}
 
+// ── Forgot Password DTOs ───────────────────────────────────────────────────
 export class ForgotPasswordDto {
   @IsNotEmpty() @IsEmail()
   email: string;

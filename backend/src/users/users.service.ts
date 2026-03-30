@@ -28,13 +28,15 @@ export class UsersService {
 
   // ── Register ───────────────────────────────────────────────────────────────
   async register(dto: RegisterUserDto) {
-    const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    const existing = await this.userModel.findOne({
+      email: dto.email.toLowerCase(),
+    });
     if (existing) throw new ConflictException('Email already registered');
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     const user = new this.userModel({
       ...dto,
-      email: dto.email.toLowerCase(),
+      email:    dto.email.toLowerCase(),
       password: hashedPassword,
     });
     const saved = await user.save();
@@ -44,7 +46,9 @@ export class UsersService {
 
   // ── Login ──────────────────────────────────────────────────────────────────
   async login(dto: LoginDto) {
-    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    const user = await this.userModel.findOne({
+      email: dto.email.toLowerCase(),
+    });
     if (!user) throw new NotFoundException('No account found with this email');
 
     const isMatch = await bcrypt.compare(dto.password, user.password);
@@ -54,13 +58,15 @@ export class UsersService {
     return { success: true, user: result };
   }
 
-  // ── Forgot Password — Step 1: Send OTP ────────────────────────────────────
+  // ── Forgot Password — Step 1 ───────────────────────────────────────────────
   async forgotPassword(dto: ForgotPasswordDto) {
-    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    const user = await this.userModel.findOne({
+      email: dto.email.toLowerCase(),
+    });
     if (!user) throw new NotFoundException('No account found with this email');
 
-    const otpCode  = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min from now
+    const otpCode  = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     await this.userModel.updateOne(
       { _id: user._id },
@@ -68,48 +74,53 @@ export class UsersService {
     );
 
     await this.mailService.sendOtpEmail(user.email, otpCode, user.fullName);
-
     return { success: true, message: 'OTP sent to your email' };
   }
 
-  // ── Forgot Password — Step 2: Verify OTP ──────────────────────────────────
+  // ── Forgot Password — Step 2 ───────────────────────────────────────────────
   async verifyOtp(dto: VerifyOtpDto) {
-    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    const user = await this.userModel.findOne({
+      email: dto.email.toLowerCase(),
+    });
     if (!user) throw new NotFoundException('No account found with this email');
 
-    if (!user.otpCode || !user.otpExpiry) {
+    if (!user.otpCode || !user.otpExpiry)
       throw new BadRequestException('No OTP requested. Please request a new one');
-    }
 
     if (new Date() > user.otpExpiry) {
-      await this.userModel.updateOne({ _id: user._id }, { otpCode: null, otpExpiry: null });
+      await this.userModel.updateOne(
+        { _id: user._id },
+        { otpCode: null, otpExpiry: null },
+      );
       throw new BadRequestException('OTP has expired. Please request a new one');
     }
 
-    if (user.otpCode !== dto.otpCode) {
+    if (user.otpCode !== dto.otpCode)
       throw new BadRequestException('Invalid OTP. Please check and try again');
-    }
 
     return { success: true, message: 'OTP verified successfully' };
   }
 
-  // ── Forgot Password — Step 3: Reset Password ──────────────────────────────
+  // ── Forgot Password — Step 3 ───────────────────────────────────────────────
   async resetPassword(dto: ResetPasswordDto) {
-    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    const user = await this.userModel.findOne({
+      email: dto.email.toLowerCase(),
+    });
     if (!user) throw new NotFoundException('No account found with this email');
 
-    if (!user.otpCode || !user.otpExpiry) {
+    if (!user.otpCode || !user.otpExpiry)
       throw new BadRequestException('No OTP requested. Please request a new one');
-    }
 
     if (new Date() > user.otpExpiry) {
-      await this.userModel.updateOne({ _id: user._id }, { otpCode: null, otpExpiry: null });
+      await this.userModel.updateOne(
+        { _id: user._id },
+        { otpCode: null, otpExpiry: null },
+      );
       throw new BadRequestException('OTP has expired. Please request a new one');
     }
 
-    if (user.otpCode !== dto.otpCode) {
+    if (user.otpCode !== dto.otpCode)
       throw new BadRequestException('Invalid OTP');
-    }
 
     const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
     await this.userModel.updateOne(
@@ -132,7 +143,10 @@ export class UsersService {
   }
 
   // ── Emergency Contacts ─────────────────────────────────────────────────────
-  async createEmergencyContacts(userId: string, dto: CreateEmergencyContactsDto) {
+  async createEmergencyContacts(
+    userId: string,
+    dto: CreateEmergencyContactsDto,
+  ) {
     const user = await this.userModel.findByIdAndUpdate(
       userId,
       { emergencyContacts: dto.contacts },
@@ -142,20 +156,36 @@ export class UsersService {
     return { success: true, user };
   }
 
+  // ── SOS Message ────────────────────────────────────────────────────────────
+  async updateSosMessage(userId: string, sosMessage: string) {
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      { sosMessage },
+      { new: true },
+    ).select('-password -otpCode -otpExpiry');
+    if (!user) throw new NotFoundException('User not found');
+    return { success: true, sosMessage: user.sosMessage };
+  }
+
   // ── CRUD ───────────────────────────────────────────────────────────────────
   async getUserById(userId: string) {
-    const user = await this.userModel.findById(userId).select('-password -otpCode -otpExpiry');
+    const user = await this.userModel
+      .findById(userId)
+      .select('-password -otpCode -otpExpiry');
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
 
   async getAllUsers() {
-  const users = await this.userModel.find().select('-password -otpCode -otpExpiry');
-  return { users };
-}
+    const users = await this.userModel
+      .find()
+      .select('-password -otpCode -otpExpiry');
+    return { users };
+  }
 
   async updateUser(userId: string, updateData: any) {
-    const user = await this.userModel.findByIdAndUpdate(userId, updateData, { new: true })
+    const user = await this.userModel
+      .findByIdAndUpdate(userId, updateData, { new: true })
       .select('-password -otpCode -otpExpiry');
     if (!user) throw new NotFoundException('User not found');
     return { success: true, user };
@@ -167,11 +197,16 @@ export class UsersService {
     return { success: true, message: 'User deleted' };
   }
 
-  async changePassword(userId: string, oldPassword: string, newPassword: string) {
+  async changePassword(
+    userId: string,
+    oldPassword: string,
+    newPassword: string,
+  ) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new NotFoundException('User not found');
     const isMatch = await bcrypt.compare(oldPassword, user.password);
-    if (!isMatch) throw new BadRequestException('Current password is incorrect');
+    if (!isMatch)
+      throw new BadRequestException('Current password is incorrect');
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
     return { success: true, message: 'Password changed successfully' };
@@ -182,7 +217,9 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) throw new BadRequestException('Incorrect password');
-    const existing = await this.userModel.findOne({ email: newEmail.toLowerCase() });
+    const existing = await this.userModel.findOne({
+      email: newEmail.toLowerCase(),
+    });
     if (existing) throw new ConflictException('Email already in use');
     user.email = newEmail.toLowerCase();
     await user.save();
@@ -190,17 +227,29 @@ export class UsersService {
   }
 
   async getNotificationSettings(userId: string) {
-    const user = await this.userModel.findById(userId).select('notificationSettings');
+    const user = await this.userModel
+      .findById(userId)
+      .select('notificationSettings');
     if (!user) throw new NotFoundException('User not found');
     return user.notificationSettings;
   }
 
-  async updateNotificationSettings(userId: string, settings: { pushEnabled?: boolean; emailEnabled?: boolean }) {
-    const user = await this.userModel.findByIdAndUpdate(
-      userId,
-      { $set: { 'notificationSettings.pushEnabled': settings.pushEnabled, 'notificationSettings.emailEnabled': settings.emailEnabled } },
-      { new: true },
-    ).select('notificationSettings');
+  async updateNotificationSettings(
+    userId: string,
+    settings: { pushEnabled?: boolean; emailEnabled?: boolean },
+  ) {
+    const user = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        {
+          $set: {
+            'notificationSettings.pushEnabled':  settings.pushEnabled,
+            'notificationSettings.emailEnabled': settings.emailEnabled,
+          },
+        },
+        { new: true },
+      )
+      .select('notificationSettings');
     if (!user) throw new NotFoundException('User not found');
     return user.notificationSettings;
   }

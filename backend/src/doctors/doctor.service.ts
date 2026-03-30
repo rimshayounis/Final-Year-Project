@@ -36,7 +36,7 @@ export class DoctorsService {
       password: hashedPassword,
       doctorProfile: {
         professionalType: dto.professionalType,
-        licenseNumber:    dto.professionalType === 'therapist' ? (dto.licenseNumber || null) : dto.licenseNumber,
+        licenseNumber:    dto.professionalType === 'psychologist' ? (dto.licenseNumber || null) : dto.licenseNumber,
         specialization:   dto.specialization,
         certificates:     dto.certificates || [],
         isVerified:       false,
