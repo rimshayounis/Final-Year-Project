@@ -7,9 +7,40 @@ import {
   TrustBadge,
   TransactionType,
 } from './schemas/points-reward.schema';
-import { SubscriptionPlan } from '../doctors/schemas/doctor.schema';
+import { Doctor, DoctorDocument, SubscriptionPlan } from '../doctors/schemas/doctor.schema';
 import { Post } from '../posts/schemas/post.schema';
 import { BookedAppointment, BookedAppointmentDocument } from '../booked-appointment/schemas/booked-appointment.schema';
+
+// ── Mentor Level ──────────────────────────────────────────────────────────────
+export interface MentorLevelResult {
+  level:      number;   // 1–5
+  title:      string;
+  score:      number;
+  nextScore:  number | null;  // null at max level
+}
+
+const MENTOR_LEVELS = [
+  { level: 1, title: 'Newcomer', min: 0   },
+  { level: 2, title: 'Rising',   min: 25  },
+  { level: 3, title: 'Trusted',  min: 60  },
+  { level: 4, title: 'Expert',   min: 120 },
+  { level: 5, title: 'Master',   min: 230 },
+];
+
+function computeMentorLevel(trustScore: number, completedCount: number, avgRating: number): MentorLevelResult {
+  const score = (trustScore * 25) + completedCount + Math.round(avgRating * 10);
+  let current = MENTOR_LEVELS[0];
+  for (const lvl of MENTOR_LEVELS) {
+    if (score >= lvl.min) current = lvl;
+  }
+  const nextLvl = MENTOR_LEVELS.find(l => l.level === current.level + 1);
+  return {
+    level:     current.level,
+    title:     current.title,
+    score,
+    nextScore: nextLvl ? nextLvl.min : null,
+  };
+}
 
 // ── Verification slot config per plan ────────────────────────────────────────
 const SLOT_CONFIG: Record<SubscriptionPlan, { base: number; bonus: number }> = {
@@ -47,6 +78,8 @@ export class PointsRewardService {
     private postModel: Model<any>,
     @InjectModel(BookedAppointment.name)
     private appointmentModel: Model<BookedAppointmentDocument>,
+    @InjectModel(Doctor.name)
+    private doctorModel: Model<DoctorDocument>,
   ) {}
 
   // ── Get or create wallet for a doctor ────────────────────────────────────
@@ -557,6 +590,17 @@ export class PointsRewardService {
       trustBadge: wallet.trustBadge,
       trustScore: wallet.trustScore,
     };
+  }
+
+  // ── Mentor Level ─────────────────────────────────────────────────────────────
+  async getMentorLevel(doctorId: string): Promise<MentorLevelResult> {
+    const [wallet, doctor] = await Promise.all([
+      this.getOrCreateWallet(doctorId),
+      this.doctorModel.findById(doctorId).select('completedCount avgRating').lean(),
+    ]);
+    const completedCount = (doctor as any)?.completedCount ?? 0;
+    const avgRating      = (doctor as any)?.avgRating      ?? 0;
+    return computeMentorLevel(wallet.trustScore, completedCount, avgRating);
   }
 
   // ── Recalculate wallet from scratch based on current active approved posts ─

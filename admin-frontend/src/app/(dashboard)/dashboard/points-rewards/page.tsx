@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MentorLevelBadge, MentorLevelCard, type MentorLevel } from '@/components/MentorLevelBadge';
 
 const BASE_URL = 'http://localhost:3000/api';
 
@@ -15,32 +16,16 @@ interface PointsSummary {
   totalPoints: number;
   lifetimePointsEarned: number;
   cashValue: number;
-  trustBadge: 'none' | 'bronze' | 'silver' | 'gold' | 'platinum';
-  trustScore: number;
   monthlyBookings: { yearMonth: string; completedCount: number; rewarded: boolean }[];
   recentTransactions: { type: string; points: number; description: string; createdAt: string }[];
 }
+
 
 interface DoctorPoints {
   doctor: Doctor;
   summary: PointsSummary | null;
 }
 
-const badgeColors: Record<string, { bg: string; color: string }> = {
-  none:     { bg: '#f3f4f8', color: '#CCC'    },
-  bronze:   { bg: '#fff3e0', color: '#8D6E63' },
-  silver:   { bg: '#ECEFF1', color: '#78909C' },
-  gold:     { bg: '#FFF8E1', color: '#F9A825' },
-  platinum: { bg: '#F3E5F5', color: '#7B1FA2' },
-};
-
-function ShieldIcon({ color, size = 16 }: { color: string; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0 }}>
-      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-    </svg>
-  );
-}
 
 const planColors: Record<string, { bg: string; color: string }> = {
   free_trial:   { bg: '#f3f4f8', color: '#666' },
@@ -55,6 +40,8 @@ export default function PointsRewardsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch]     = useState('');
   const [selected, setSelected] = useState<DoctorPoints | null>(null);
+  const [selectedMentor, setSelectedMentor] = useState<MentorLevel | null>(null);
+  const [mentorLevels, setMentorLevels] = useState<Record<string, MentorLevel>>({});
   const [toast, setToast]       = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
@@ -81,6 +68,9 @@ export default function PointsRewardsPage() {
         summary: results[i].status === 'fulfilled' ? results[i].value : null,
       }));
       setData(combined);
+      // Batch fetch mentor levels for all doctors
+      const { fetchMentorLevels: batchFetch } = await import('@/components/MentorLevelBadge');
+      batchFetch(doctors.map(d => d._id), BASE_URL).then(setMentorLevels);
     } catch {
       showToast('Failed to load points data', 'error');
     } finally {
@@ -119,11 +109,6 @@ export default function PointsRewardsPage() {
   // Summary stats
   const totalPoints    = data.reduce((s, d) => s + (d.summary?.totalPoints || 0), 0);
   const totalCashValue = data.reduce((s, d) => s + (d.summary?.cashValue || 0), 0);
-  const badgeCounts    = { bronze: 0, silver: 0, gold: 0, platinum: 0 };
-  data.forEach(d => {
-    const b = d.summary?.trustBadge;
-    if (b && b !== 'none') badgeCounts[b as keyof typeof badgeCounts]++;
-  });
 
   const getCurrentMonth = () => new Date().toISOString().slice(0, 7);
 
@@ -139,7 +124,7 @@ export default function PointsRewardsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Points &amp; Rewards</h1>
-          <p className="page-sub">Monitor doctor points, trust badges and reward wallets · synced from live appointment data</p>
+          <p className="page-sub">Monitor doctor points, mentor levels and reward wallets · synced from live appointment data</p>
         </div>
         <div className="header-stats">
           <div className="hstat">
@@ -150,13 +135,6 @@ export default function PointsRewardsPage() {
           <div className="hstat">
             <span className="hstat-val" style={{ color: '#059669' }}>PKR {totalCashValue.toLocaleString()}</span>
             <span className="hstat-label">Cash Value</span>
-          </div>
-          <div className="hstat-divider" />
-          <div className="hstat">
-            <span className="hstat-val" style={{ color: '#d97706' }}>
-              {Object.values(badgeCounts).reduce((a, b) => a + b, 0)}
-            </span>
-            <span className="hstat-label">Badges Earned</span>
           </div>
           <div className="hstat-divider" />
           <button
@@ -171,19 +149,6 @@ export default function PointsRewardsPage() {
             </svg>
           </button>
         </div>
-      </div>
-
-      {/* Badge Summary */}
-      <div className="badge-summary">
-        {Object.entries(badgeColors).filter(([k]) => k !== 'none').map(([badge, style]) => (
-          <div key={badge} className="badge-card">
-            <ShieldIcon color={style.color} size={22} />
-            <span className="badge-count">{badgeCounts[badge as keyof typeof badgeCounts]}</span>
-            <span className="badge-name" style={{ color: style.color }}>
-              {badge.charAt(0).toUpperCase() + badge.slice(1)}
-            </span>
-          </div>
-        ))}
       </div>
 
       {/* Search */}
@@ -217,7 +182,6 @@ export default function PointsRewardsPage() {
                 <th>Plan</th>
                 <th>Points</th>
                 <th>Cash Value</th>
-                <th>Trust Badge</th>
                 <th>This Month Bookings</th>
                 <th>Actions</th>
               </tr>
@@ -225,13 +189,13 @@ export default function PointsRewardsPage() {
             <tbody>
               {filtered.map(({ doctor, summary }) => {
                 const thisMonth = summary?.monthlyBookings?.find(m => m.yearMonth === getCurrentMonth());
-                const badge = summary?.trustBadge || 'none';
                 return (
                   <tr key={doctor._id} className="table-row">
                     <td>
                       <div className="person-cell">
                         <div className="person-name">{doctor.fullName}</div>
                         <div className="person-email">{doctor.email}</div>
+                        <MentorLevelBadge level={mentorLevels[doctor._id]} size="sm" />
                       </div>
                     </td>
                     <td>
@@ -252,15 +216,6 @@ export default function PointsRewardsPage() {
                       <span className="cash-val">PKR {(summary?.cashValue || 0).toLocaleString()}</span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <span className="badge-chip" style={{ background: badgeColors[badge].bg, color: badgeColors[badge].color }}>
-                          <ShieldIcon color={badgeColors[badge].color} size={13} />
-                          {badge === 'none' ? '—' : badge.charAt(0).toUpperCase() + badge.slice(1)}
-                        </span>
-                        <span style={{ fontSize: 11, color: '#888' }}>Score: {summary?.trustScore || 0}/4</span>
-                      </div>
-                    </td>
-                    <td>
                       <div className="booking-cell">
                         <div className="booking-bar-wrap">
                           <div
@@ -276,7 +231,14 @@ export default function PointsRewardsPage() {
                     </td>
                     <td>
                       <div className="action-btns">
-                        <button className="btn-view" onClick={() => setSelected({ doctor, summary })}>
+                        <button className="btn-view" onClick={async () => {
+                          setSelected({ doctor, summary });
+                          setSelectedMentor(null);
+                          try {
+                            const r = await fetch(`${BASE_URL}/points-reward/${doctor._id}/mentor-level`).then(x => x.json());
+                            setSelectedMentor(r.data ?? null);
+                          } catch { /* ignore */ }
+                        }}>
                           Details
                         </button>
                         <button className="btn-recalc" onClick={() => recalculate(doctor._id, doctor.fullName)} title="Recalculate — triggers a fresh recalculation of this doctor's points from live DB data">
@@ -297,14 +259,14 @@ export default function PointsRewardsPage() {
 
       {/* Detail Modal */}
       {selected && (
-        <div className="overlay" onClick={() => setSelected(null)}>
+        <div className="overlay" onClick={() => { setSelected(null); setSelectedMentor(null); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h2 className="modal-title">{selected.doctor.fullName}</h2>
                 <p className="modal-sub">{selected.doctor.email}</p>
               </div>
-              <button className="modal-close" onClick={() => setSelected(null)}>✕</button>
+              <button className="modal-close" onClick={() => { setSelected(null); setSelectedMentor(null); }}>✕</button>
             </div>
             <div className="modal-body">
               {/* Points Overview */}
@@ -322,20 +284,7 @@ export default function PointsRewardsPage() {
                   <div className="mc-val">PKR {(selected.summary?.cashValue || 0).toLocaleString()}</div>
                   <div className="mc-label">Cash Value</div>
                 </div>
-                <div className="modal-card">
-                  <div className="mc-icon" style={{ background: badgeColors[selected.summary?.trustBadge || 'none'].bg }}>
-                    <ShieldIcon color={badgeColors[selected.summary?.trustBadge || 'none'].color} size={18} />
-                  </div>
-                  <div className="mc-val" style={{ color: badgeColors[selected.summary?.trustBadge || 'none'].color }}>
-                    {(selected.summary?.trustBadge || 'none').charAt(0).toUpperCase() + (selected.summary?.trustBadge || 'none').slice(1)}
-                  </div>
-                  <div className="mc-label">Trust Badge</div>
-                </div>
-                <div className="modal-card">
-                  <div className="mc-icon" style={{ background: '#dbeafe', color: '#1d4ed8' }}>🏆</div>
-                  <div className="mc-val">{selected.summary?.trustScore || 0}</div>
-                  <div className="mc-label">Trust Score</div>
-                </div>
+                <MentorLevelCard level={selectedMentor} />
               </div>
 
               {/* Monthly Bookings */}
@@ -413,18 +362,6 @@ export default function PointsRewardsPage() {
         .hstat-val   { display: block; font-size: 20px; font-weight: 800; }
         .hstat-label { display: block; font-size: 11px; color: #888; font-weight: 500; margin-top: 2px; }
         .hstat-divider { width: 1px; background: #f0f0f5; align-self: stretch; }
-
-        /* Badge Summary */
-        .badge-summary { display: flex; gap: 12px; flex-wrap: wrap; }
-        .badge-card {
-          background: #fff; border-radius: 12px; padding: 14px 20px;
-          border: 1px solid #f0f0f5; display: flex; align-items: center; gap: 10px;
-          transition: transform 0.15s;
-        }
-        .badge-card:hover { transform: translateY(-2px); }
-        .badge-icon  { font-size: 22px; }
-        .badge-count { font-size: 22px; font-weight: 800; color: #111; }
-        .badge-name  { font-size: 12px; font-weight: 600; text-transform: capitalize; }
 
         /* Search */
         .search-wrap {

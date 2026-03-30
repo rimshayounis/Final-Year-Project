@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MentorLevelBadge, fetchMentorLevels, type MentorLevel } from '@/components/MentorLevelBadge';
 
 const BASE_URL = 'http://localhost:3000/api';
 
@@ -34,13 +35,21 @@ export default function FeedbackPage() {
   const [search, setSearch]       = useState('');
   const [selected, setSelected]   = useState<DoctorSummary | null>(null);
   const [viewMode, setViewMode]   = useState<'doctors' | 'all'>('doctors');
+  const [mentorLevels, setMentorLevels] = useState<Record<string, MentorLevel>>({});
 
   useEffect(() => {
     const fetchFeedbacks = async () => {
       try {
         const res  = await fetch(`${BASE_URL}/feedback`);
         const data = await res.json();
-        setFeedbacks(Array.isArray(data) ? data : (data.data || data.feedbacks || []));
+        const list: Feedback[] = Array.isArray(data) ? data : (data.data || data.feedbacks || []);
+        setFeedbacks(list);
+        // Extract unique doctor IDs and batch-fetch mentor levels
+        const docIds = [...new Set(list.map((f: Feedback) => {
+          const d = f.doctorId;
+          return typeof d === 'string' ? d : d?._id;
+        }).filter(Boolean))] as string[];
+        fetchMentorLevels(docIds, BASE_URL).then(setMentorLevels);
       } catch (e) {
         console.error('Failed to fetch feedback:', e);
       } finally {
@@ -193,6 +202,7 @@ export default function FeedbackPage() {
                     </div>
                     <div className="fb-doc-name">Dr. {d.name}</div>
                     {d.specialization && <div className="fb-doc-spec">{d.specialization}</div>}
+                    <MentorLevelBadge level={mentorLevels[d.doctorId]} size="sm" />
                     <StarRating rating={Math.round(d.avgRating)} />
                     <div className="fb-card-footer">
                       <span className="fb-review-count">{d.totalReviews} review{d.totalReviews !== 1 ? 's' : ''}</span>
@@ -236,7 +246,10 @@ export default function FeedbackPage() {
         {selected && viewMode === 'doctors' && (
           <div className="fb-detail">
             <div className="fb-detail-header">
-              <h3>Dr. {selected.name}</h3>
+              <div>
+                <h3>Dr. {selected.name}</h3>
+                <MentorLevelBadge level={mentorLevels[selected.doctorId]} size="md" />
+              </div>
               <button className="fb-detail-close" onClick={() => setSelected(null)}>✕</button>
             </div>
             {selected.specialization && <div className="fb-detail-spec">{selected.specialization}</div>}

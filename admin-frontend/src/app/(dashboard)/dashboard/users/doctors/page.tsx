@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MentorLevelBadge, MentorLevelCard, fetchMentorLevels, type MentorLevel } from '@/components/MentorLevelBadge';
 
 const BASE_URL = 'http://localhost:3000/api';
 
 interface DoctorProfile {
+  professionalType: 'doctor' | 'psychologist';
   licenseNumber: string;
   specialization: string;
   certificates: string[];
@@ -30,7 +32,7 @@ interface UserProfile {
 
 type FilterTab = 'all' | 'pending' | 'verified' | 'rejected';
 
-export default function DoctorsPage() {
+export default function ProfessionalsPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [filtered, setFiltered] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,10 @@ export default function DoctorsPage() {
 
   // Profile images map { doctorId -> imageUrl | null }
   const [profileImages, setProfileImages] = useState<Record<string, string | null>>({});
+
+  // Mentor levels map { doctorId -> MentorLevel }
+  const [mentorLevels, setMentorLevels] = useState<Record<string, MentorLevel>>({});
+  const [selectedMentor, setSelectedMentor] = useState<MentorLevel | null | undefined>(undefined);
 
   // Verify loading
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
@@ -81,21 +87,23 @@ export default function DoctorsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Fetch profile images for all doctors in parallel
+  // Fetch profile images + mentor levels for all doctors in parallel
   useEffect(() => {
     if (doctors.length === 0) return;
+    const ids = doctors.map(d => d._id);
     Promise.allSettled(
-      doctors.map(d =>
-        fetch(`${BASE_URL}/profiles/doctor/${d._id}`)
+      ids.map(id =>
+        fetch(`${BASE_URL}/profiles/doctor/${id}`)
           .then(r => r.json())
-          .then(data => ({ id: d._id, img: data.data?.profileImage || null }))
-          .catch(() => ({ id: d._id, img: null }))
+          .then(data => ({ id, img: data.data?.profileImage || null }))
+          .catch(() => ({ id, img: null }))
       )
     ).then(results => {
       const map: Record<string, string | null> = {};
       results.forEach(r => { if (r.status === 'fulfilled') map[r.value.id] = r.value.img; });
       setProfileImages(map);
     });
+    fetchMentorLevels(ids, BASE_URL).then(setMentorLevels);
   }, [doctors]);
 
   // Filter + search
@@ -120,10 +128,14 @@ export default function DoctorsPage() {
     setSelected(doctor);
     setProfile(null);
     setModalLoading(true);
+    setSelectedMentor(mentorLevels[doctor._id] ?? undefined);
     try {
-      const res = await fetch(`${BASE_URL}/profiles/doctor/${doctor._id}`);
-      const data = await res.json();
-      setProfile(data.data || {});
+      const [profileRes, mentorRes] = await Promise.allSettled([
+        fetch(`${BASE_URL}/profiles/doctor/${doctor._id}`).then(r => r.json()),
+        fetch(`${BASE_URL}/points-reward/${doctor._id}/mentor-level`).then(r => r.json()),
+      ]);
+      setProfile(profileRes.status === 'fulfilled' ? (profileRes.value.data || {}) : {});
+      if (mentorRes.status === 'fulfilled') setSelectedMentor(mentorRes.value.data ?? null);
     } catch {
       setProfile({});
     } finally {
@@ -246,7 +258,7 @@ export default function DoctorsPage() {
       {/* Top Bar — title + tabs + search + stats all in one row */}
       <div className="top-bar">
         <div className="top-bar-left">
-          <h1 className="page-title">Doctors</h1>
+          <h1 className="page-title">Professionals</h1>
           <div className="tab-group">
             {(['all', 'pending', 'verified', 'rejected'] as FilterTab[]).map(tab => (
               <button
@@ -288,12 +300,12 @@ export default function DoctorsPage() {
       {loading ? (
         <div className="loading-state">
           <div className="spinner" />
-          <p>Loading doctors...</p>
+          <p>Loading professionals...</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">🩺</div>
-          <p>No doctors found</p>
+          <p>No professionals found</p>
           <span>Try adjusting your search or filter</span>
         </div>
       ) : (
@@ -301,7 +313,7 @@ export default function DoctorsPage() {
           <table className="doctors-table">
             <thead>
               <tr>
-                <th>Doctor</th>
+                <th>Professional</th>
                 <th>Specialization</th>
                 <th>License</th>
                 <th>Plan</th>
@@ -333,6 +345,10 @@ export default function DoctorsPage() {
                       <div>
                         <div className="row-name">{doctor.fullName}</div>
                         <div className="row-email">{doctor.email}</div>
+                        <span className={`role-chip ${doctor.doctorProfile?.professionalType === 'psychologist' ? 'role-psychologist' : 'role-doctor'}`}>
+                          {doctor.doctorProfile?.professionalType === 'psychologist' ? 'Psychologist' : 'Doctor'}
+                        </span>
+                        <MentorLevelBadge level={mentorLevels[doctor._id]} size="sm" />
                       </div>
                     </div>
                   </td>
@@ -416,7 +432,7 @@ export default function DoctorsPage() {
 
       {/* Doctor Profile Modal */}
       {selected && (
-        <div className="overlay" onClick={() => setSelected(null)}>
+        <div className="overlay" onClick={() => { setSelected(null); setSelectedMentor(undefined); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="modal-header">
@@ -446,7 +462,7 @@ export default function DoctorsPage() {
                   <p className="modal-email">{selected.email}</p>
                 </div>
               </div>
-              <button className="modal-close" onClick={() => setSelected(null)}>✕</button>
+              <button className="modal-close" onClick={() => { setSelected(null); setSelectedMentor(undefined); }}>✕</button>
             </div>
 
             {/* Modal Body */}
@@ -455,10 +471,19 @@ export default function DoctorsPage() {
                 <div className="modal-loading"><div className="spinner" /><p>Loading...</p></div>
               ) : (
                 <>
+                  {/* Mentor Level */}
+                  <MentorLevelCard level={selectedMentor} />
+
                   {/* Professional Info */}
                   <div className="info-section">
                     <h3 className="info-title">Professional Information</h3>
                     <div className="detail-grid">
+                      <div className="detail-cell">
+                        <span className="detail-label">Role</span>
+                        <span className={`role-chip ${selected.doctorProfile?.professionalType === 'psychologist' ? 'role-psychologist' : 'role-doctor'}`}>
+                          {selected.doctorProfile?.professionalType === 'psychologist' ? 'Psychologist' : 'Doctor'}
+                        </span>
+                      </div>
                       <div className="detail-cell">
                         <span className="detail-label">License Number</span>
                         <span className="detail-value">{selected.doctorProfile?.licenseNumber || '—'}</span>
@@ -545,7 +570,7 @@ export default function DoctorsPage() {
                           onClick={() => verifyDoctor(selected._id, selected.fullName)}
                           disabled={verifyingId === selected._id}
                         >
-                          {verifyingId === selected._id ? 'Approving...' : '✓ Approve Doctor'}
+                          {verifyingId === selected._id ? 'Approving...' : '✓ Approve'}
                         </button>
                         <button
                           className="btn-reject-modal"
@@ -631,9 +656,9 @@ export default function DoctorsPage() {
         <div className="overlay" onClick={() => setDeleteTarget(null)}>
           <div className="confirm-modal" onClick={e => e.stopPropagation()}>
             <div className="confirm-icon">⚠️</div>
-            <h3>Remove Doctor?</h3>
+            <h3>Remove Professional?</h3>
             <p>
-              Are you sure you want to remove <strong>Dr. {deleteTarget.fullName}</strong> from TruHealLink?
+              Are you sure you want to remove <strong>{deleteTarget.fullName}</strong> from TruHealLink?
               This action cannot be undone.
             </p>
             <div className="confirm-actions">
@@ -709,6 +734,11 @@ export default function DoctorsPage() {
         .table-row:last-child { border-bottom: none; }
         .table-row:hover { background: #fafafa; }
         .doctors-table td { padding: 12px 14px; vertical-align: middle; }
+
+        /* Role chip */
+        .role-chip { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; margin-top: 3px; }
+        .role-doctor { background: #dbeafe; color: #1d4ed8; }
+        .role-psychologist { background: #ede9fe; color: #7c3aed; }
 
         /* Row doctor cell */
         .row-doctor { display: flex; align-items: center; gap: 10px; }

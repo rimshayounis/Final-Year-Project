@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MentorLevelBadge, fetchMentorLevels, type MentorLevel } from '@/components/MentorLevelBadge';
 
 const BASE_URL = 'http://localhost:3000/api';
 
@@ -50,6 +51,7 @@ export default function SubscriptionsPage() {
   const [selected, setSelected] = useState<Doctor | null>(null);
   const [subHistory, setSubHistory] = useState<Subscription[]>([]);
   const [subLoading, setSubLoading] = useState(false);
+  const [mentorLevels, setMentorLevels] = useState<Record<string, MentorLevel>>({});
   const [toast, setToast]       = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
@@ -60,7 +62,11 @@ export default function SubscriptionsPage() {
   useEffect(() => {
     fetch(`${BASE_URL}/doctors`)
       .then(r => r.json())
-      .then(data => setDoctors(data.doctors || []))
+      .then(data => {
+        const list: Doctor[] = data.doctors || [];
+        setDoctors(list);
+        fetchMentorLevels(list.map(d => d._id), BASE_URL).then(setMentorLevels);
+      })
       .catch(() => showToast('Failed to load doctors', 'error'))
       .finally(() => setLoading(false));
   }, []);
@@ -172,7 +178,12 @@ export default function SubscriptionsPage() {
             <tbody>
               {filtered.map(doctor => (
                 <tr key={doctor._id} className="table-row">
-                  <td><span className="doctor-name">{doctor.fullName}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="doctor-name">{doctor.fullName}</span>
+                      <MentorLevelBadge level={mentorLevels[doctor._id]} size="sm" />
+                    </div>
+                  </td>
                   <td><span className="doctor-email">{doctor.email}</span></td>
                   <td>
                     <span className="plan-badge" style={planColors[doctor.subscriptionPlan] || planColors.free_trial}>
@@ -202,7 +213,10 @@ export default function SubscriptionsPage() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h2 className="modal-title">{selected.fullName}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <h2 className="modal-title">{selected.fullName}</h2>
+                  <MentorLevelBadge level={mentorLevels[selected._id]} size="md" />
+                </div>
                 <p className="modal-sub">Subscription History</p>
               </div>
               <button className="modal-close" onClick={() => setSelected(null)}>✕</button>

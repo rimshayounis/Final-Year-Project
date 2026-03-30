@@ -198,8 +198,12 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
   const [pointsSummary, setPointsSummary] = useState<{
     totalPoints: number;
     cashValue: number;
-    trustBadge: string;
-    trustScore: number;
+  } | null>(null);
+  const [mentorLevel, setMentorLevel] = useState<{
+    level: number;
+    title: string;
+    score: number;
+    nextScore: number | null;
   } | null>(null);
   const avatarSource = useMemo(
     () => userProfile?.profileImage ? { uri: userProfile.profileImage } : null,
@@ -355,8 +359,12 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
   const fetchPointsSummary = async () => {
     try {
       await apiClient.post(`/points-reward/${id}/recalculate`);
-      const res = await apiClient.get(`/points-reward/${id}/summary`);
-      setPointsSummary(res.data?.data ?? null);
+      const [summaryRes, mentorRes] = await Promise.all([
+        apiClient.get(`/points-reward/${id}/summary`),
+        apiClient.get(`/points-reward/${id}/mentor-level`),
+      ]);
+      setPointsSummary(summaryRes.data?.data ?? null);
+      setMentorLevel(mentorRes.data?.data ?? null);
     } catch {
       // silent
     }
@@ -974,7 +982,7 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
           </Text>
         </View>
 
-        {/* Trust Badge — visible to ALL users on doctor profiles */}
+        {/* Points & Mentor Level — visible to ALL users on doctor profiles */}
         {role === "doctor" && pointsSummary !== null && (
           <View style={styles.pointsCard}>
             {!onBookAppointment && (
@@ -1009,30 +1017,31 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
                 </>
               )}
 
-              {/* Trust Badge */}
-              <View style={styles.pointsItem}>
-                <Ionicons
-                  name="shield-checkmark"
-                  size={18}
-                  color={
-                    pointsSummary.trustBadge === "platinum" ? "#7B1FA2"
-                    : pointsSummary.trustBadge === "gold"   ? "#F9A825"
-                    : pointsSummary.trustBadge === "silver" ? "#78909C"
-                    : pointsSummary.trustBadge === "bronze" ? "#8D6E63"
-                    : "#CCC"
-                  }
-                />
-                <Text style={styles.pointsNum}>
-                  {pointsSummary.trustBadge === "none"
-                    ? "—"
-                    : pointsSummary.trustBadge.charAt(0).toUpperCase() +
-                      pointsSummary.trustBadge.slice(1)}
-                </Text>
-                <Text style={styles.pointsLabel}>Trust Badge</Text>
-                <Text style={styles.pointsCash}>
-                  Score: {pointsSummary.trustScore}
-                </Text>
-              </View>
+              {/* Mentor Level */}
+              {mentorLevel && (
+                <>
+                  <View style={styles.pointsItem}>
+                    <Ionicons
+                      name="ribbon"
+                      size={18}
+                      color={
+                        mentorLevel.level === 5 ? "#7B1FA2"
+                        : mentorLevel.level === 4 ? "#F9A825"
+                        : mentorLevel.level === 3 ? "#6B7FED"
+                        : mentorLevel.level === 2 ? "#00B374"
+                        : "#999"
+                      }
+                    />
+                    <Text style={styles.pointsNum}>Lv.{mentorLevel.level}</Text>
+                    <Text style={styles.pointsLabel}>{mentorLevel.title}</Text>
+                    <Text style={styles.pointsCash}>
+                      {mentorLevel.nextScore
+                        ? `${mentorLevel.score}/${mentorLevel.nextScore}`
+                        : `${mentorLevel.score} pts`}
+                    </Text>
+                  </View>
+                </>
+              )}
             </View>
 
             {/* Hint — only for doctor's own profile */}

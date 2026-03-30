@@ -29,14 +29,34 @@ export default function HealthProfileScreen({
 }: HealthProfileScreenProps) {
   const { userId } = route.params;
 
+  const INTERESTS = [
+    'Skin Care',
+    'Hair Care',
+    'Weight Loss',
+    'Weight Gain',
+    'Mental Health',
+    'Fitness',
+    'Nutrition',
+    'Sleep Health',
+  ];
+
   const [formData, setFormData] = useState({
-    sleepDuration: 7,
+    sleepDuration: 8,
     stressLevel: 'Moderate',
     dietPreference: 'Balanced',
     additionalNotes: '',
   });
 
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const toggleInterest = (interest: string) => {
+    setSelectedInterests((prev) =>
+      prev.includes(interest)
+        ? prev.filter((i) => i !== interest)
+        : [...prev, interest]
+    );
+  };
 
   const handleContinue = async () => {
     setLoading(true);
@@ -46,6 +66,7 @@ export default function HealthProfileScreen({
         stressLevel: formData.stressLevel,
         dietPreference: formData.dietPreference,
         additionalNotes: formData.additionalNotes,
+        interests: selectedInterests,
       });
 
       if (response.data.success) {
@@ -172,6 +193,27 @@ export default function HealthProfileScreen({
                   </Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </View>
+
+          {/* Interests */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Health Interests (Select all that apply)</Text>
+            <View style={styles.interestsContainer}>
+              {INTERESTS.map((interest) => {
+                const active = selectedInterests.includes(interest);
+                return (
+                  <TouchableOpacity
+                    key={interest}
+                    style={[styles.interestChip, active && styles.interestChipActive]}
+                    onPress={() => toggleInterest(interest)}
+                  >
+                    <Text style={[styles.interestChipText, active && styles.interestChipTextActive]}>
+                      {interest}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
@@ -331,6 +373,37 @@ const styles = StyleSheet.create({
 
   optionTextActive: {
     color: '#FFFFFF',
+  },
+
+  interestsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  interestChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#E8E8E8',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+
+  interestChipActive: {
+    backgroundColor: '#EEF0FB',
+    borderColor: '#7B8CDE',
+  },
+
+  interestChipText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+  },
+
+  interestChipTextActive: {
+    color: '#7B8CDE',
+    fontWeight: '700',
   },
 
   textArea: {
