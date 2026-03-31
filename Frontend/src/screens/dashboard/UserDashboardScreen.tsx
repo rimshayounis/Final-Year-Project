@@ -87,6 +87,7 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
             role={role}
             onNavigateToDoctorProfile={handleNavigateToDoctorProfile}
             onNavigateToUserProfile={handleNavigateToUserProfile}
+            onFindPeople={role === 'user' ? () => navigation.navigate('PeopleList', { myUserId: id }) : undefined}
           />
         );
 

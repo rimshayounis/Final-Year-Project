@@ -498,9 +498,9 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
 
   /* ── Pick photo ── */
   const handlePickPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission Needed", "Allow gallery access");
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission Needed", "Allow gallery access to set a profile photo.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -511,28 +511,37 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
     });
     if (!result.canceled && result.assets.length > 0) {
       try {
+        const asset     = result.assets[0];
+        const ownerType = role === "doctor" ? "doctor" : "user";
+
         const formData = new FormData();
         formData.append("profileImage", {
-          uri: result.assets[0].uri,
+          uri:  asset.uri,
           name: "profile.jpg",
           type: "image/jpeg",
         } as any);
-        const ownerType = role === "doctor" ? "doctor" : "user";
-        const res = await apiClient.put(
-          `/profiles/${ownerType}/${id}/image`,
-          formData,
-          { headers: { "Content-Type": undefined } },
-        );
-        const savedPath = res.data?.data?.profileImage;
-        const baseUrl = API_URL.replace("/api", "");
+
+        // Use fetch directly — axios defaults interfere with multipart boundary
+        const response = await fetch(`${API_URL}/profiles/${ownerType}/${id}/image`, {
+          method: "PUT",
+          body:   formData,
+        });
+
+        if (!response.ok) {
+          const errText = await response.text().catch(() => "");
+          throw new Error(`${response.status}: ${errText}`);
+        }
+
+        const json      = await response.json();
+        const savedPath = json?.data?.profileImage;
+        const baseUrl   = API_URL.replace("/api", "");
         const displayUrl = savedPath
-          ? savedPath.startsWith("http")
-            ? savedPath
-            : baseUrl + savedPath
-          : result.assets[0].uri;
+          ? savedPath.startsWith("http") ? savedPath : baseUrl + savedPath
+          : asset.uri;
+
         setUserProfile((p) => (p ? { ...p, profileImage: displayUrl } : p));
-      } catch {
-        Alert.alert("Error", "Failed to update photo");
+      } catch (e: any) {
+        Alert.alert("Error", e?.message ?? "Failed to update photo");
       }
     }
   };
@@ -758,8 +767,8 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
   };
 
   const handlePickEditMedia = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted")
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted)
       return Alert.alert("Permission Needed", "Allow gallery access");
 
     const result = await ImagePicker.launchImageLibraryAsync({

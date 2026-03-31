@@ -81,6 +81,15 @@ export class SosService {
             user.phoneNumber ?? 'Not provided',
             sosMessage,
             locationUrl,
+            {
+              age:             user.age,
+              gender:          user.gender,
+              sleepDuration:   user.healthProfile?.sleepDuration,
+              stressLevel:     user.healthProfile?.stressLevel,
+              dietPreference:  user.healthProfile?.dietPreference,
+              additionalNotes: user.healthProfile?.additionalNotes,
+              interests:       user.healthProfile?.interests,
+            },
           );
           contactResult.emailStatus = 'sent ✅';
           console.log(`✅ SOS email sent to ${contact.fullName}`);

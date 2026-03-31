@@ -85,9 +85,18 @@ export class MailService {
     contactName:     string,
     contactRelation: string,
     userName:        string,
-    userPhone:       string,
+    _userPhone:      string,
     sosMessage:      string,
     locationUrl:     string,
+    userProfile?: {
+      age?:              number;
+      gender?:           string;
+      sleepDuration?:    number;
+      stressLevel?:      string;
+      dietPreference?:   string;
+      additionalNotes?:  string;
+      interests?:        string[];
+    },
   ): Promise<void> {
     const mailOptions = {
       from:    `"TruHeal-Link Emergency" <${process.env.GMAIL_USER}>`,
@@ -174,6 +183,71 @@ export class MailService {
               <hr style="border:none; border-top:1px solid #f0f0f0; margin:0;">
             </td>
           </tr>
+
+          <!-- ── USER PROFILE ── -->
+          ${userProfile ? `
+          <tr>
+            <td style="padding:24px 30px 0;">
+              <p style="margin:0 0 12px; font-size:12px; color:#CC0000;
+                          font-weight:700; text-transform:uppercase;
+                          letter-spacing:1px;">
+                👤 User Profile
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="background:#fff8f8; border-radius:8px;
+                             border-left:5px solid #FF0000;">
+                <tr>
+                  <td style="padding:16px;">
+                    <table width="100%" cellpadding="4" cellspacing="0">
+                      ${userProfile.age !== undefined ? `
+                      <tr>
+                        <td style="font-size:13px; color:#888; width:40%;">Age</td>
+                        <td style="font-size:13px; color:#333; font-weight:600;">${userProfile.age}</td>
+                      </tr>` : ''}
+                      ${userProfile.gender ? `
+                      <tr>
+                        <td style="font-size:13px; color:#888;">Gender</td>
+                        <td style="font-size:13px; color:#333; font-weight:600;">${userProfile.gender}</td>
+                      </tr>` : ''}
+                      ${userProfile.stressLevel ? `
+                      <tr>
+                        <td style="font-size:13px; color:#888;">Stress Level</td>
+                        <td style="font-size:13px; color:#333; font-weight:600;">${userProfile.stressLevel}</td>
+                      </tr>` : ''}
+                      ${userProfile.sleepDuration !== undefined ? `
+                      <tr>
+                        <td style="font-size:13px; color:#888;">Sleep Duration</td>
+                        <td style="font-size:13px; color:#333; font-weight:600;">${userProfile.sleepDuration} hrs</td>
+                      </tr>` : ''}
+                      ${userProfile.dietPreference ? `
+                      <tr>
+                        <td style="font-size:13px; color:#888;">Diet</td>
+                        <td style="font-size:13px; color:#333; font-weight:600;">${userProfile.dietPreference}</td>
+                      </tr>` : ''}
+                      ${userProfile.interests && userProfile.interests.length > 0 ? `
+                      <tr>
+                        <td style="font-size:13px; color:#888;">Interests</td>
+                        <td style="font-size:13px; color:#333; font-weight:600;">${userProfile.interests.join(', ')}</td>
+                      </tr>` : ''}
+                      ${userProfile.additionalNotes ? `
+                      <tr>
+                        <td style="font-size:13px; color:#888;">Notes</td>
+                        <td style="font-size:13px; color:#333; font-weight:600;">${userProfile.additionalNotes}</td>
+                      </tr>` : ''}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── DIVIDER 2 ── -->
+          <tr>
+            <td style="padding:24px 30px 0;">
+              <hr style="border:none; border-top:1px solid #f0f0f0; margin:0;">
+            </td>
+          </tr>
+          ` : ''}
 
           <!-- ── LOCATION BUTTON ── -->
           <tr>

@@ -134,6 +134,13 @@ export default function PatientChatScreen({ route }: Props) {
     };
   }, []);
 
+  // Notify both parties via email + push when session opens
+  useEffect(() => {
+    if (!appointmentId) return;
+    fetch(`${API_URL}/booked-appointments/${appointmentId}/session-started`, { method: 'POST' })
+      .catch(() => {});
+  }, [appointmentId]);
+
   useEffect(() => {
     if (!startTime || !sessionDuration) return;
     const endTimeMs = new Date(startTime).getTime() + sessionDuration * 60 * 1000;
@@ -442,7 +449,7 @@ export default function PatientChatScreen({ route }: Props) {
         )}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {isLoading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="large" color="#6B7FED" />

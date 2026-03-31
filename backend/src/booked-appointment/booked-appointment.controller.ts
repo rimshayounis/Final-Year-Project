@@ -69,6 +69,14 @@ export class BookedAppointmentController {
     return this.bookedAppointmentService.updateStatus(id, dto);
   }
 
+  // POST /booked-appointments/:id/session-started
+  // Called by frontend when chat session opens — notifies both parties by email & push
+  @Post(':id/session-started')
+  async notifySessionStarted(@Param('id') id: string) {
+    await this.bookedAppointmentService.notifySessionStart(id);
+    return { success: true, message: 'Session started notifications sent' };
+  }
+
   // DELETE /booked-appointments/:id/cancel
   // Cancel an appointment
   @Delete(':id/cancel')

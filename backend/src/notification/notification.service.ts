@@ -158,19 +158,17 @@ export class NotificationService {
       ).catch((e) => console.error('[Notification] Push error:', e.message));
     }
 
-    // ── Email ─────────────────────────────────────────────────────────────
-    if (settings?.emailEnabled) {
-      await this.sendPaymentReceivedEmail(
-        (doctor as any).email,
-        {
-          doctorName,
-          patientName,
-          date:            data.date,
-          time:            data.time,
-          consultationFee: data.consultationFee,
-        },
-      ).catch((e) => console.error('[Notification] Email error:', e.message));
-    }
+    // ── Email — always send for payment events ───────────────────────────
+    await this.sendPaymentReceivedEmail(
+      (doctor as any).email,
+      {
+        doctorName,
+        patientName,
+        date:            data.date,
+        time:            data.time,
+        consultationFee: data.consultationFee,
+      },
+    ).catch((e) => console.error('[Notification] Email error:', e.message));
   }
 
   // ── Post like/comment notification ────────────────────────────────────────
@@ -206,6 +204,59 @@ export class NotificationService {
     await this.sendRawPush(token, title, body).catch((e) =>
       console.error('[Notification] User push error:', e.message),
     );
+  }
+
+  // ── 5. Both notified when session starts ──────────────────────────────────
+  async notifySessionStarted(data: {
+    doctorId:        string;
+    userId:          string;
+    date:            string;
+    time:            string;
+    sessionDuration: number;
+  }): Promise<void> {
+    const [doctor, patient] = await Promise.all([
+      this.doctorModel.findById(data.doctorId).select('fullName email expoPushToken').exec(),
+      this.userModel.findById(data.userId).select('fullName email expoPushToken notificationSettings').exec(),
+    ]);
+
+    if (!doctor || !patient) return;
+
+    const doctorName  = (doctor as any).fullName  ?? 'Doctor';
+    const patientName = (patient as any).fullName ?? 'Patient';
+
+    // ── Push to doctor ────────────────────────────────────────────────────
+    const doctorToken = (doctor as any).expoPushToken;
+    if (doctorToken) {
+      await this.sendRawPush(
+        doctorToken,
+        '🟢 Session Started',
+        `Your session with ${patientName} is now live!`,
+        { date: data.date, time: data.time },
+      ).catch((e) => console.error('[Notification] Push error:', e.message));
+    }
+
+    // ── Push to patient ───────────────────────────────────────────────────
+    const patientToken = (patient as any).expoPushToken;
+    if (patientToken) {
+      await this.sendRawPush(
+        patientToken,
+        '🟢 Session Started',
+        `Your session with Dr. ${doctorName} is now live!`,
+        { date: data.date, time: data.time },
+      ).catch((e) => console.error('[Notification] Push error:', e.message));
+    }
+
+    // ── Email to doctor ───────────────────────────────────────────────────
+    await this.sendSessionStartedEmail(
+      (doctor as any).email,
+      { recipientName: `Dr. ${doctorName}`, otherPartyName: patientName, role: 'doctor', date: data.date, time: data.time, sessionDuration: data.sessionDuration },
+    ).catch((e) => console.error('[Notification] Session email error:', e.message));
+
+    // ── Email to patient ──────────────────────────────────────────────────
+    await this.sendSessionStartedEmail(
+      (patient as any).email,
+      { recipientName: patientName, otherPartyName: `Dr. ${doctorName}`, role: 'patient', date: data.date, time: data.time, sessionDuration: data.sessionDuration },
+    ).catch((e) => console.error('[Notification] Session email error:', e.message));
   }
 
   // ── Email: New Appointment → Doctor ──────────────────────────────────────
@@ -379,6 +430,61 @@ export class NotificationService {
       `,
     });
     console.log(`[Notification] Payment email sent to ${to}`);
+  }
+
+  // ── Email: Session Started → Doctor & Patient ─────────────────────────────
+  private async sendSessionStartedEmail(
+    to: string,
+    d: {
+      recipientName:   string;
+      otherPartyName:  string;
+      role:            'doctor' | 'patient';
+      date:            string;
+      time:            string;
+      sessionDuration: number;
+    },
+  ): Promise<void> {
+    if (!process.env.GMAIL_USER) return;
+
+    const roleLabel = d.role === 'doctor' ? 'patient' : 'doctor';
+
+    await this.transporter.sendMail({
+      from:    `"TruHeal Link" <${process.env.GMAIL_USER}>`,
+      to,
+      subject: `🟢 Your Session Has Started — TruHeal Link`,
+      html: `
+        <div style="font-family:Arial,sans-serif; max-width:520px;
+                    margin:0 auto; border-radius:12px; overflow:hidden;
+                    border:1px solid #e8eaf6;">
+          <div style="background:#6B7FED; padding:24px 28px;">
+            <h2 style="color:#fff; margin:0;">TruHeal Link</h2>
+            <p style="color:rgba(255,255,255,0.85); margin:4px 0 0;">
+              Session Started
+            </p>
+          </div>
+          <div style="padding:28px;">
+            <p style="color:#555;">
+              Hi <strong>${d.recipientName}</strong>,<br>
+              Your session with your <strong>${roleLabel}</strong>,
+              <strong style="color:#6B7FED;">${d.otherPartyName}</strong>,
+              has officially started. Please open the TruHeal Link app now.
+            </p>
+            <table style="width:100%; border-collapse:collapse; margin-top:16px;">
+              ${row('📅 Date',      d.date)}
+              ${row('🕐 Time',      d.time)}
+              ${row('⏱️ Duration',  `${d.sessionDuration} minutes`)}
+            </table>
+            <div style="margin-top:24px; padding:16px; background:#f0f4ff;
+                        border-radius:10px; text-align:center;">
+              <p style="color:#6B7FED; font-weight:700; margin:0;">
+                Open TruHeal Link to join your session
+              </p>
+            </div>
+          </div>
+        </div>
+      `,
+    });
+    console.log(`[Notification] Session-started email sent to ${to}`);
   }
 
   // ── Raw Expo Push ─────────────────────────────────────────────────────────

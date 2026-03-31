@@ -217,6 +217,24 @@ export const userAPI = {
   getUser: (userId: string) =>
     apiClient.get(`/users/${userId}`),
 
+  getFriendSuggestions: (userId: string) =>
+    apiClient.get(`/users/${userId}/suggestions`),
+
+  searchUsers: (query: string, excludeUserId: string) =>
+    apiClient.get(`/users/search/users?q=${encodeURIComponent(query)}&exclude=${excludeUserId}`),
+
+  blockUser:       (userId: string, targetId: string) =>
+    apiClient.post(`/users/${userId}/block/${targetId}`),
+
+  unblockUser:     (userId: string, targetId: string) =>
+    apiClient.post(`/users/${userId}/unblock/${targetId}`),
+
+  getBlockedUsers: (userId: string) =>
+    apiClient.get(`/users/${userId}/blocked`),
+
+  getBlockStatus:  (userId: string, targetId: string) =>
+    apiClient.get(`/users/${userId}/block-status/${targetId}`),
+
   updateUser: (userId: string, data: any) =>
     apiClient.put(`/users/${userId}`, data),
 
@@ -350,6 +368,16 @@ export const chatAPI = {
 
   getOrCreateConversation: (doctorId: string, patientId: string) =>
     apiClient.post('/chat/conversation', { doctorId, patientId }),
+
+  // ── User-to-user chat ─────────────────────────────────────────────────
+  getOrCreateUserConversation: (userId1: string, userId2: string) =>
+    apiClient.post('/chat/user-conversation', { userId1, userId2 }),
+
+  getUserToUserConversations: (userId: string) =>
+    apiClient.get(`/chat/user-conversations/${userId}`),
+
+  markUserConversationRead: (conversationId: string, userId: string) =>
+    apiClient.post(`/chat/user-conversation/${conversationId}/read`, { userId }),
 
   uploadFile: (
     formData: FormData,

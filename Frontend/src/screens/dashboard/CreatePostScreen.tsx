@@ -71,8 +71,8 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
 
 
   const handlePickMedia = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted")
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted)
       return Alert.alert("Permission Needed", "Allow gallery access");
 
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -92,8 +92,8 @@ export default function CreatePostScreen({ id, role }: CreatePostScreenProps) {
   };
 
   const handleTakePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted")
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted)
       return Alert.alert("Permission Needed", "Allow camera access");
 
     const result = await ImagePicker.launchCameraAsync({

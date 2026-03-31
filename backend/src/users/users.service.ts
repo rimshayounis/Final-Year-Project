@@ -5,9 +5,10 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
+import { UserProfile, UserProfileDocument } from '../user-profile/schemas/user-profile.schema';
 import { MailService } from '../mail/mail.service';
 import {
   RegisterUserDto,
@@ -22,7 +23,8 @@ import {
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(User.name)        private userModel:    Model<UserDocument>,
+    @InjectModel(UserProfile.name) private profileModel: Model<UserProfileDocument>,
     private readonly mailService: MailService,
   ) {}
 
@@ -181,6 +183,154 @@ export class UsersService {
       .find()
       .select('-password -otpCode -otpExpiry');
     return { users };
+  }
+
+  // ── Bulk fetch profile images from UserProfile collection ────────────────
+  private async bulkGetProfileImages(userIds: string[]): Promise<Record<string, string | null>> {
+    const objIds = userIds.map(id => new Types.ObjectId(id));
+    const profiles = await this.profileModel
+      .find({ ownerId: { $in: objIds }, ownerType: 'User' })
+      .select('ownerId profileImage')
+      .lean()
+      .exec();
+    const map: Record<string, string | null> = {};
+    for (const p of profiles) {
+      map[p.ownerId.toString()] = (p as any).profileImage ?? null;
+    }
+    return map;
+  }
+
+  // ── Friend suggestions based on shared health interests ──────────────────
+  async getFriendSuggestions(userId: string, limit = 10) {
+    const me = await this.userModel
+      .findById(userId)
+      .select('healthProfile blockedUsers')
+      .lean()
+      .exec();
+
+    const myInterests: string[]  = (me as any)?.healthProfile?.interests ?? [];
+    const myBlockedIds: string[] = ((me as any)?.blockedUsers ?? []).map((id: any) => id.toString());
+
+    // Find who has blocked me
+    const whoBlockedMe   = await this.userModel.find({ blockedUsers: new Types.ObjectId(userId) }).select('_id').lean();
+    const blockedByOthers = whoBlockedMe.map((u: any) => u._id.toString());
+    const allExcluded    = [...new Set([userId, ...myBlockedIds, ...blockedByOthers])];
+
+    let suggestions: any[];
+
+    const baseFilter: any = { _id: { $nin: allExcluded }, userType: 'user' };
+
+    if (myInterests.length > 0) {
+      // Find users sharing at least one interest
+      suggestions = await this.userModel
+        .find({ ...baseFilter, 'healthProfile.interests': { $in: myInterests } })
+        .select('fullName gender age healthProfile profileImage')
+        .limit(limit)
+        .lean()
+        .exec();
+    } else {
+      // Fallback: return recent users
+      suggestions = await this.userModel
+        .find(baseFilter)
+        .select('fullName gender age healthProfile profileImage')
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean()
+        .exec();
+    }
+
+    // Fetch profile images from UserProfile collection
+    const ids = suggestions.map((u: any) => u._id.toString());
+    const imageMap = await this.bulkGetProfileImages(ids);
+
+    // Count shared interests for each suggestion
+    const result = suggestions.map((u: any) => {
+      const uid = u._id.toString();
+      const theirInterests: string[] = u.healthProfile?.interests ?? [];
+      const shared = myInterests.filter(i => theirInterests.includes(i));
+      return {
+        _id:             uid,
+        fullName:        u.fullName,
+        gender:          u.gender,
+        age:             u.age,
+        profileImage:    imageMap[uid] ?? null,
+        interests:       theirInterests,
+        sharedInterests: shared,
+      };
+    });
+
+    return { success: true, data: result };
+  }
+
+  // ── Search users by name ──────────────────────────────────────────────────
+  async searchUsers(query: string, excludeUserId: string) {
+    const users = await this.userModel
+      .find({
+        _id:      { $ne: excludeUserId },
+        fullName: { $regex: query, $options: 'i' },
+        userType: 'user',
+      })
+      .select('fullName gender age healthProfile profileImage')
+      .limit(20)
+      .lean()
+      .exec();
+
+    const ids = users.map((u: any) => u._id.toString());
+    const imageMap = await this.bulkGetProfileImages(ids);
+
+    return {
+      success: true,
+      data: users.map((u: any) => {
+        const uid = u._id.toString();
+        return {
+          _id:          uid,
+          fullName:     u.fullName,
+          gender:       u.gender,
+          age:          u.age,
+          profileImage: imageMap[uid] ?? null,
+          interests:    u.healthProfile?.interests ?? [],
+        };
+      }),
+    };
+  }
+
+  // ── Block / Unblock ───────────────────────────────────────────────────────
+  async blockUser(userId: string, targetId: string) {
+    if (userId === targetId) throw new BadRequestException('Cannot block yourself');
+    const targetObjId = new Types.ObjectId(targetId);
+    await this.userModel.findByIdAndUpdate(userId, {
+      $addToSet: { blockedUsers: targetObjId },
+    });
+    return { success: true, message: 'User blocked' };
+  }
+
+  async unblockUser(userId: string, targetId: string) {
+    const targetObjId = new Types.ObjectId(targetId);
+    await this.userModel.findByIdAndUpdate(userId, {
+      $pull: { blockedUsers: targetObjId },
+    });
+    return { success: true, message: 'User unblocked' };
+  }
+
+  async getBlockedUsers(userId: string) {
+    const user = await this.userModel
+      .findById(userId)
+      .select('blockedUsers')
+      .lean();
+    return { success: true, blockedUsers: (user as any)?.blockedUsers?.map((id: any) => id.toString()) ?? [] };
+  }
+
+  async isBlockedBetween(userId: string, targetId: string): Promise<{ blockedByMe: boolean; blockedByThem: boolean }> {
+    const [me, them] = await Promise.all([
+      this.userModel.findById(userId).select('blockedUsers').lean(),
+      this.userModel.findById(targetId).select('blockedUsers').lean(),
+    ]);
+    const myBlocked   = ((me   as any)?.blockedUsers ?? []).map((id: any) => id.toString());
+    const theirBlocked = ((them as any)?.blockedUsers ?? []).map((id: any) => id.toString());
+    return {
+      blockedByMe:   myBlocked.includes(targetId),
+      blockedByThem: theirBlocked.includes(userId),
+    };
   }
 
   async updateUser(userId: string, updateData: any) {

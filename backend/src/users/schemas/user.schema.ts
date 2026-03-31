@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type UserDocument = User & Document;
 
@@ -49,6 +49,9 @@ export class User {
   @Prop({ required: false })
   phoneNumber?: string;
 
+  @Prop({ type: String, default: null })
+  profileImage: string | null;
+
   @Prop({ type: HealthProfile, required: false })
   healthProfile?: HealthProfile;
 
@@ -70,6 +73,10 @@ export class User {
     default: 'I need emergency help! Please contact me immediately.',
   })
   sosMessage: string;
+
+  // ── Blocked users ──────────────────────────────────────────────────────
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
+  blockedUsers: Types.ObjectId[];
 
   // ── OTP fields ─────────────────────────────────────────────────────────
   @Prop({ type: String, default: null })

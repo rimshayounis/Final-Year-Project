@@ -319,15 +319,15 @@ export default function ChatbotScreen({ role, onNavigateToDoctorAppointment }: C
   };
 
   const handleOpenCamera = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission Needed', 'Camera permission required'); return; }
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission Needed', 'Camera permission required'); return; }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
     if (!result.canceled && result.assets?.length > 0) await handleSend(result.assets[0].uri);
   };
 
   const handlePickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission Needed', 'Gallery permission required'); return; }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission Needed', 'Gallery permission required'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (!result.canceled && result.assets?.length > 0) await handleSend(result.assets[0].uri);
   };

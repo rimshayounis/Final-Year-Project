@@ -49,6 +49,9 @@ import DoctorAppointmentDetailScreen from './src/screens/dashboard/Doctorappoint
 import DoctorProfileViewScreen from './src/screens/dashboard/DoctorProfileViewScreen';
 import PatientChatScreen from './src/screens/chat/PatientChatScreen';
 import DoctorChatScreen from './src/screens/chat/DoctorChatScreen';
+import UserChatScreen from './src/screens/chat/UserChatScreen';
+import PeopleListScreen from './src/screens/dashboard/PeopleScreen';
+import UserProfileViewScreen from './src/screens/dashboard/UserProfileViewScreen';
 import SettingsScreen from './src/screens/dashboard/SettingsScreen';
 import SubscriptionScreen from './src/screens/doctors/SubscriptionScreen';
 import WalletScreen from './src/screens/doctors/WalletScreen';
@@ -101,6 +104,12 @@ export type RootStackParamList = {
     doctorId: string; doctorName: string; doctorAvatar?: string;
     doctorSpecialty?: string; conversationId: string;
   };
+  UserChat: {
+    otherUserId: string; otherUserName: string;
+    conversationId: string; myUserId: string;
+  };
+  PeopleList:  { myUserId: string };
+  UserProfile: { userId: string; myUserId: string };
   ForgotPassword:  { userType: 'user' | 'doctor' };
   OTPVerification: { email: string; userType: 'user' | 'doctor' };
   ResetPassword:   { email: string; otpCode: string; userType: 'user' | 'doctor' };
@@ -188,6 +197,9 @@ export default function App() {
             <Stack.Screen name="DoctorProfileView"    component={DoctorProfileViewScreen} />
             <Stack.Screen name="DoctorChat"           component={DoctorChatScreen} />
             <Stack.Screen name="PatientChat"          component={PatientChatScreen} />
+            <Stack.Screen name="UserChat"             component={UserChatScreen} />
+            <Stack.Screen name="PeopleList"           component={PeopleListScreen} />
+            <Stack.Screen name="UserProfile"          component={UserProfileViewScreen} />
             <Stack.Screen name="Settings"             component={SettingsScreen} />
             <Stack.Screen name="Wallet"               component={WalletScreen} />
             <Stack.Screen name="BankDetails"          component={BankDetailsScreen} />

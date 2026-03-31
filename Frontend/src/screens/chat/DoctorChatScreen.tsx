@@ -438,7 +438,7 @@ export default function DoctorChatScreen({ route }: Props) {
         )}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {isLoading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="large" color="#6B7FED" />

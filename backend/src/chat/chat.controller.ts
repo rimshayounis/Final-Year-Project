@@ -44,6 +44,39 @@ export class ChatController {
     };
   }
 
+  // ── User-to-User chat endpoints ───────────────────────────────────────────
+  @Post('user-conversation')
+  @HttpCode(HttpStatus.OK)
+  async getOrCreateUserConversation(
+    @Body() body: { userId1: string; userId2: string },
+  ) {
+    const conv = await this.chatService.getOrCreateUserConversation(
+      body.userId1,
+      body.userId2,
+    );
+    return {
+      _id:           conv._id.toString(),
+      user1Id:       conv.user1Id.toString(),
+      user2Id:       conv.user2Id.toString(),
+      lastMessage:   conv.lastMessage,
+      lastMessageAt: (conv as any).lastMessageAt,
+    };
+  }
+
+  @Get('user-conversations/:userId')
+  getUserToUserConversations(@Param('userId') userId: string) {
+    return this.chatService.getUserToUserConversations(userId);
+  }
+
+  @Post('user-conversation/:id/read')
+  @HttpCode(HttpStatus.OK)
+  markUserConversationRead(
+    @Param('id') conversationId: string,
+    @Body() body: { userId: string },
+  ) {
+    return this.chatService.markUserConversationRead(conversationId, body.userId);
+  }
+
   @Get('test-upload-path')
   testPath() {
     const uploadPath = join(process.cwd(), 'uploads');

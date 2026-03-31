@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(mongosh --eval \"db.adminCommand\\({listDatabases:1}\\).databases.forEach\\(d => print\\(d.name\\)\\)\" --quiet)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep -r \"whatsapp\\\\|twilio\\\\|sms\\\\|SMS\" /c/Users/rimsh/Final-Year-Project --include=*.ts --include=*.js)",
+      "Bash(ls -la /c/Users/rimsh/Final-Year-Project/admin-frontend/src/app/\\\\\\(dashboard\\\\\\)/dashboard/)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Dell\\OneDrive\\Desktop\\fyp\\Final-Year-Project\\admin-frontend\\src\\app\\(dashboard)\\dashboard\\payments"

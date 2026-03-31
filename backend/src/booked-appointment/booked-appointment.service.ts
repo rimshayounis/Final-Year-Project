@@ -244,6 +244,20 @@ export class BookedAppointmentService {
     return { success: true, count: appointments.length, data: appointments };
   }
 
+  // ── Notify session started (emails to both parties) ───────────────────────
+  async notifySessionStart(appointmentId: string): Promise<void> {
+    const appt = await this.bookedAppointmentModel.findById(appointmentId).exec();
+    if (!appt) return;
+
+    await this.notificationService.notifySessionStarted({
+      doctorId:        appt.doctorId.toString(),
+      userId:          appt.userId.toString(),
+      date:            appt.date,
+      time:            appt.time,
+      sessionDuration: appt.sessionDuration,
+    });
+  }
+
   // ── Auto complete expired ──────────────────────────────────────────────────
   async autoCompleteExpired(): Promise<void> {
     const now       = new Date();

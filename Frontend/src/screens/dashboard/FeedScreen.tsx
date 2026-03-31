@@ -69,6 +69,7 @@ type FeedScreenProps = {
   role: "user" | "doctor";
   onNavigateToDoctorProfile?: (doctorId: string) => void;
   onNavigateToUserProfile?: (userId: string) => void;
+  onFindPeople?: () => void;
 };
 
 /* ── Reject Modal ── */
@@ -200,6 +201,7 @@ export default function FeedScreen({
   role,
   onNavigateToDoctorProfile,
   onNavigateToUserProfile,
+  onFindPeople,
 }: FeedScreenProps) {
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -955,6 +957,11 @@ export default function FeedScreen({
           <Text style={s.topNavTitle}>{"Health Feed"}</Text>
         )}
         <View style={s.topNavRight}>
+          {role === 'user' && onFindPeople && (
+            <TouchableOpacity style={s.navIconBtn} onPress={onFindPeople}>
+              <Ionicons name="people-outline" size={20} color="#FFF" />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={s.navIconBtn}
             onPress={() => { setSearchVisible((v) => !v); setSearchQuery(""); }}

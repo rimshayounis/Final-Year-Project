@@ -7,6 +7,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -87,6 +88,21 @@ export class UsersController {
   }
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
+  // GET /users/:userId/suggestions  — friend suggestions by shared interests
+  @Get(':userId/suggestions')
+  async getFriendSuggestions(@Param('userId') userId: string) {
+    return this.usersService.getFriendSuggestions(userId);
+  }
+
+  // GET /users/search?q=name&exclude=userId
+  @Get('search/users')
+  async searchUsers(
+    @Query('q') query: string,
+    @Query('exclude') excludeUserId: string,
+  ) {
+    return this.usersService.searchUsers(query || '', excludeUserId || '');
+  }
+
   @Get(':userId')
   async getUserById(@Param('userId') userId: string) {
     return this.usersService.getUserById(userId);
@@ -153,5 +169,37 @@ export class UsersController {
     @Body() body: { token: string | null },
   ) {
     return this.usersService.savePushToken(userId, body.token ?? null);
+  }
+
+  // ── Block / Unblock ───────────────────────────────────────────────────────
+  @Post(':userId/block/:targetId')
+  @HttpCode(HttpStatus.OK)
+  async blockUser(
+    @Param('userId') userId: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return this.usersService.blockUser(userId, targetId);
+  }
+
+  @Post(':userId/unblock/:targetId')
+  @HttpCode(HttpStatus.OK)
+  async unblockUser(
+    @Param('userId') userId: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return this.usersService.unblockUser(userId, targetId);
+  }
+
+  @Get(':userId/blocked')
+  async getBlockedUsers(@Param('userId') userId: string) {
+    return this.usersService.getBlockedUsers(userId);
+  }
+
+  @Get(':userId/block-status/:targetId')
+  async getBlockStatus(
+    @Param('userId') userId: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return this.usersService.isBlockedBetween(userId, targetId);
   }
 }

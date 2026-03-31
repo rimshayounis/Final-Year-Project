@@ -3,6 +3,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message, MessageDocument } from './schemas/message.schema';
 import { Conversation, ConversationDocument } from './schemas/conversation.schema';
+import { UserConversation, UserConversationDocument } from './schemas/user-conversation.schema';
+import { UserProfile, UserProfileDocument } from '../user-profile/schemas/user-profile.schema';
 
 interface SaveMessageDto {
   conversationId: string;
@@ -23,6 +25,12 @@ export class ChatService {
 
     @InjectModel(Conversation.name)
     private readonly conversationModel: Model<ConversationDocument>,
+
+    @InjectModel(UserConversation.name)
+    private readonly userConvModel: Model<UserConversationDocument>,
+
+    @InjectModel(UserProfile.name)
+    private readonly userProfileModel: Model<UserProfileDocument>,
   ) {}
 
   async saveMessage(dto: SaveMessageDto): Promise<MessageDocument> {
@@ -40,16 +48,30 @@ export class ChatService {
 
     const saved = await msg.save();
 
-    // Determine which side receives the unread increment
-    const conv = await this.conversationModel.findById(dto.conversationId).lean();
-    const senderIsPatient = conv?.patientId?.toString() === dto.senderId;
-    const unreadField = senderIsPatient ? 'doctorUnreadCount' : 'patientUnreadCount';
+    // Try doctor-patient conversation first, then user-user
+    const convId = dto.conversationId;
+    const doctorConv = await this.conversationModel.findById(convId).lean();
 
-    await this.conversationModel.findByIdAndUpdate(dto.conversationId, {
-      lastMessage:   dto.text || dto.fileType || 'File',
-      lastMessageAt: new Date(),
-      $inc: { [unreadField]: 1 },
-    });
+    if (doctorConv) {
+      const senderIsPatient = doctorConv.patientId?.toString() === dto.senderId;
+      const unreadField = senderIsPatient ? 'doctorUnreadCount' : 'patientUnreadCount';
+      await this.conversationModel.findByIdAndUpdate(convId, {
+        lastMessage:   dto.text || dto.fileType || 'File',
+        lastMessageAt: new Date(),
+        $inc: { [unreadField]: 1 },
+      });
+    } else {
+      const userConv = await this.userConvModel.findById(convId).lean();
+      if (userConv) {
+        const senderIsUser1 = userConv.user1Id?.toString() === dto.senderId;
+        const unreadField = senderIsUser1 ? 'user2UnreadCount' : 'user1UnreadCount';
+        await this.userConvModel.findByIdAndUpdate(convId, {
+          lastMessage:   dto.text || dto.fileType || 'File',
+          lastMessageAt: new Date(),
+          $inc: { [unreadField]: 1 },
+        });
+      }
+    }
 
     return saved;
   }
@@ -163,5 +185,83 @@ export class ChatService {
       .populate('doctorId', 'fullName')
       .lean()
       .exec();
+  }
+
+  // ── User-to-User Conversations ────────────────────────────────────────────
+  async getOrCreateUserConversation(userId1: string, userId2: string): Promise<UserConversationDocument> {
+    const u1 = new Types.ObjectId(userId1);
+    const u2 = new Types.ObjectId(userId2);
+
+    let conv = await this.userConvModel
+      .findOne({
+        $or: [
+          { user1Id: u1, user2Id: u2 },
+          { user1Id: u2, user2Id: u1 },
+        ],
+      })
+      .exec();
+
+    if (!conv) {
+      conv = new this.userConvModel({
+        user1Id:      u1,
+        user2Id:      u2,
+        lastMessage:  '',
+        lastMessageAt: new Date(),
+      });
+      await conv.save();
+    }
+
+    return conv;
+  }
+
+  async getUserToUserConversations(userId: string) {
+    const uid = new Types.ObjectId(userId);
+    const convs = await this.userConvModel
+      .find({ $or: [{ user1Id: uid }, { user2Id: uid }] })
+      .sort({ lastMessageAt: -1 })
+      .populate('user1Id', 'fullName')
+      .populate('user2Id', 'fullName')
+      .lean()
+      .exec();
+
+    // Collect all participant IDs to batch-fetch profile images
+    const participantIds = new Set<string>();
+    for (const c of convs) {
+      if ((c.user1Id as any)?._id) participantIds.add((c.user1Id as any)._id.toString());
+      if ((c.user2Id as any)?._id) participantIds.add((c.user2Id as any)._id.toString());
+    }
+
+    const profiles = await this.userProfileModel
+      .find({
+        ownerId:   { $in: [...participantIds].map(id => new Types.ObjectId(id)) },
+        ownerType: 'User',
+      })
+      .select('ownerId profileImage')
+      .lean()
+      .exec();
+
+    const imageMap: Record<string, string | null> = {};
+    for (const p of profiles) {
+      imageMap[p.ownerId.toString()] = (p as any).profileImage ?? null;
+    }
+
+    // Attach profileImage to each populated user object
+    return convs.map(c => ({
+      ...c,
+      user1Id: c.user1Id
+        ? { ...(c.user1Id as any), profileImage: imageMap[(c.user1Id as any)._id?.toString()] ?? null }
+        : c.user1Id,
+      user2Id: c.user2Id
+        ? { ...(c.user2Id as any), profileImage: imageMap[(c.user2Id as any)._id?.toString()] ?? null }
+        : c.user2Id,
+    }));
+  }
+
+  async markUserConversationRead(conversationId: string, userId: string): Promise<void> {
+    const conv = await this.userConvModel.findById(conversationId).lean();
+    if (!conv) return;
+    const isUser1 = conv.user1Id?.toString() === userId;
+    const field   = isUser1 ? 'user1UnreadCount' : 'user2UnreadCount';
+    await this.userConvModel.findByIdAndUpdate(conversationId, { [field]: 0 });
   }
 }
