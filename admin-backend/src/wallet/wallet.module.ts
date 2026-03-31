@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { WalletController } from './wallet.controller';
 import { WalletService } from './wallet.service';
+import { MailService } from './mail.service';
 import { Wallet, WalletSchema } from './schemas/wallet.schema';
 import { Doctor, DoctorSchema } from './schemas/doctor.schema';
 import { UserProfile, UserProfileSchema } from './schemas/user-profile.schema';
@@ -15,6 +16,6 @@ import { UserProfile, UserProfileSchema } from './schemas/user-profile.schema';
     ]),
   ],
   controllers: [WalletController],
-  providers:   [WalletService],
+  providers:   [WalletService, MailService],
 })
 export class WalletModule {}

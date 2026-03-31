@@ -126,17 +126,17 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
 
-  useShakeSOS(); // shake × 3 triggers SOS globally
-
   // Track current screen name
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
   const [currentScreen, setCurrentScreen] = useState<string>('Splash');
   const [userRole, setUserRole]           = useState<string | null>(null);
 
-  // Check if SOS button should be visible
+  // Check if SOS should be active (post-login, users only, not doctors)
   const showSOS =
     !HIDE_SOS_SCREENS.includes(currentScreen) &&
-    userRole === 'user'; // 👈 only show for users not doctors
+    userRole === 'user';
+
+  useShakeSOS(showSOS); // shake × 3 triggers SOS — only after login, users only
 
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener((notification) => {

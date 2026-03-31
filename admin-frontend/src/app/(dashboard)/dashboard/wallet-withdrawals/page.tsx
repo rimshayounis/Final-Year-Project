@@ -527,6 +527,7 @@ export default function WalletWithdrawalsPage() {
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .modal {
           background: #fff; border-radius: 18px; padding: 28px; width: 460px; max-width: 95vw;
+          max-height: 90vh; overflow-y: auto;
           box-shadow: 0 20px 60px rgba(0,0,0,0.2);
           animation: slideUp .2s ease;
         }

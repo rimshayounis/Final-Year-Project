@@ -7,12 +7,14 @@ const SHAKE_THRESHOLD  = 1.8;  // how hard the shake must be
 const SHAKES_NEEDED    = 3;    // how many shakes needed
 const RESET_TIME       = 3000; // reset count after 3 seconds
 
-export const useShakeSOS = () => {
+export const useShakeSOS = (enabled: boolean = true) => {
   const shakeCount    = useRef(0);
   const lastShakeTime = useRef(0);
   const alertShown    = useRef(false); // prevent duplicate popups
 
   useEffect(() => {
+    if (!enabled) return; // don't run before login
+
     // Check every 100ms
     Accelerometer.setUpdateInterval(100);
 
@@ -57,5 +59,5 @@ export const useShakeSOS = () => {
 
     // Cleanup on unmount
     return () => subscription.remove();
-  }, []);
+  }, [enabled]);
 };

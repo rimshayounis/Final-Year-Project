@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Wallet, WalletDocument } from './schemas/wallet.schema';
 import { Doctor, DoctorDocument } from './schemas/doctor.schema';
 import { UserProfile, UserProfileDocument } from './schemas/user-profile.schema';
+import { MailService } from './mail.service';
 
 @Injectable()
 export class WalletService {
@@ -11,6 +12,7 @@ export class WalletService {
     @InjectModel(Wallet.name)       private walletModel:       Model<WalletDocument>,
     @InjectModel(Doctor.name)       private doctorModel:       Model<DoctorDocument>,
     @InjectModel(UserProfile.name)  private userProfileModel:  Model<UserProfileDocument>,
+    private readonly mailService:   MailService,
   ) {}
 
   // ── Get all withdrawal transactions across all doctors ────────────────────
@@ -84,6 +86,26 @@ export class WalletService {
 
     wallet.markModified('transactions');
     await wallet.save();
+
+    // Send approval email to doctor
+    if (status === 'succeeded') {
+      const doctor = await this.doctorModel
+        .findById(new Types.ObjectId(doctorId))
+        .select('fullName email')
+        .exec();
+
+      if (doctor && (doctor as any).email) {
+        const fee    = +(tx.amount * 0.02).toFixed(2);
+        const payout = +(tx.amount - fee).toFixed(2);
+        await this.mailService.sendWithdrawalApprovedEmail(
+          (doctor as any).email,
+          (doctor as any).fullName ?? 'Doctor',
+          tx.amount,
+          payout,
+          fee,
+        );
+      }
+    }
 
     return { txId, status, newBalance: wallet.balance };
   }

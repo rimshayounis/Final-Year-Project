@@ -91,7 +91,15 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
         );
 
       case 'Chatbot':
-        return <ChatbotScreen id={id} role={role} />;
+        return (
+          <ChatbotScreen
+            id={id}
+            role={role}
+            onNavigateToDoctorAppointment={(doctor) =>
+              navigation.navigate('DoctorAppointmentDetail', { doctor, userId: id })
+            }
+          />
+        );
 
       case 'CreatePost':
         return <CreatePostScreen id={id} role={role} />;
