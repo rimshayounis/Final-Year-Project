@@ -2,13 +2,15 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform,
-  StatusBar, ActivityIndicator, Alert, Modal,
+  StatusBar, ActivityIndicator, Alert, Modal, Image,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { io, Socket } from 'socket.io-client';
-import { chatAPI, userAPI, SOCKET_URL } from '../../services/api';
+import { chatAPI, userAPI, SOCKET_URL, API_URL } from '../../services/api';
+
+const BASE_URL = API_URL.replace('/api', '');
 
 interface Message {
   _id:            string;
@@ -46,6 +48,7 @@ export default function UserChatScreen({ route }: Props) {
   const [isBlocked,    setIsBlocked]    = useState(false);   // I blocked them
   const [blockedByThem,setBlockedByThem]= useState(false);   // they blocked me
   const [menuVisible,  setMenuVisible]  = useState(false);
+  const [otherImage,   setOtherImage]   = useState<string | null>(null);
 
   const socketRef     = useRef<Socket | null>(null);
   const flatListRef   = useRef<FlatList>(null);
@@ -56,6 +59,15 @@ export default function UserChatScreen({ route }: Props) {
     (async () => {
       await Promise.all([loadHistory(), loadBlockStatus()]);
       chatAPI.markUserConversationRead(conversationId, myUserId).catch(() => {});
+      // Fetch other user's profile image
+      try {
+        const res = await fetch(`${API_URL}/profiles/user/${otherUserId}`);
+        const json = await res.json();
+        const path = json?.data?.profileImage;
+        if (path && mounted) {
+          setOtherImage(path.startsWith('http') ? path : BASE_URL + path);
+        }
+      } catch {}
       if (mounted) connectSocket();
     })();
     return () => {
@@ -214,13 +226,6 @@ export default function UserChatScreen({ route }: Props) {
             <Text style={[styles.metaTime, { color: isMe ? 'rgba(255,255,255,0.65)' : '#B0B3C6' }]}>
               {formatTime(item.createdAt)}
             </Text>
-            {isMe && (
-              <MaterialIcons
-                name={item.isTemp ? 'access-time' : item.read ? 'done-all' : 'done'}
-                size={13}
-                color={item.read ? '#4ADE80' : 'rgba(255,255,255,0.7)'}
-              />
-            )}
           </View>
         </View>
       </View>
@@ -242,9 +247,13 @@ export default function UserChatScreen({ route }: Props) {
         {/* Avatar + name — tappable to view profile */}
         <TouchableOpacity style={styles.headerCenter} onPress={viewProfile} activeOpacity={0.8}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>
-              {otherUserName?.charAt(0)?.toUpperCase() ?? '?'}
-            </Text>
+            {otherImage ? (
+              <Image source={{ uri: otherImage }} style={styles.avatarImg} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {otherUserName?.charAt(0)?.toUpperCase() ?? '?'}
+              </Text>
+            )}
           </View>
           <View style={styles.headerTextWrap}>
             <Text style={styles.headerName}>{otherUserName}</Text>
@@ -367,7 +376,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems:      'center',
     justifyContent:  'center',
+    overflow:        'hidden',
   },
+  avatarImg:      { width: 38, height: 38, borderRadius: 19 },
   avatarText:     { color: '#fff', fontWeight: '700', fontSize: 16 },
   headerTextWrap: { flex: 1 },
   headerName:     { color: '#fff', fontWeight: '700', fontSize: 16 },

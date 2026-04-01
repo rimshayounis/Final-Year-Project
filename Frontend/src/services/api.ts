@@ -1,6 +1,6 @@
 import axios from 'axios'
-export const API_URL = 'http://10.249.95.86:3000/api';
-export const SOCKET_URL = 'http://10.249.95.86:3000';
+export const API_URL = 'http://10.129.103.86:3000/api';
+export const SOCKET_URL = 'http://10.129.103.86:3000';
 
 const apiClient = axios.create({
   baseURL: API_URL,

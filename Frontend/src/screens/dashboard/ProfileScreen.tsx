@@ -25,6 +25,7 @@ import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
+import axios from 'axios';
 import apiClient, { API_URL, postAPI, reportAPI, feedbackAPI } from "../../services/api";
 
 const BACKGROUND_COLORS = [
@@ -521,19 +522,15 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
           type: "image/jpeg",
         } as any);
 
-        // Use fetch directly — axios defaults interfere with multipart boundary
-        const response = await fetch(`${API_URL}/profiles/${ownerType}/${id}/image`, {
-          method: "PUT",
-          body:   formData,
-        });
-
-        if (!response.ok) {
-          const errText = await response.text().catch(() => "");
-          throw new Error(`${response.status}: ${errText}`);
-        }
-
-        const json      = await response.json();
-        const savedPath = json?.data?.profileImage;
+        const res = await axios.put(
+          `${API_URL}/profiles/${ownerType}/${id}/image`,
+          formData,
+          {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 30000,
+          },
+        );
+        const savedPath = res.data?.data?.profileImage;
         const baseUrl   = API_URL.replace("/api", "");
         const displayUrl = savedPath
           ? savedPath.startsWith("http") ? savedPath : baseUrl + savedPath

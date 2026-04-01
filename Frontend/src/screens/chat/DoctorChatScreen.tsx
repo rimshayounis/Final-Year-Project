@@ -387,7 +387,6 @@ export default function DoctorChatScreen({ route }: Props) {
               {content()}
               <View style={[styles.metaRow, isMedia && { paddingHorizontal: 8, paddingBottom: 6 }]}>
                 <Text style={[styles.metaTime, { color: isMe ? 'rgba(255,255,255,0.65)' : '#B0B3C6' }]}>{formatTime(item.createdAt)}</Text>
-                {isMe && <MaterialIcons name={item.isTemp ? 'access-time' : item.read ? 'done-all' : 'done'} size={13} color={item.read ? '#4ADE80' : 'rgba(255,255,255,0.7)'} />}
               </View>
             </View>
             {reactionEntries.length > 0 && (

@@ -6,7 +6,13 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { userAPI, chatAPI } from '../../services/api';
+import { userAPI, chatAPI, API_URL } from '../../services/api';
+
+const BASE_URL = API_URL.replace('/api', '');
+const toFullUrl = (path: string | null | undefined): string | null => {
+  if (!path) return null;
+  return path.startsWith('http') ? path : BASE_URL + path;
+};
 
 interface Person {
   _id:             string;
@@ -78,7 +84,7 @@ export default function PeopleScreen({ route }: Props) {
           convId:        c._id,
           otherId:       other?._id ?? '',
           otherName:     other?.fullName ?? 'Unknown',
-          otherImage:    other?.profileImage ?? null,
+          otherImage:    toFullUrl(other?.profileImage),
           lastMessage:   c.lastMessage,
           unreadCount:   unread ?? 0,
           lastMessageAt: c.lastMessageAt,
@@ -178,7 +184,7 @@ export default function PeopleScreen({ route }: Props) {
     <TouchableOpacity style={styles.card} onPress={() => openChatWithPerson(item._id, item.fullName)} activeOpacity={0.85}>
       <View style={styles.avatar}>
         {item.profileImage ? (
-          <Image source={{ uri: item.profileImage }} style={styles.avatarImg} />
+          <Image source={{ uri: toFullUrl(item.profileImage) ?? item.profileImage }} style={styles.avatarImg} />
         ) : (
           <Text style={styles.avatarText}>{item.fullName?.charAt(0)?.toUpperCase() ?? '?'}</Text>
         )}
