@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
+import { CommonActions } from "@react-navigation/native";
 import { RootStackParamList } from "../../App";
 import { Ionicons } from "@expo/vector-icons";
 import { userAPI, doctorAPI } from "../services/api";
@@ -67,15 +68,12 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
               if (userType === "doctor") {
                 const isVerified = userData.doctorProfile?.isVerified;
                 if (isVerified === true) {
-                  navigation.replace("Dashboard", { id: userData._id, role: "doctor" });
+                  navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Dashboard', params: { id: userData._id, role: 'doctor' } }] }));
                 } else {
-                  navigation.replace("DoctorUnverified", {
-                    doctorId: userData._id,
-                    doctorName: userData.fullName,
-                  });
+                  navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'DoctorUnverified', params: { doctorId: userData._id, doctorName: userData.fullName } }] }));
                 }
               } else {
-                navigation.replace("Dashboard", { id: userData._id, role: "user" });
+                navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Dashboard', params: { id: userData._id, role: 'user' } }] }));
               }
             },
           },

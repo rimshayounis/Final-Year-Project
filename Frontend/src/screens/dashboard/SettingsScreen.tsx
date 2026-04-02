@@ -24,6 +24,7 @@ import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { RootStackParamList } from "../../../App";
 import apiClient from "../../services/api";
+import type { EmergencyContactData } from "../../services/api";
 
 async function registerForPushNotifications(): Promise<string | null> {
   if (!Device.isDevice) return null;
@@ -226,13 +227,23 @@ export default function SettingsScreen() {
   const [pwdFields,  setPwdFields]  = useState<Record<string, string>>({});
   const [pwdLoading, setPwdLoading] = useState(false);
 
-  // ── SOS message state ─────────────────────────────────────────────────────
+  // ── Emergency Contacts state ──────────────────────────────────────────────
+  const EMPTY_EC: EmergencyContactData = { fullName: '', phoneNumber: '', relationship: '', email: '' };
+  const [contacts,     setContacts]     = useState<EmergencyContactData[]>([]);
+  const [ecModal,      setEcModal]      = useState(false);
+  const [ecFormModal,  setEcFormModal]  = useState(false);
+  const [ecEditIndex,  setEcEditIndex]  = useState<number | null>(null);
+  const [ecDraft,      setEcDraft]      = useState<EmergencyContactData>(EMPTY_EC);
+  const [ecSaving,     setEcSaving]     = useState(false);
+
+  // ── SOS message + profile share state ────────────────────────────────────
   const [sosMessage,      setSosMessage]      = useState(
     'I need emergency help! Please contact me immediately.'
   );
   const [sosModal,        setSosModal]        = useState(false);
   const [sosLoading,      setSosLoading]      = useState(false);
   const [sosMessageDraft, setSosMessageDraft] = useState('');
+  const [sosShareProfile, setSosShareProfile] = useState(true);
 
   /* ── Load data on mount ──────────────────────────────────────────────────── */
   useEffect(() => {
@@ -279,11 +290,13 @@ export default function SettingsScreen() {
         })
         .catch(() => {});
 
-      // 👇 Load SOS message
+      // Load SOS message + emergency contacts
       apiClient.get(`/users/${id}`)
         .then((res) => {
           const u = res.data;
           if (u?.sosMessage) setSosMessage(u.sosMessage);
+          if (u?.sosShareProfile !== undefined) setSosShareProfile(u.sosShareProfile);
+          if (Array.isArray(u?.emergencyContacts)) setContacts(u.emergencyContacts);
         })
         .catch(() => {});
     }
@@ -380,6 +393,62 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleSosShareProfileToggle = async (value: boolean) => {
+    setSosShareProfile(value);
+    try {
+      await apiClient.patch(`/users/${id}/sos-share-profile`, { sosShareProfile: value });
+    } catch {
+      setSosShareProfile(!value); // revert on failure
+    }
+  };
+
+  /* ── Emergency Contact handlers ─────────────────────────────────────────── */
+  const openAddContact = () => {
+    setEcEditIndex(null);
+    setEcDraft(EMPTY_EC);
+    setEcFormModal(true);
+  };
+
+  const openEditContact = (index: number) => {
+    setEcEditIndex(index);
+    setEcDraft({ ...contacts[index] });
+    setEcFormModal(true);
+  };
+
+  const handleDeleteContact = (index: number) => {
+    Alert.alert('Remove Contact', 'Delete this emergency contact?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          const updated = contacts.filter((_, i) => i !== index);
+          setContacts(updated);
+          await apiClient.post(`/users/${id}/emergency-contacts`, { contacts: updated }).catch(() => {});
+        },
+      },
+    ]);
+  };
+
+  const handleSaveContact = async () => {
+    if (!ecDraft.fullName.trim() || !ecDraft.phoneNumber.trim() || !ecDraft.relationship.trim()) {
+      Alert.alert('Missing fields', 'Name, phone number and relationship are required.');
+      return;
+    }
+    setEcSaving(true);
+    try {
+      const updated = ecEditIndex === null
+        ? [...contacts, ecDraft]
+        : contacts.map((c, i) => (i === ecEditIndex ? ecDraft : c));
+      await apiClient.post(`/users/${id}/emergency-contacts`, { contacts: updated });
+      setContacts(updated);
+      setEcFormModal(false);
+    } catch {
+      Alert.alert('Error', 'Failed to save contact.');
+    } finally {
+      setEcSaving(false);
+    }
+  };
+
   /* ══════════════════════════════════════════════════════════════════════════
      RENDER
   ══════════════════════════════════════════════════════════════════════════ */
@@ -429,26 +498,36 @@ export default function SettingsScreen() {
               <SettingRow
                 icon={<Ionicons name="call-outline" size={20} color="#00B374" />}
                 label="Emergency Contacts"
-                sublabel="Manage your emergency contacts"
-                onPress={() =>
-                  navigation.navigate("EmergencyContact", { userId: id })
-                }
+                sublabel={contacts.length > 0 ? `${contacts.length} contact${contacts.length > 1 ? 's' : ''} saved` : "No contacts added yet"}
+                onPress={() => setEcModal(true)}
               />
             </View>
 
-            {/* 👇 NEW — SOS Emergency */}
+            {/* SOS Emergency */}
             <SectionHeader title="SOS Emergency" />
             <View style={styles.card}>
               <SettingRow
-                icon={
-                  <Ionicons name="warning-outline" size={20} color="#FF0000" />
-                }
+                icon={<Ionicons name="warning-outline" size={20} color="#FF0000" />}
                 label="SOS Message"
                 sublabel={sosMessage}
                 onPress={() => {
                   setSosMessageDraft(sosMessage);
                   setSosModal(true);
                 }}
+              />
+              <View style={styles.divider} />
+              <SettingRow
+                icon={<Ionicons name="person-outline" size={20} color="#FF0000" />}
+                label="Share Health Profile"
+                sublabel="Include your age, gender & health info in SOS alerts"
+                right={
+                  <Switch
+                    value={sosShareProfile}
+                    onValueChange={handleSosShareProfileToggle}
+                    trackColor={{ false: "#DDE", true: "#FF6B6B" }}
+                    thumbColor="#FFF"
+                  />
+                }
               />
             </View>
           </>
@@ -791,6 +870,99 @@ export default function SettingsScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
+      {/* ── Emergency Contacts List Modal ── */}
+      <Modal visible={ecModal} transparent animationType="slide" onRequestClose={() => setEcModal(false)}>
+        <View style={styles.overlay}>
+          <View style={[styles.modalBox, { maxHeight: '80%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Emergency Contacts</Text>
+              <TouchableOpacity onPress={() => setEcModal(false)}>
+                <Ionicons name="close" size={22} color="#555" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              {contacts.length === 0 ? (
+                <Text style={{ color: '#AAA', textAlign: 'center', paddingVertical: 20, fontSize: 14 }}>
+                  No emergency contacts added yet.
+                </Text>
+              ) : (
+                contacts.map((c, i) => (
+                  <View key={i} style={styles.ecCard}>
+                    <View style={styles.ecCardInfo}>
+                      <Text style={styles.ecName}>{c.fullName}</Text>
+                      <Text style={styles.ecSub}>{c.relationship} · {c.phoneNumber}</Text>
+                      {c.email ? <Text style={styles.ecSub}>{c.email}</Text> : null}
+                    </View>
+                    <View style={styles.ecActions}>
+                      <TouchableOpacity onPress={() => { setEcModal(false); openEditContact(i); }} style={styles.ecBtn}>
+                        <Ionicons name="pencil-outline" size={18} color="#6B7FED" />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteContact(i)} style={styles.ecBtn}>
+                        <Ionicons name="trash-outline" size={18} color="#E53E3E" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.submitBtn} onPress={() => { setEcModal(false); openAddContact(); }}>
+              <Text style={styles.submitBtnTxt}>+ Add Contact</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Emergency Contact Add/Edit Form Modal ── */}
+      <Modal visible={ecFormModal} transparent animationType="fade" onRequestClose={() => setEcFormModal(false)}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.overlay}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+              <TouchableWithoutFeedback onPress={() => {}}>
+                <View style={styles.modalBox}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>{ecEditIndex === null ? 'Add Contact' : 'Edit Contact'}</Text>
+                    <TouchableOpacity onPress={() => setEcFormModal(false)}>
+                      <Ionicons name="close" size={22} color="#555" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {([
+                    { key: 'fullName',     label: 'Full Name',     placeholder: 'e.g. John Doe' },
+                    { key: 'phoneNumber',  label: 'Phone Number',  placeholder: 'e.g. +92 300 1234567' },
+                    { key: 'relationship', label: 'Relationship',  placeholder: 'e.g. Parent, Spouse' },
+                    { key: 'email',        label: 'Email (optional)', placeholder: 'e.g. john@example.com' },
+                  ] as { key: keyof EmergencyContactData; label: string; placeholder: string }[]).map(f => (
+                    <View key={f.key} style={styles.fieldWrap}>
+                      <Text style={styles.fieldLabel}>{f.label}</Text>
+                      <View style={styles.fieldRow}>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={ecDraft[f.key] ?? ''}
+                          onChangeText={v => setEcDraft(p => ({ ...p, [f.key]: v }))}
+                          placeholder={f.placeholder}
+                          placeholderTextColor="#AAA"
+                          autoCapitalize="none"
+                          keyboardType={f.key === 'phoneNumber' ? 'phone-pad' : f.key === 'email' ? 'email-address' : 'default'}
+                        />
+                      </View>
+                    </View>
+                  ))}
+
+                  <TouchableOpacity style={[styles.submitBtn, ecSaving && { opacity: 0.5 }]} onPress={handleSaveContact} disabled={ecSaving}>
+                    {ecSaving
+                      ? <ActivityIndicator color="#FFF" size="small" />
+                      : <Text style={styles.submitBtnTxt}>{ecEditIndex === null ? 'Add Contact' : 'Save Changes'}</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
       {/* ── Verification Status Modal ── */}
       <Modal
         visible={verifModal}
@@ -1035,6 +1207,21 @@ const styles = StyleSheet.create({
   sosSubmitBtn: {
     backgroundColor: "#FF0000", // 👈 red for SOS
   },
+
+  // ── Emergency contact card ──
+  ecCard: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    backgroundColor: '#F5F7FF',
+    borderRadius:   12,
+    padding:        12,
+    marginBottom:   10,
+  },
+  ecCardInfo:  { flex: 1 },
+  ecName:      { fontSize: 14, fontWeight: '700', color: '#1A1D2E' },
+  ecSub:       { fontSize: 12, color: '#888', marginTop: 2 },
+  ecActions:   { flexDirection: 'row', gap: 8 },
+  ecBtn:       { padding: 6 },
 
   // ── Verification modal ──
   verifHeader: {

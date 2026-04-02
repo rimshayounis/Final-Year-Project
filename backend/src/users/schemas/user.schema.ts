@@ -67,12 +67,14 @@ export class User {
   @Prop({ type: String, default: null })
   expoPushToken: string | null;
 
-  // 👇 NEW — custom SOS message
   @Prop({
     type:    String,
     default: 'I need emergency help! Please contact me immediately.',
   })
   sosMessage: string;
+
+  @Prop({ type: Boolean, default: true })
+  sosShareProfile: boolean;
 
   // ── Blocked users ──────────────────────────────────────────────────────
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
