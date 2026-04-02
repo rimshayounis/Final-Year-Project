@@ -87,6 +87,15 @@ export class UsersController {
     return this.usersService.updateSosMessage(userId, dto.sosMessage);
   }
 
+  @Patch(':userId/sos-share-profile')
+  @HttpCode(HttpStatus.OK)
+  async updateSosShareProfile(
+    @Param('userId') userId: string,
+    @Body() dto: { sosShareProfile: boolean },
+  ) {
+    return this.usersService.updateSosShareProfile(userId, dto.sosShareProfile);
+  }
+
   // ── CRUD ───────────────────────────────────────────────────────────────────
   // GET /users/:userId/suggestions  — friend suggestions by shared interests
   @Get(':userId/suggestions')
