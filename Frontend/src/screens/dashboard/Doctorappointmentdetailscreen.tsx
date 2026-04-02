@@ -157,8 +157,15 @@ export default function DoctorAppointmentDetailScreen() {
     return `${y}-${m}-${d}`;
   };
 
-  const selectedDaySlots =
-    availableDays.find((d) => d.date === selectedDate)?.slots || [];
+  const now = new Date();
+  const todayStr = formatDate(now);
+  const rawSelectedSlots = availableDays.find((d) => d.date === selectedDate)?.slots || [];
+  const selectedDaySlots = selectedDate === todayStr
+    ? rawSelectedSlots.filter((time) => {
+        const [h, m] = time.split(':').map(Number);
+        return h * 60 + m > now.getHours() * 60 + now.getMinutes();
+      })
+    : rawSelectedSlots;
 
   const handleBooking = async () => {
     if (!selectedDate || !selectedSlot) {

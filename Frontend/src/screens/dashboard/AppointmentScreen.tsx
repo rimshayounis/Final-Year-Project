@@ -10,6 +10,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStripe } from '@stripe/stripe-react-native';
 import { bookedAppointmentAPI, appointmentAPI, chatAPI, feedbackAPI } from '../../services/api';
 import apiClient from '../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AppointmentScreenProps { id: string; role: string; }
 
@@ -43,6 +44,14 @@ interface Availability {
 
 const isTimeReached = (date: string, time: string) =>
   new Date() >= new Date(`${date}T${time}:00`);
+
+const isSessionEnded = (date: string, time: string, duration: number) => {
+  const endMs = new Date(`${date}T${time}:00`).getTime() + duration * 60 * 1000;
+  return Date.now() >= endMs;
+};
+
+// Module-level set so it persists across component mounts (won't re-trigger on screen focus)
+const _autoFeedbackShown = new Set<string>();
 
 const formatDisplayDate = (dateStr: string) =>
   new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', {
@@ -230,7 +239,9 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [payLoadingId,    setPayLoadingId]    = useState<string | null>(null);
   const [,                setNow]             = useState(new Date());
-  const [bellVisible,     setBellVisible]     = useState(false);
+  const [bellVisible,       setBellVisible]       = useState(false);
+  const [seenNotifIds,      setSeenNotifIds]      = useState<Set<string>>(new Set());
+  const [bellSnapshot,      setBellSnapshot]      = useState<Appointment[]>([]);
 
   // Feedback modal state
   const [feedbackAppt,      setFeedbackAppt]      = useState<Appointment | null>(null);
@@ -242,11 +253,43 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
   const [localFeedbackIds,  setLocalFeedbackIds]  = useState<Set<string>>(new Set());
 
   const convCache = useRef<Record<string, string>>({});
+  const autoFeedbackShownRef = useRef<Set<string>>(_autoFeedbackShown);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(timer);
   }, []);
+
+  // Load persisted seen notification IDs from storage on mount
+  useEffect(() => {
+    AsyncStorage.getItem(`seenNotifIds_${id}`)
+      .then((raw) => {
+        if (raw) {
+          setSeenNotifIds(new Set(JSON.parse(raw) as string[]));
+        }
+      })
+      .catch(() => {});
+  }, [id]);
+
+  // Auto-show feedback modal for user only after their session has actually ended
+  useEffect(() => {
+    if (role !== 'user' || !appointments.length) return;
+    const pending = appointments.find(
+      (a) =>
+        a.status === 'completed' &&
+        isSessionEnded(a.date, a.time, a.sessionDuration) &&
+        !a.hasFeedback &&
+        !localFeedbackIds.has(a._id) &&
+        !autoFeedbackShownRef.current.has(a._id),
+    );
+    if (pending) {
+      autoFeedbackShownRef.current.add(pending._id);
+      setTimeout(() => {
+        setApptSubTab('completed');
+        handleOpenFeedback(pending);
+      }, 600);
+    }
+  }, [appointments]);
 
   useFocusEffect(
     useCallback(() => { loadAppointments(); }, [id, role])
@@ -259,7 +302,20 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
       const response = role === 'doctor'
         ? await bookedAppointmentAPI.getDoctorAppointments(id)
         : await bookedAppointmentAPI.getUserAppointments(id);
-      if (response.data?.success) setAppointments(response.data.data);
+      if (response.data?.success) {
+        const fresh: Appointment[] = response.data.data;
+        setAppointments(fresh);
+        // Any appointment not previously seen will re-appear in the badge
+        setSeenNotifIds(prev => {
+          const stillActive = new Set(
+            fresh
+              .filter(a => a.status !== 'completed' && a.status !== 'cancelled')
+              .map(a => a._id)
+          );
+          // Keep only IDs that are still active — new ones won't be in prev, so they show as unseen
+          return new Set([...prev].filter(id => stillActive.has(id)));
+        });
+      }
     } catch (error) {
       console.error('Load appointments error:', error);
     } finally {
@@ -425,7 +481,10 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
     }
   };
 
-  const pendingCount = appointments.filter(a => a.status === 'pending').length;
+  // Notification list = all active (non-completed, non-cancelled)
+  const notificationAppts = appointments.filter(a => a.status !== 'completed' && a.status !== 'cancelled');
+  // Badge only shows unseen notifications — clears to 0 after opening the bell
+  const unseenCount = notificationAppts.filter(a => !seenNotifIds.has(a._id)).length;
 
   // Split appointments for doctor view
   const activeAppts    = appointments.filter(a => a.status !== 'completed' && a.status !== 'cancelled');
@@ -448,8 +507,12 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
     const paymentColor = PAYMENT_COLORS[item.paymentStatus] ?? null;
 
     const alreadyGivenFeedback = item.status === 'completed' && (item.hasFeedback || localFeedbackIds.has(item._id));
+    // For users: only dim after feedback given or if cancelled. For doctors: use dimmed param.
+    const shouldDim = role === 'user'
+      ? (alreadyGivenFeedback || item.status === 'cancelled')
+      : dimmed;
     return (
-      <View key={item._id} style={[styles.card, dimmed && styles.cardDimmed, alreadyGivenFeedback && { opacity: 0.45 }]}>
+      <View key={item._id} style={[styles.card, shouldDim && styles.cardDimmed]}>
         <View style={styles.statusRow}>
           <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
             <Text style={[styles.statusText, { color: statusColors.text }]}>
@@ -538,8 +601,8 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
           </TouchableOpacity>
         )}
 
-        {/* Feedback button — only for users on completed appointments */}
-        {role === 'user' && item.status === 'completed' && (
+        {/* Feedback button — only for users after their session has actually ended */}
+        {role === 'user' && item.status === 'completed' && isSessionEnded(item.date, item.time, item.sessionDuration) && (
           (() => {
             const alreadyGiven = item.hasFeedback || localFeedbackIds.has(item._id);
             return (
@@ -587,11 +650,24 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
 
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Text style={styles.headerTitle}>Appointments</Text>
-        <TouchableOpacity style={styles.bellWrap} onPress={() => setBellVisible(true)}>
+        <TouchableOpacity
+          style={styles.bellWrap}
+          onPress={() => {
+            // Snapshot only the unseen ones to display in the modal
+            const unseen = notificationAppts.filter(a => !seenNotifIds.has(a._id));
+            setBellSnapshot(unseen);
+            // Mark all current notifications as seen and persist
+            const allIds = notificationAppts.map(a => a._id);
+            const merged = Array.from(new Set([...Array.from(seenNotifIds), ...allIds]));
+            setSeenNotifIds(new Set(merged));
+            AsyncStorage.setItem(`seenNotifIds_${id}`, JSON.stringify(merged)).catch(() => {});
+            setBellVisible(true);
+          }}
+        >
           <MaterialIcons name="notifications" size={24} color="#FFF" />
-          {pendingCount > 0 && (
+          {unseenCount > 0 && (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{pendingCount > 9 ? '9+' : pendingCount}</Text>
+              <Text style={styles.badgeText}>{unseenCount > 9 ? '9+' : unseenCount}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -607,16 +683,14 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
                 <Ionicons name="close" size={22} color="#555" />
               </TouchableOpacity>
             </View>
-            {appointments.filter(a => a.status !== 'completed' && a.status !== 'cancelled').length === 0 ? (
+            {bellSnapshot.length === 0 ? (
               <View style={styles.bellEmpty}>
                 <MaterialIcons name="notifications-none" size={48} color="#DDD" />
                 <Text style={styles.bellEmptyText}>No new notifications</Text>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {appointments
-                  .filter(a => a.status !== 'completed' && a.status !== 'cancelled')
-                  .map(a => {
+                {bellSnapshot.map(a => {
                     const sc = getStatusColors(a.status);
                     const name = role === 'doctor' ? (a.userId?.fullName ?? 'Patient') : (a.doctorId?.fullName ?? 'Doctor');
                     const spec = role === 'user' ? getSpecialization(a) : '';
@@ -928,7 +1002,7 @@ const styles = StyleSheet.create({
 
   sectionHeader:              { fontSize: 13, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, marginTop: 4 },
   card:                       { backgroundColor: '#FFF', borderRadius: 15, padding: 15, marginBottom: 20, elevation: 3, borderWidth: 1.5, borderColor: PURPLE },
-  cardDimmed:                 { opacity: 0.5 },
+  cardDimmed:                 { opacity: 0.38 },
 
   statusRow:                  { flexDirection: 'row', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 6 },
   statusBadge:                { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
