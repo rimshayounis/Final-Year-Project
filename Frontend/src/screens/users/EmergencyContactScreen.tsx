@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
+import { RouteProp, CommonActions } from '@react-navigation/native';
 import { RootStackParamList } from '../../../App';
 import { MaterialIcons } from '@expo/vector-icons';
 import { userAPI, EmergencyContactData } from '../../services/api';
@@ -119,7 +119,7 @@ export default function EmergencyContactScreen({
         Alert.alert('Success', 'Account created successfully!', [
           {
             text: 'OK',
-            onPress: () => navigation.navigate('Dashboard', { id: userId, role: 'user' }),
+            onPress: () => navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Dashboard', params: { id: userId, role: 'user' } }] })),
           },
         ]);
       }

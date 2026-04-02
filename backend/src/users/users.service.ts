@@ -169,6 +169,16 @@ export class UsersService {
     return { success: true, sosMessage: user.sosMessage };
   }
 
+  async updateSosShareProfile(userId: string, sosShareProfile: boolean) {
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      { sosShareProfile },
+      { new: true },
+    ).select('-password -otpCode -otpExpiry');
+    if (!user) throw new NotFoundException('User not found');
+    return { success: true, sosShareProfile: user.sosShareProfile };
+  }
+
   // ── CRUD ───────────────────────────────────────────────────────────────────
   async getUserById(userId: string) {
     const user = await this.userModel

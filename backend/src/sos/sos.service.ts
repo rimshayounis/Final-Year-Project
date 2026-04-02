@@ -73,6 +73,7 @@ export class SosService {
 
       if (contact.email) {
         try {
+          const shareProfile = user.sosShareProfile !== false; // default true
           await this.mailService.sendSosAlertToContact(
             contact.email,
             contact.fullName,
@@ -81,7 +82,7 @@ export class SosService {
             user.phoneNumber ?? 'Not provided',
             sosMessage,
             locationUrl,
-            {
+            shareProfile ? {
               age:             user.age,
               gender:          user.gender,
               sleepDuration:   user.healthProfile?.sleepDuration,
@@ -89,7 +90,7 @@ export class SosService {
               dietPreference:  user.healthProfile?.dietPreference,
               additionalNotes: user.healthProfile?.additionalNotes,
               interests:       user.healthProfile?.interests,
-            },
+            } : undefined,
           );
           contactResult.emailStatus = 'sent ✅';
           console.log(`✅ SOS email sent to ${contact.fullName}`);
