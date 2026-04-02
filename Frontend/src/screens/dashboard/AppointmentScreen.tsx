@@ -230,6 +230,7 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [payLoadingId,    setPayLoadingId]    = useState<string | null>(null);
   const [,                setNow]             = useState(new Date());
+  const [bellVisible,     setBellVisible]     = useState(false);
 
   // Feedback modal state
   const [feedbackAppt,      setFeedbackAppt]      = useState<Appointment | null>(null);
@@ -446,8 +447,9 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
     const showSessionBtn  = (item.status === 'confirmed' || item.status === 'pending') && !showPayBtn;
     const paymentColor = PAYMENT_COLORS[item.paymentStatus] ?? null;
 
+    const alreadyGivenFeedback = item.status === 'completed' && (item.hasFeedback || localFeedbackIds.has(item._id));
     return (
-      <View key={item._id} style={[styles.card, dimmed && styles.cardDimmed]}>
+      <View key={item._id} style={[styles.card, dimmed && styles.cardDimmed, alreadyGivenFeedback && { opacity: 0.45 }]}>
         <View style={styles.statusRow}>
           <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
             <Text style={[styles.statusText, { color: statusColors.text }]}>
@@ -471,9 +473,17 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
           <Text style={styles.label}>Patient: <Text style={styles.value}>{getPatientName(item)}</Text></Text>
         ) : (
           <>
-            <Text style={styles.label}>
-              Doctor: <Text style={styles.value}>{getDoctorName(item)}{getSpecialization(item) ? ` · ${getSpecialization(item)}` : ''}</Text>
-            </Text>
+            <View style={styles.doctorNameRow}>
+              <Text style={styles.label}>
+                Doctor: <Text style={styles.value}>{getDoctorName(item)}{getSpecialization(item) ? ` · ${getSpecialization(item)}` : ''}</Text>
+              </Text>
+              {item.doctorId?.isOnline && (
+                <View style={styles.onlinePill}>
+                  <View style={styles.onlineDot} />
+                  <Text style={styles.onlineText}>Online</Text>
+                </View>
+              )}
+            </View>
             {(item.doctorId?.ratingCount ?? 0) > 0 && (
               <View style={styles.ratingChip}>
                 <MaterialIcons name="star" size={12} color="#F6A623" />
@@ -577,15 +587,64 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
 
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Text style={styles.headerTitle}>Appointments</Text>
-        <View style={styles.bellWrap}>
+        <TouchableOpacity style={styles.bellWrap} onPress={() => setBellVisible(true)}>
           <MaterialIcons name="notifications" size={24} color="#FFF" />
-          {role === 'doctor' && pendingCount > 0 && (
+          {pendingCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{pendingCount > 9 ? '9+' : pendingCount}</Text>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
       </View>
+
+      {/* ── Bell Notification Modal ── */}
+      <Modal visible={bellVisible} transparent animationType="slide" onRequestClose={() => setBellVisible(false)}>
+        <View style={styles.bellOverlay}>
+          <View style={styles.bellSheet}>
+            <View style={styles.bellSheetHeader}>
+              <Text style={styles.bellSheetTitle}>Notifications</Text>
+              <TouchableOpacity onPress={() => setBellVisible(false)}>
+                <Ionicons name="close" size={22} color="#555" />
+              </TouchableOpacity>
+            </View>
+            {appointments.filter(a => a.status !== 'completed' && a.status !== 'cancelled').length === 0 ? (
+              <View style={styles.bellEmpty}>
+                <MaterialIcons name="notifications-none" size={48} color="#DDD" />
+                <Text style={styles.bellEmptyText}>No new notifications</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {appointments
+                  .filter(a => a.status !== 'completed' && a.status !== 'cancelled')
+                  .map(a => {
+                    const sc = getStatusColors(a.status);
+                    const name = role === 'doctor' ? (a.userId?.fullName ?? 'Patient') : (a.doctorId?.fullName ?? 'Doctor');
+                    const spec = role === 'user' ? getSpecialization(a) : '';
+                    return (
+                      <View key={a._id} style={styles.bellItem}>
+                        <View style={[styles.bellDot, { backgroundColor: sc.bg }]}>
+                          <MaterialIcons name="event" size={18} color={sc.text} />
+                        </View>
+                        <View style={styles.bellItemInfo}>
+                          <Text style={styles.bellItemName}>{name}{spec ? ` · ${spec}` : ''}</Text>
+                          <Text style={styles.bellItemTime}>
+                            {formatDisplayDate(a.date)} at {formatDisplayTime(a.time)}
+                          </Text>
+                          <View style={[styles.bellStatusBadge, { backgroundColor: sc.bg }]}>
+                            <Text style={[styles.bellStatusText, { color: sc.text }]}>
+                              {a.status.charAt(0).toUpperCase() + a.status.slice(1)}
+                              {a.paymentStatus === 'pending_payment' ? ' · Payment Required' : ''}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Tabs — doctor only */}
       {role === 'doctor' && (
@@ -822,6 +881,27 @@ const styles = StyleSheet.create({
   bellWrap:                   { position: 'relative', padding: 5 },
   badge:                      { position: 'absolute', top: 0, right: 0, backgroundColor: '#E53E3E', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 },
   badgeText:                  { color: '#FFF', fontSize: 9, fontWeight: '800' },
+
+  // Bell modal
+  bellOverlay:                { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  bellSheet:                  { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36, maxHeight: '75%' },
+  bellSheetHeader:            { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  bellSheetTitle:             { fontSize: 17, fontWeight: '800', color: '#1A1D2E' },
+  bellEmpty:                  { alignItems: 'center', paddingVertical: 40 },
+  bellEmptyText:              { marginTop: 10, fontSize: 14, color: '#AAA' },
+  bellItem:                   { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16, gap: 12 },
+  bellDot:                    { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  bellItemInfo:               { flex: 1 },
+  bellItemName:               { fontSize: 14, fontWeight: '700', color: '#1A1D2E', marginBottom: 2 },
+  bellItemTime:               { fontSize: 12, color: '#777', marginBottom: 4 },
+  bellStatusBadge:            { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  bellStatusText:             { fontSize: 11, fontWeight: '600' },
+
+  // Doctor online indicator
+  doctorNameRow:              { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 },
+  onlinePill:                 { flexDirection: 'row', alignItems: 'center', backgroundColor: '#D4F8E8', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, gap: 4 },
+  onlineDot:                  { width: 7, height: 7, borderRadius: 4, backgroundColor: '#00B374' },
+  onlineText:                 { fontSize: 10, color: '#1B8A5A', fontWeight: '700' },
 
   // Tabs
   tabBar:                     { flexDirection: 'row', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E8ECFF' },

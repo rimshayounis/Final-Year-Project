@@ -377,8 +377,8 @@ export default function ChatbotScreen({ role, onNavigateToDoctorAppointment }: C
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 90}
     >
       <StatusBar barStyle="light-content" backgroundColor="#6B7FED" />
 

@@ -23,10 +23,10 @@ import {
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import axios from 'axios';
-import apiClient, { API_URL, postAPI, reportAPI, feedbackAPI } from "../../services/api";
+import apiClient, { API_URL, postAPI, reportAPI, feedbackAPI, chatAPI } from "../../services/api";
 
 const BACKGROUND_COLORS = [
   { color: "#6B7FED", label: "Indigo"   },
@@ -182,6 +182,27 @@ const bsStyles = StyleSheet.create({
 
 export default function ProfileScreen({ id, role, isOwner = false, viewerId, viewerRole, onBack, onBookAppointment, onCreateAppointment, onOpenSettings }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
+  const [messagingLoading, setMessagingLoading] = useState(false);
+
+  const handleMessageUser = async () => {
+    if (!viewerId || isOwner || role !== 'user') return;
+    setMessagingLoading(true);
+    try {
+      const res = await chatAPI.getOrCreateUserConversation(viewerId, id);
+      const conv = res.data;
+      navigation.navigate('UserChat', {
+        otherUserId:    id,
+        otherUserName:  userProfile?.fullName ?? 'User',
+        conversationId: conv._id,
+        myUserId:       viewerId,
+      });
+    } catch {
+      Alert.alert('Error', 'Could not open chat. Please try again.');
+    } finally {
+      setMessagingLoading(false);
+    }
+  };
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1085,6 +1106,24 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
               </View>
             )}
           </View>
+        )}
+
+        {/* Message button — shown when viewing another user's profile */}
+        {!isOwner && viewerId && role === 'user' && (
+          <TouchableOpacity
+            style={profileMsgStyles.msgBtn}
+            onPress={handleMessageUser}
+            disabled={messagingLoading}
+            activeOpacity={0.8}
+          >
+            {messagingLoading
+              ? <ActivityIndicator size="small" color="#FFF" />
+              : <>
+                  <Ionicons name="chatbubble-outline" size={18} color="#FFF" />
+                  <Text style={profileMsgStyles.msgBtnText}>Message</Text>
+                </>
+            }
+          </TouchableOpacity>
         )}
 
         {/* Book Appointment — only shown when doctor is active and has availability */}
@@ -3213,4 +3252,29 @@ const editStyles = StyleSheet.create({
   categoryOptionActive: { backgroundColor: "#E8F0FE" },
   categoryOptionText: { fontSize: 16, color: "#2C3E50" },
   categoryOptionTextActive: { color: "#6B7FED", fontWeight: "600" },
+});
+
+const profileMsgStyles = StyleSheet.create({
+  msgBtn: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'center',
+    gap:               8,
+    backgroundColor:   '#6B7FED',
+    paddingVertical:   12,
+    paddingHorizontal: 28,
+    borderRadius:      22,
+    marginTop:         14,
+    marginHorizontal:  20,
+    shadowColor:       '#6B7FED',
+    shadowOffset:      { width: 0, height: 3 },
+    shadowOpacity:     0.3,
+    shadowRadius:      6,
+    elevation:         4,
+  },
+  msgBtnText: {
+    color:      '#FFF',
+    fontSize:   15,
+    fontWeight: '700',
+  },
 });

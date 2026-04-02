@@ -49,7 +49,8 @@ import DoctorAppointmentDetailScreen from './src/screens/dashboard/Doctorappoint
 import DoctorProfileViewScreen from './src/screens/dashboard/DoctorProfileViewScreen';
 import PatientChatScreen from './src/screens/chat/PatientChatScreen';
 import DoctorChatScreen from './src/screens/chat/DoctorChatScreen';
-import UserChatScreen from './src/screens/chat/UserChatScreen';
+import UserChatScreen    from './src/screens/chat/UserChatScreen';
+import MessagesScreen   from './src/screens/chat/MessagesScreen';
 import PeopleListScreen from './src/screens/dashboard/PeopleScreen';
 import UserProfileViewScreen from './src/screens/dashboard/UserProfileViewScreen';
 import SettingsScreen from './src/screens/dashboard/SettingsScreen';
@@ -108,6 +109,7 @@ export type RootStackParamList = {
     otherUserId: string; otherUserName: string;
     conversationId: string; myUserId: string;
   };
+  Messages:    { myUserId: string };
   PeopleList:  { myUserId: string };
   UserProfile: { userId: string; myUserId: string };
   ForgotPassword:  { userType: 'user' | 'doctor' };
@@ -198,6 +200,7 @@ export default function App() {
             <Stack.Screen name="DoctorChat"           component={DoctorChatScreen} />
             <Stack.Screen name="PatientChat"          component={PatientChatScreen} />
             <Stack.Screen name="UserChat"             component={UserChatScreen} />
+            <Stack.Screen name="Messages"             component={MessagesScreen} />
             <Stack.Screen name="PeopleList"           component={PeopleListScreen} />
             <Stack.Screen name="UserProfile"          component={UserProfileViewScreen} />
             <Stack.Screen name="Settings"             component={SettingsScreen} />

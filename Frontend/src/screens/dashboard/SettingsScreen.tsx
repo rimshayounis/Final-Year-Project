@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Alert,
   StatusBar,
   Modal,
@@ -20,33 +19,8 @@ import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
 import { RootStackParamList } from "../../../App";
 import apiClient from "../../services/api";
-
-async function registerForPushNotifications(): Promise<string | null> {
-  if (!Device.isDevice) return null;
-
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let finalStatus = existing;
-
-  if (existing !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== "granted") {
-    Alert.alert(
-      "Permission required",
-      "Please enable notifications in your device settings.",
-    );
-    return null;
-  }
-
-  const tokenData = await Notifications.getExpoPushTokenAsync();
-  return tokenData.data;
-}
 
 type SettingsNav   = NativeStackNavigationProp<RootStackParamList, "Settings">;
 type SettingsRoute = RouteProp<RootStackParamList, "Settings">;
@@ -203,9 +177,6 @@ export default function SettingsScreen() {
   const route      = useRoute<SettingsRoute>();
   const { id, role } = route.params;
 
-  // ── Notification state ────────────────────────────────────────────────────
-  const [pushEnabled,  setPushEnabled]  = useState(true);
-  const [emailEnabled, setEmailEnabled] = useState(false);
   const [doctorPlan,   setDoctorPlan]   = useState<string>("free_trial");
 
   // ── Verification state ────────────────────────────────────────────────────
@@ -270,15 +241,6 @@ export default function SettingsScreen() {
     }
 
     if (role === "user") {
-      // Load notification settings
-      apiClient.get(`/users/${id}/notification-settings`)
-        .then((res) => {
-          const d = res.data?.data ?? {};
-          if (d.pushEnabled  !== undefined) setPushEnabled(d.pushEnabled);
-          if (d.emailEnabled !== undefined) setEmailEnabled(d.emailEnabled);
-        })
-        .catch(() => {});
-
       // 👇 Load SOS message
       apiClient.get(`/users/${id}`)
         .then((res) => {
@@ -290,30 +252,6 @@ export default function SettingsScreen() {
   }, [id, role]);
 
   /* ── Handlers ────────────────────────────────────────────────────────────── */
-  const handlePushToggle = async (value: boolean) => {
-    setPushEnabled(value);
-    try {
-      await apiClient.patch(`/users/${id}/notification-settings`, {
-        pushEnabled: value,
-      });
-    } catch { /* silent */ }
-
-    if (value) {
-      try {
-        const token = await registerForPushNotifications();
-        if (token) {
-          await apiClient.patch(`/users/${id}/push-token`, { token });
-        }
-      } catch (e) {
-        console.warn("[PushNotif] Registration failed:", e);
-      }
-    } else {
-      try {
-        await apiClient.patch(`/users/${id}/push-token`, { token: null });
-      } catch { /* silent */ }
-    }
-  };
-
   const handleLogout = () => {
     Alert.alert("Log Out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
@@ -567,47 +505,6 @@ export default function SettingsScreen() {
             </View>
           </>
         )}
-
-        {/* ── NOTIFICATIONS ── */}
-        <SectionHeader title="Notifications" />
-        <View style={styles.card}>
-          <SettingRow
-            icon={
-              <Ionicons
-                name="notifications-outline"
-                size={20}
-                color="#F6A623"
-              />
-            }
-            label="Push Notifications"
-            sublabel={
-              role === "user" ? "Likes & comments on your posts" : undefined
-            }
-            right={
-              <Switch
-                value={pushEnabled}
-                onValueChange={
-                  role === "user" ? handlePushToggle : setPushEnabled
-                }
-                trackColor={{ false: "#DDE", true: "#6B7FED" }}
-                thumbColor="#FFF"
-              />
-            }
-          />
-          <View style={styles.divider} />
-          <SettingRow
-            icon={<Ionicons name="mail-outline" size={20} color="#F6A623" />}
-            label="Email Notifications"
-            right={
-              <Switch
-                value={emailEnabled}
-                onValueChange={setEmailEnabled}
-                trackColor={{ false: "#DDE", true: "#6B7FED" }}
-                thumbColor="#FFF"
-              />
-            }
-          />
-        </View>
 
         {/* ── PRIVACY ── */}
         <SectionHeader title="Privacy & Security" />

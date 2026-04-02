@@ -76,6 +76,8 @@ export default function DoctorChatScreen({ route }: Props) {
   const navigation = useNavigation<any>();
 
   const [resolvedAvatar,    setResolvedAvatar]    = useState<string | null>(patientAvatar ?? null);
+  const [avatarLoading,     setAvatarLoading]     = useState(!patientAvatar);
+  const [avatarError,       setAvatarError]       = useState(false);
   const [messages,          setMessages]          = useState<Message[]>([]);
   const [inputText,         setInputText]         = useState('');
   const [isPatientTyping,   setIsPatientTyping]   = useState(false);
@@ -101,19 +103,25 @@ export default function DoctorChatScreen({ route }: Props) {
   const dot3            = useRef(new Animated.Value(0)).current;
   const sessionEndedRef = useRef(false);
   const countdownRef    = useRef<NodeJS.Timeout | null>(null);
+  const pollRef         = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch patient's real profile image
   useEffect(() => {
     const base = API_URL.replace('/api', '');
+    setAvatarLoading(true);
+    setAvatarError(false);
     fetch(`${API_URL}/profiles/user/${patientId}`)
       .then((r) => r.json())
       .then((json) => {
         const imgPath = json?.data?.profileImage;
         if (imgPath) {
           setResolvedAvatar(imgPath.startsWith('http') ? imgPath : base + imgPath);
+        } else {
+          setAvatarError(true);
         }
+        setAvatarLoading(false);
       })
-      .catch(() => {});
+      .catch(() => { setAvatarError(true); setAvatarLoading(false); });
   }, [patientId]);
 
   useEffect(() => {
@@ -125,11 +133,16 @@ export default function DoctorChatScreen({ route }: Props) {
       await loadHistory();
       connectSocket(id);
     })();
+    // Poll for new messages every 3 seconds as socket fallback
+    pollRef.current = setInterval(() => {
+      if (conversationId) loadHistory();
+    }, 3000);
     return () => {
       mounted = false;
       socketRef.current?.disconnect();
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
       if (countdownRef.current)  clearInterval(countdownRef.current);
+      if (pollRef.current)       clearInterval(pollRef.current);
     };
   }, []);
 
@@ -380,7 +393,13 @@ export default function DoctorChatScreen({ route }: Props) {
       <TouchableOpacity activeOpacity={0.85} onLongPress={(e) => !item.isTemp && handleLongPress(item, e)} delayLongPress={350}>
         <View style={[styles.msgRow, isMe ? styles.rowRight : styles.rowLeft]}>
           {!isMe && (
-            <Image source={resolvedAvatar ? { uri: resolvedAvatar } : require('../../../assets/icon.png')} style={styles.msgAvatar} />
+            resolvedAvatar && !avatarError ? (
+              <Image source={{ uri: resolvedAvatar }} style={styles.msgAvatar} onError={() => setAvatarError(true)} />
+            ) : (
+              <View style={[styles.msgAvatar, styles.avatarFallback]}>
+                <Text style={[styles.avatarFallbackText, { fontSize: 14 }]}>{patientName.charAt(0).toUpperCase()}</Text>
+              </View>
+            )
           )}
           <View style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '74%' }}>
             <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem, item.isTemp && { opacity: 0.7 }, isMedia && { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0, overflow: 'hidden' }, item.fileType === 'voice' && { width: 260 }]}>
@@ -413,7 +432,21 @@ export default function DoctorChatScreen({ route }: Props) {
           <MaterialIcons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.avatarWrap}>
-          <Image source={resolvedAvatar ? { uri: resolvedAvatar } : require('../../../assets/icon.png')} style={styles.headerAvatar} />
+          {avatarLoading ? (
+            <View style={[styles.headerAvatar, styles.avatarLoadingBox]}>
+              <ActivityIndicator size="small" color="#6B7FED" />
+            </View>
+          ) : resolvedAvatar && !avatarError ? (
+            <Image
+              source={{ uri: resolvedAvatar }}
+              style={styles.headerAvatar}
+              onError={() => setAvatarError(true)}
+            />
+          ) : (
+            <View style={[styles.headerAvatar, styles.avatarFallback]}>
+              <Text style={styles.avatarFallbackText}>{patientName.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
           {isPatientOnline && <View style={styles.onlineDot} />}
         </View>
         <View style={styles.headerTextWrap}>
@@ -437,7 +470,7 @@ export default function DoctorChatScreen({ route }: Props) {
         )}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {isLoading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="large" color="#6B7FED" />
@@ -473,7 +506,13 @@ export default function DoctorChatScreen({ route }: Props) {
         )}
         {isPatientTyping && (
           <View style={styles.typingRow}>
-            <Image source={resolvedAvatar ? { uri: resolvedAvatar } : require('../../../assets/icon.png')} style={styles.msgAvatar} />
+            {resolvedAvatar && !avatarError ? (
+              <Image source={{ uri: resolvedAvatar }} style={styles.msgAvatar} onError={() => setAvatarError(true)} />
+            ) : (
+              <View style={[styles.msgAvatar, styles.avatarFallback]}>
+                <Text style={[styles.avatarFallbackText, { fontSize: 14 }]}>{patientName.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
             <View style={styles.typingBubble}>
               {[dot1, dot2, dot3].map((d, i) => (
                 <Animated.View key={i} style={[styles.typingDot, { transform: [{ translateY: d }] }]} />
@@ -511,7 +550,7 @@ export default function DoctorChatScreen({ route }: Props) {
           showVoiceRecorder ? (
             <VoiceRecorder onSend={handleVoiceSend} onCancel={handleVoiceCancel} />
           ) : (
-            <View style={styles.inputBar}>
+            <View style={[styles.inputBar, { marginBottom: Math.max(insets.bottom, 10) }]}>
               <TouchableOpacity onPress={toggleAttach} style={styles.inputIconBtn}>
                 <MaterialIcons name={attachMenuOpen ? 'close' : 'attach-file'} size={22} color="#6B7FED" />
               </TouchableOpacity>
@@ -556,6 +595,9 @@ const styles = StyleSheet.create({
   backBtn:            { marginRight: 8, padding: 2 },
   avatarWrap:         { position: 'relative' },
   headerAvatar:       { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: WHITE },
+  avatarLoadingBox:   { backgroundColor: '#E8ECFF', alignItems: 'center', justifyContent: 'center' },
+  avatarFallback:     { backgroundColor: '#6B7FED', alignItems: 'center', justifyContent: 'center' },
+  avatarFallbackText: { color: '#fff', fontWeight: '700', fontSize: 18 },
   onlineDot:          { position: 'absolute', bottom: 0, right: 0, width: 11, height: 11, borderRadius: 6, backgroundColor: '#4ADE80', borderWidth: 2, borderColor: PURPLE },
   headerTextWrap:     { flex: 1, marginLeft: 10 },
   headerName:         { color: WHITE, fontSize: 16, fontWeight: '700' },
