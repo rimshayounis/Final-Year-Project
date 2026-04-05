@@ -15,8 +15,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
 import { RootStackParamList } from "../../../App";
 import apiClient from "../../services/api";
 
@@ -24,47 +22,7 @@ type Nav   = NativeStackNavigationProp<RootStackParamList, "NotificationSettings
 type Route = RouteProp<RootStackParamList, "NotificationSettings">;
 
 interface Settings {
-  emailEnabled:    boolean;
-  pushEnabled: boolean;
-}
-
-// Configure how notifications appear when the app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge:  false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
-
-async function registerForPushNotifications(): Promise<string | null> {
-  if (!Device.isDevice) {
-    Alert.alert("Push notifications only work on a physical device.");
-    return null;
-  }
-
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let finalStatus = existing;
-
-  if (existing !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== "granted") {
-    Alert.alert(
-      "Permission required",
-      "Please enable notifications in your device settings to receive appointment alerts.",
-    );
-    return null;
-  }
-
-  // Android channel is created at app startup in App.tsx
-
-  const tokenData = await Notifications.getExpoPushTokenAsync();
-  return tokenData.data;
+  emailEnabled: boolean;
 }
 
 export default function NotificationSettingsScreen() {
@@ -74,8 +32,7 @@ export default function NotificationSettingsScreen() {
   const { doctorId } = route.params;
 
   const [settings, setSettings] = useState<Settings>({
-    emailEnabled:    false,
-    pushEnabled: true,
+    emailEnabled: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
@@ -100,27 +57,6 @@ export default function NotificationSettingsScreen() {
       const updated: Settings = res.data?.data ?? settings;
       setSettings(updated);
 
-      // When app notifications are enabled, register for push and save the token
-      if (patch.pushEnabled === true) {
-        try {
-          const token = await registerForPushNotifications();
-          if (token) {
-            await apiClient.patch(`/doctors/${doctorId}/push-token`, { token });
-            console.log("[PushNotif] Token saved:", token.slice(0, 30) + "...");
-          }
-        } catch (e) {
-          console.warn("[PushNotif] Token registration failed:", e);
-        }
-      }
-
-      // When app notifications are disabled, clear the stored token
-      if (patch.pushEnabled === false) {
-        try {
-          await apiClient.patch(`/doctors/${doctorId}/push-token`, { token: null });
-        } catch (e) {
-          console.warn("[PushNotif] Token clear failed:", e);
-        }
-      }
     } catch {
       Alert.alert("Error", "Could not save settings.");
     } finally {
@@ -163,32 +99,6 @@ export default function NotificationSettingsScreen() {
           <Text style={s.hint}>
             Choose how you'd like to be notified when a patient books an appointment.
           </Text>
-
-          {/* ── App Notifications ── */}
-          <Text style={s.sectionTitle}>In-App</Text>
-          <View style={s.card}>
-            <Row
-              icon={<Ionicons name="notifications" size={20} color="#6B7FED" />}
-              label="App Notifications"
-              sublabel="Receive OS banner alerts when a patient books"
-              right={
-                <Switch
-                  value={settings.pushEnabled}
-                  onValueChange={(v) => toggle("pushEnabled", v)}
-                  trackColor={{ false: "#DDE", true: "#6B7FED" }}
-                  thumbColor="#FFF"
-                />
-              }
-            />
-          </View>
-          {settings.pushEnabled && (
-            <View style={s.infoBox}>
-              <Ionicons name="checkmark-circle-outline" size={16} color="#6B7FED" />
-              <Text style={[s.infoTxt, { color: "#6B7FED" }]}>
-                You'll receive a banner notification on your device when a patient books.
-              </Text>
-            </View>
-          )}
 
           {/* ── Email ── */}
           <Text style={s.sectionTitle}>Email</Text>

@@ -23,28 +23,6 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../../App";
 import apiClient from "../../services/api";
 
-async function registerForPushNotifications(): Promise<string | null> {
-  if (!Device.isDevice) return null;
-
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let finalStatus = existing;
-
-  if (existing !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== "granted") {
-    Alert.alert(
-      "Permission required",
-      "Please enable notifications in your device settings.",
-    );
-    return null;
-  }
-
-  const tokenData = await Notifications.getExpoPushTokenAsync();
-  return tokenData.data;
-}
 
 type SettingsNav   = NativeStackNavigationProp<RootStackParamList, "Settings">;
 type SettingsRoute = RouteProp<RootStackParamList, "Settings">;

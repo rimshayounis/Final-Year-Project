@@ -167,17 +167,9 @@ export class UsersController {
   @Patch(':userId/notification-settings')
   async updateNotificationSettings(
     @Param('userId') userId: string,
-    @Body() body: { pushEnabled?: boolean; emailEnabled?: boolean },
+    @Body() body: { emailEnabled?: boolean },
   ) {
     return this.usersService.updateNotificationSettings(userId, body);
-  }
-
-  @Patch(':userId/push-token')
-  async savePushToken(
-    @Param('userId') userId: string,
-    @Body() body: { token: string | null },
-  ) {
-    return this.usersService.savePushToken(userId, body.token ?? null);
   }
 
   // ── Block / Unblock ───────────────────────────────────────────────────────

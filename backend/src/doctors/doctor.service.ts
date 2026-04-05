@@ -242,19 +242,14 @@ export class DoctorsService {
     return doctor.notificationSettings;
   }
 
-  async updateNotificationSettings(doctorId: string, settings: { emailEnabled?: boolean; pushEnabled?: boolean }) {
+  async updateNotificationSettings(doctorId: string, settings: { emailEnabled?: boolean }) {
     const doctor = await this.doctorModel.findByIdAndUpdate(
       doctorId,
-      { $set: { 'notificationSettings.emailEnabled': settings.emailEnabled, 'notificationSettings.pushEnabled': settings.pushEnabled } },
+      { $set: { 'notificationSettings.emailEnabled': settings.emailEnabled } },
       { new: true },
     ).select('notificationSettings');
     if (!doctor) throw new NotFoundException('Doctor not found');
     return doctor.notificationSettings;
-  }
-
-  async savePushToken(doctorId: string, token: string | null) {
-    await this.doctorModel.updateOne({ _id: doctorId }, { expoPushToken: token });
-    return { success: true };
   }
 
   async changePassword(doctorId: string, oldPassword: string, newPassword: string) {

@@ -1,29 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert:  true,
-    shouldPlaySound:  true,
-    shouldSetBadge:   false,
-    shouldShowBanner: true,
-    shouldShowList:   true,
-  }),
-});
-
-if (Platform.OS === 'android') {
-  Notifications.setNotificationChannelAsync('default', {
-    name: 'TruHeal Notifications',
-    importance: Notifications.AndroidImportance.MAX,
-    sound: 'default',
-    vibrationPattern: [0, 250, 250, 250],
-    lightColor: '#6B7FED',
-    enableVibrate: true,
-    showBadge: true,
-  });
-}
-
+import React, { useRef, useState } from 'react';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -148,13 +123,6 @@ export default function App() {
     userRole === 'user';
 
   useShakeSOS(showSOS); // shake × 3 triggers SOS — only after login, users only
-
-  useEffect(() => {
-    const sub = Notifications.addNotificationReceivedListener((notification) => {
-      console.log('[Push] Received:', notification.request.content.title);
-    });
-    return () => sub.remove();
-  }, []);
 
   return (
     <SafeAreaProvider>
