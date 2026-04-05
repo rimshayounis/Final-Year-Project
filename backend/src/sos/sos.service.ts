@@ -65,7 +65,6 @@ export class SosService {
     for (const contact of user.emergencyContacts) {
       const contactResult: ContactResult = {
         name:         contact.fullName,
-        phone:        contact.phoneNumber,
         relationship: contact.relationship,
         email:        contact.email ?? 'not provided',
         emailStatus:  'skipped',

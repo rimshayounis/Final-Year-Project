@@ -31,14 +31,36 @@ export class BookedAppointmentService {
 
   // ── Book appointment ───────────────────────────────────────────────────────
   async bookAppointment(dto: CreateBookedAppointmentDto): Promise<any> {
-    const existing = await this.bookedAppointmentModel.findOne({
+    // Check if this user already has a pending/unpaid appointment with this doctor
+    const userExisting = await this.bookedAppointmentModel.findOne({
+      userId:   new Types.ObjectId(dto.userId),
+      doctorId: new Types.ObjectId(dto.doctorId),
+      $or: [
+        { status: 'pending' },
+        { status: 'confirmed', paymentStatus: 'pending_payment' },
+      ],
+    });
+
+    if (userExisting) {
+      throw new ConflictException({
+        code:          'PENDING_APPOINTMENT_EXISTS',
+        appointmentId: userExisting._id.toString(),
+        status:        userExisting.status,
+        date:          userExisting.date,
+        time:          userExisting.time,
+        message:       'You already have an active appointment with this doctor.',
+      });
+    }
+
+    // Check if the slot is already taken by another user
+    const slotTaken = await this.bookedAppointmentModel.findOne({
       doctorId: new Types.ObjectId(dto.doctorId),
       date:     dto.date,
       time:     dto.time,
       status:   { $in: ['pending', 'confirmed'] },
     });
 
-    if (existing) {
+    if (slotTaken) {
       throw new ConflictException(
         'This time slot is already booked. Please choose another slot.',
       );
@@ -134,6 +156,7 @@ export class BookedAppointmentService {
 
     if (dto.status === 'confirmed') {
       appointment.paymentStatus = 'pending_payment';
+      appointment.confirmedAt   = new Date();
     }
 
     if (dto.status === 'cancelled') {
@@ -256,6 +279,67 @@ export class BookedAppointmentService {
       time:            appt.time,
       sessionDuration: appt.sessionDuration,
     });
+  }
+
+  // ── Auto cancel: doctor didn't confirm in 10 min OR user didn't pay in 10 min ──
+  async autoCancelExpiredAppointments(): Promise<void> {
+    const now      = new Date();
+    const tenMinsAgo = new Date(now.getTime() - 10 * 60 * 1000);
+
+    // 1. Pending > 10 min — doctor didn't confirm
+    const expiredPending = await this.bookedAppointmentModel.find({
+      status:    'pending',
+      createdAt: { $lte: tenMinsAgo },
+    }).populate('userId',   'fullName email')
+      .populate('doctorId', 'fullName email')
+      .exec();
+
+    for (const appt of expiredPending) {
+      appt.status       = 'cancelled';
+      appt.cancelledAt  = now;
+      appt.cancelReason = 'Auto-cancelled: doctor did not confirm within 10 minutes';
+      await appt.save();
+
+      this.notificationService.notifyAutoCancellation({
+        userId:      appt.userId.toString(),
+        doctorId:    appt.doctorId.toString(),
+        date:        appt.date,
+        time:        appt.time,
+        reason:      'confirmation_timeout',
+        userEmail:   (appt.userId as any).email,
+        userName:    (appt.userId as any).fullName,
+        doctorEmail: (appt.doctorId as any).email,
+        doctorName:  (appt.doctorId as any).fullName,
+      }).catch((e) => console.error('[AutoCancel] Notify failed:', e.message));
+    }
+
+    // 2. Confirmed + pending_payment > 10 min — user didn't pay
+    const expiredPayment = await this.bookedAppointmentModel.find({
+      status:        'confirmed',
+      paymentStatus: 'pending_payment',
+      confirmedAt:   { $lte: tenMinsAgo },
+    }).populate('userId',   'fullName email')
+      .populate('doctorId', 'fullName email')
+      .exec();
+
+    for (const appt of expiredPayment) {
+      appt.status       = 'cancelled';
+      appt.cancelledAt  = now;
+      appt.cancelReason = 'Auto-cancelled: payment not completed within 10 minutes';
+      await appt.save();
+
+      this.notificationService.notifyAutoCancellation({
+        userId:      appt.userId.toString(),
+        doctorId:    appt.doctorId.toString(),
+        date:        appt.date,
+        time:        appt.time,
+        reason:      'payment_timeout',
+        userEmail:   (appt.userId as any).email,
+        userName:    (appt.userId as any).fullName,
+        doctorEmail: (appt.doctorId as any).email,
+        doctorName:  (appt.doctorId as any).fullName,
+      }).catch((e) => console.error('[AutoCancel] Notify failed:', e.message));
+    }
   }
 
   // ── Auto complete expired ──────────────────────────────────────────────────

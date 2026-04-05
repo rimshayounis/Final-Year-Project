@@ -192,17 +192,9 @@ export class DoctorsController {
   @Patch(':doctorId/notification-settings')
   async updateNotificationSettings(
     @Param('doctorId') doctorId: string,
-    @Body() body: { emailEnabled?: boolean; pushEnabled?: boolean },
+    @Body() body: { emailEnabled?: boolean },
   ) {
     return this.doctorsService.updateNotificationSettings(doctorId, body);
-  }
-
-  @Patch(':doctorId/push-token')
-  async savePushToken(
-    @Param('doctorId') doctorId: string,
-    @Body() body: { token: string | null },
-  ) {
-    return this.doctorsService.savePushToken(doctorId, body.token ?? null);
   }
 
   @Patch(':doctorId/change-password')

@@ -5,7 +5,6 @@ export type UserDocument = User & Document;
 
 @Schema({ _id: false })
 export class UserNotificationSettings {
-  @Prop({ default: true  }) pushEnabled:  boolean;
   @Prop({ default: false }) emailEnabled: boolean;
 }
 
@@ -20,10 +19,9 @@ export class HealthProfile {
 
 @Schema({ _id: false })
 export class EmergencyContact {
-  @Prop({ required: true  }) fullName:     string;
-  @Prop({ required: true  }) phoneNumber:  string;
-  @Prop({ required: true  }) relationship: string;
-  @Prop({ required: false }) email?:       string;
+  @Prop({ required: true }) fullName:     string;
+  @Prop({ required: true }) relationship: string;
+  @Prop({ required: true }) email:        string;
 }
 
 @Schema({ timestamps: true })
@@ -60,12 +58,9 @@ export class User {
 
   @Prop({
     type: UserNotificationSettings,
-    default: () => ({ pushEnabled: true, emailEnabled: false }),
+    default: () => ({ emailEnabled: false }),
   })
   notificationSettings: UserNotificationSettings;
-
-  @Prop({ type: String, default: null })
-  expoPushToken: string | null;
 
   @Prop({
     type:    String,

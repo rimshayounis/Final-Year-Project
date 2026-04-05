@@ -38,6 +38,9 @@ export class BookedAppointment {
   status: AppointmentStatus;
 
   @Prop({ type: Date, default: null })
+  confirmedAt: Date | null;
+
+  @Prop({ type: Date, default: null })
   cancelledAt: Date | null;
 
   @Prop({ type: String, default: null })
@@ -82,4 +85,4 @@ export const BookedAppointmentSchema = SchemaFactory.createForClass(BookedAppoin
 
 BookedAppointmentSchema.index({ userId: 1, date: -1 });
 BookedAppointmentSchema.index({ doctorId: 1, date: -1 });
-BookedAppointmentSchema.index({ doctorId: 1, date: 1, time: 1 }, { unique: true });
+BookedAppointmentSchema.index({ doctorId: 1, date: 1, time: 1 });

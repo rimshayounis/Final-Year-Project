@@ -18,7 +18,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { appointmentAPI,bookedAppointmentAPI } from '../../services/api';
+import { appointmentAPI, bookedAppointmentAPI } from '../../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -201,11 +201,52 @@ export default function DoctorAppointmentDetailScreen() {
                 consultationFee,
                 healthConcern,
               });
-              Alert.alert('Booked! 🎉', 'Your appointment has been confirmed.', [
+              Alert.alert('Booked! 🎉', 'Your appointment request has been sent to the doctor.', [
                 { text: 'OK', onPress: () => navigation.goBack() },
               ]);
             } catch (e: any) {
-              Alert.alert('Error', e.message || 'Booking failed');
+              const errData = e.response?.data;
+              const conflict =
+                typeof errData === 'object' && errData?.code === 'PENDING_APPOINTMENT_EXISTS'
+                  ? errData
+                  : null;
+
+              if (conflict) {
+                const statusLabel =
+                  conflict.status === 'pending'
+                    ? 'waiting for doctor confirmation'
+                    : 'confirmed but payment pending';
+
+                Alert.alert(
+                  'Active Appointment Exists',
+                  `You already have an appointment with this doctor (${statusLabel}).\n\nCancel it to book a new slot, or wait for it to proceed.`,
+                  [
+                    { text: 'Wait', style: 'cancel' },
+                    {
+                      text: 'Cancel My Appointment',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          await bookedAppointmentAPI.cancel(
+                            conflict.appointmentId,
+                            'User cancelled to book a new slot',
+                          );
+                          // Reload slots so the freed slot appears
+                          await loadSlots();
+                          Alert.alert(
+                            'Cancelled',
+                            'Your previous appointment was cancelled. You can now book a new slot.',
+                          );
+                        } catch {
+                          Alert.alert('Error', 'Could not cancel appointment. Please try again.');
+                        }
+                      },
+                    },
+                  ],
+                );
+              } else {
+                Alert.alert('Error', typeof e.response?.data?.message === 'string' ? e.response.data.message : e.message || 'Booking failed');
+              }
             } finally {
               setIsBooking(false);
             }

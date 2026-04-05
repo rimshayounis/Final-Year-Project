@@ -32,5 +32,6 @@ import { NotificationModule } from '../notification/notification.module';
     AppointmentGateway,
     AppointmentCompletionScheduler,
   ],
+  exports: [BookedAppointmentService],
 })
 export class BookedAppointmentModule {}

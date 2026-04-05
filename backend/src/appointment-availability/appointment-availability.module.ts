@@ -3,11 +3,13 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AppointmentAvailabilityController } from './appointment-availability.controller';
 import { AppointmentAvailabilityService } from './appointment-availability.service';
 import { AppointmentAvailability, AppointmentAvailabilitySchema } from './schemas/appointment-availability.schema';
+import { BookedAppointment, BookedAppointmentSchema } from '../booked-appointment/schemas/booked-appointment.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: AppointmentAvailability.name, schema: AppointmentAvailabilitySchema },
+      { name: BookedAppointment.name, schema: BookedAppointmentSchema },
     ]),
   ],
   controllers: [AppointmentAvailabilityController],

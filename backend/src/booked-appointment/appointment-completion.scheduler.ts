@@ -8,6 +8,7 @@ import {
 } from './schemas/booked-appointment.schema';
 import { AppointmentGateway } from './appointment.gateway';
 import { PaymentService } from '../payment/payment.service';
+import { BookedAppointmentService } from './booked-appointment.service';
 
 @Injectable()
 export class AppointmentCompletionScheduler {
@@ -18,10 +19,16 @@ export class AppointmentCompletionScheduler {
     private readonly bookedAppointmentModel: Model<BookedAppointmentDocument>,
     private readonly gateway: AppointmentGateway,
     private readonly paymentService: PaymentService,
+    private readonly bookedAppointmentService: BookedAppointmentService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
   async run() {
+    // Auto-cancel unconfirmed (>10 min) and unpaid confirmed (>10 min)
+    await this.bookedAppointmentService
+      .autoCancelExpiredAppointments()
+      .catch((e) => this.logger.error(`Auto-cancel failed: ${e.message}`));
+
     const now = new Date();
 
     const confirmed = await this.bookedAppointmentModel

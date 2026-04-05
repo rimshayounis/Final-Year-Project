@@ -236,8 +236,9 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
   const [isLoading,       setIsLoading]       = useState(true);
   const [isRefreshing,    setIsRefreshing]    = useState(false);
   const [chatLoadingId,   setChatLoadingId]   = useState<string | null>(null);
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [payLoadingId,    setPayLoadingId]    = useState<string | null>(null);
+  const [actionLoadingId,  setActionLoadingId]  = useState<string | null>(null);
+  const [payLoadingId,     setPayLoadingId]     = useState<string | null>(null);
+  const [cancelLoadingId,  setCancelLoadingId]  = useState<string | null>(null);
   const [,                setNow]             = useState(new Date());
   const [bellVisible,       setBellVisible]       = useState(false);
   const [seenNotifIds,      setSeenNotifIds]      = useState<Set<string>>(new Set());

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AppointmentAvailability, AppointmentAvailabilityDocument } from './schemas/appointment-availability.schema';
+import { BookedAppointment, BookedAppointmentDocument } from '../booked-appointment/schemas/booked-appointment.schema';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { GetAvailableSlotsDto } from './dto/get-available-slots.dto';
@@ -25,6 +26,8 @@ export class AppointmentAvailabilityService {
   constructor(
     @InjectModel(AppointmentAvailability.name)
     private availabilityModel: Model<AppointmentAvailabilityDocument>,
+    @InjectModel(BookedAppointment.name)
+    private bookedAppointmentModel: Model<BookedAppointmentDocument>,
   ) {}
 
   // Create or update doctor's availability
@@ -92,6 +95,21 @@ export class AppointmentAvailabilityService {
       ? new Date(query.endDate)
       : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
 
+    // Fetch all active bookings for this doctor in the date range
+    const bookedSlots = await this.bookedAppointmentModel
+      .find({
+        doctorId: new Types.ObjectId(query.doctorId),
+        date:     { $gte: this.formatDate(startDate), $lte: this.formatDate(endDate) },
+        status:   { $in: ['pending', 'confirmed'] },
+      })
+      .select('date time')
+      .lean()
+      .exec();
+
+    const bookedSet = new Set(
+      bookedSlots.map((b: any) => `${b.date}|${b.time}`),
+    );
+
     const availableSlots: DaySlots[] = [];
 
     for (
@@ -104,9 +122,12 @@ export class AppointmentAvailabilityService {
       const specific = availability.specificDates.find(sd => sd.date === dateStr);
 
       if (specific) {
-        const slots = this.generateTimeSlots(
+        const allSlots = this.generateTimeSlots(
           specific.timeSlots,
           availability.sessionDuration,
+        );
+        const slots = allSlots.filter(
+          (time) => !bookedSet.has(`${dateStr}|${time}`),
         );
         if (slots.length > 0) {
           availableSlots.push({

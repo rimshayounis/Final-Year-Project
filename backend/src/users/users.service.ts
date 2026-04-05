@@ -396,26 +396,16 @@ export class UsersService {
 
   async updateNotificationSettings(
     userId: string,
-    settings: { pushEnabled?: boolean; emailEnabled?: boolean },
+    settings: { emailEnabled?: boolean },
   ) {
     const user = await this.userModel
       .findByIdAndUpdate(
         userId,
-        {
-          $set: {
-            'notificationSettings.pushEnabled':  settings.pushEnabled,
-            'notificationSettings.emailEnabled': settings.emailEnabled,
-          },
-        },
+        { $set: { 'notificationSettings.emailEnabled': settings.emailEnabled } },
         { new: true },
       )
       .select('notificationSettings');
     if (!user) throw new NotFoundException('User not found');
     return user.notificationSettings;
-  }
-
-  async savePushToken(userId: string, token: string | null) {
-    await this.userModel.updateOne({ _id: userId }, { expoPushToken: token });
-    return { success: true };
   }
 }

@@ -1,6 +1,6 @@
 import axios from 'axios'
-export const API_URL = 'http://192.168.100.217:3000/api';
-export const SOCKET_URL = 'http://192.168.100.217:3000';
+export const API_URL = 'http://192.168.137.1:3000/api';
+export const SOCKET_URL = 'http://192.168.137.1:3000';
 const apiClient = axios.create({
   baseURL: API_URL,
   timeout: 10000,
@@ -149,10 +149,9 @@ export interface HealthProfileData {
 }
 
 export interface EmergencyContactData {
-  fullName: string;
-  phoneNumber: string;
+  fullName:     string;
   relationship: string;
-   email?:       string; 
+  email:        string;
 }
 
 export interface SendMessageData {
