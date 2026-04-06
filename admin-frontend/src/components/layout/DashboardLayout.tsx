@@ -34,7 +34,7 @@ const navItems = [
 ];
 
 const moderationItems = [
-  { href: '/dashboard/reports',  label: 'Post Reports',    icon: 'reports',  badge: 'reports'  },
+  { href: '/dashboard/reports',  label: 'Reports',         icon: 'reports',  badge: 'reports'  },
   { href: '/dashboard/feedback', label: 'Doctor Feedback', icon: 'feedback', badge: 'feedback' },
   { href: '/dashboard/support',  label: 'Support Queries', icon: 'support',  badge: 'support'  },
 ];
@@ -399,7 +399,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const getPageTitle = () => {
     if (pathname.includes('settings')) return 'Settings';
-    if (pathname.includes('reports'))  return 'Post Reports';
+    if (pathname.includes('reports'))  return 'Reports';
     if (pathname.includes('feedback')) return 'Doctor Feedback';
     if (pathname.includes('support'))  return 'Support Queries';
     return [...navItems, ...moderationItems].find(n => isActive(n.href))?.label || 'Dashboard';

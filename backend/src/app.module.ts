@@ -19,6 +19,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { SupportRequestModule } from './support-request/support-request.module';
 import { MailModule } from './mail/mail.module';
 import { SosModule } from './sos/sos.module'; // 👈 add this
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -43,7 +44,8 @@ import { SosModule } from './sos/sos.module'; // 👈 add this
     ReportModule,
     FeedbackModule,
     SupportRequestModule,
-    SosModule, // 👈 add this
+    SosModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

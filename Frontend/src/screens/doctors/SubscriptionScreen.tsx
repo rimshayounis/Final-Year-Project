@@ -146,14 +146,6 @@ const PLANS: Plan[] = [
   },
 ];
 
-const POINTS_INFO = [
-  '500 pts  →  Cross 1,000 likes on a post',
-  '+1,000 pts  →  Cross 5,000 likes on a post',
-  '+1,000 pts  →  Cross 10,000 likes (max per post)',
-  'Trust Badge  →  Every 1 lac likes (Bronze → Platinum)',
-  '200 pts  →  Complete 30 bookings in a month',
-  '1 point  =  PKR 0.10  (fixed rate)',
-];
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -646,57 +638,6 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           );
         })}
-
-        {/* ── Points & Rewards Info ── */}
-        <View style={styles.rewardsCard}>
-          <View style={styles.rewardsHeader}>
-            <Ionicons name="gift" size={20} color="#6B7FED" />
-            <Text style={styles.rewardsTitle}>Points & Rewards System</Text>
-          </View>
-          <Text style={styles.rewardsSub}>
-            Available on all paid plans (Basic, Professional, Premium)
-          </Text>
-          {POINTS_INFO.map((info, i) => (
-            <View key={i} style={styles.rewardRow}>
-              <View style={styles.rewardDot} />
-              <Text style={styles.rewardText}>{info}</Text>
-            </View>
-          ))}
-          <View style={styles.withdrawalNote}>
-            <Ionicons name="information-circle-outline" size={15} color="#5C6BC0" />
-            <Text style={styles.withdrawalNoteText}>
-              2% processing fee deducted on every withdrawal. Processing time ~24 hours.
-            </Text>
-          </View>
-        </View>
-
-        {/* ── Trust Score Info ── */}
-        <View style={styles.trustCard}>
-          <View style={styles.rewardsHeader}>
-            <Ionicons name="shield-checkmark" size={20} color="#7B1FA2" />
-            <Text style={[styles.rewardsTitle, { color: '#7B1FA2' }]}>
-              Trust Score Badges
-            </Text>
-          </View>
-          <Text style={styles.rewardsSub}>
-            Earn reputation badges when your posts go viral (above 1 lac likes)
-          </Text>
-          {[
-            { badge: 'Bronze', likes: '1,00,000 likes' },
-            { badge: 'Silver', likes: '2,00,000 likes' },
-            { badge: 'Gold', likes: '5,00,000 likes' },
-            { badge: 'Platinum', likes: '10,00,000 likes' },
-          ].map((item, i) => (
-            <View key={i} style={styles.rewardRow}>
-              <View style={[styles.rewardDot, { backgroundColor: '#7B1FA2' }]} />
-              <Text style={styles.rewardText}>
-                <Text style={{ fontWeight: '700' }}>{item.badge}</Text>
-                {'  →  '}
-                {item.likes}
-              </Text>
-            </View>
-          ))}
-        </View>
 
         {/* spacer for button */}
         <View style={{ height: 100 }} />

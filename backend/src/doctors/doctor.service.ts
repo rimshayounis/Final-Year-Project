@@ -3,6 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -55,6 +57,13 @@ export class DoctorsService {
 
     const isMatch = await bcrypt.compare(dto.password, doctor.password);
     if (!isMatch) throw new BadRequestException('Incorrect password');
+
+    if (doctor.isBanned) {
+      throw new HttpException(
+        { banned: true, userId: doctor._id.toString(), message: 'Your account has been banned.' },
+        HttpStatus.FORBIDDEN,
+      );
+    }
 
     const { password, otpCode, otpExpiry, ...result } = doctor.toObject();
     return { success: true, doctor: result };

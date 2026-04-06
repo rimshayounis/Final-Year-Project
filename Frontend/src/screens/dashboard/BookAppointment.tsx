@@ -202,8 +202,18 @@ export default function BookAppointmentScreen() {
             })
         );
 
+        // Keep only doctors with at least one future availability date
+        const todayMidnight = new Date();
+        todayMidnight.setHours(0, 0, 0, 0);
+        const doctorsWithAvailability = doctorsData.filter((d) => {
+          if (!d.specificDates || d.specificDates.length === 0) return false;
+          return d.specificDates.some(
+            (sd) => new Date(sd.date + 'T00:00:00') >= todayMidnight,
+          );
+        });
+
         // Sort: interest-matched first, then by plan rank, then by mentor level
-        doctorsData.sort((a, b) => {
+        doctorsWithAvailability.sort((a, b) => {
           const aMatch = keywords.length > 0 && specializationMatches(a.specialization, keywords) ? 1 : 0;
           const bMatch = keywords.length > 0 && specializationMatches(b.specialization, keywords) ? 1 : 0;
           if (bMatch !== aMatch) return bMatch - aMatch;
@@ -213,8 +223,8 @@ export default function BookAppointmentScreen() {
           return (b.mentorLevel?.level ?? 0) - (a.mentorLevel?.level ?? 0);
         });
 
-        setDoctors(doctorsData);
-        const specs = Array.from(new Set(doctorsData.map(d => d.specialization).filter(Boolean))).sort();
+        setDoctors(doctorsWithAvailability);
+        const specs = Array.from(new Set(doctorsWithAvailability.map(d => d.specialization).filter(Boolean))).sort();
         setCategories(['All', ...specs]);
       }
     } catch (e: any) {

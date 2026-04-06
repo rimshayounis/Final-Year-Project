@@ -17,7 +17,7 @@ export class DoctorProfile {
 
 @Schema({ _id: false })
 export class NotificationSettings {
-  @Prop({ default: false }) emailEnabled!: boolean;
+  @Prop({ default: true }) emailEnabled!: boolean;
 }
 
 @Schema({ _id: false })
@@ -52,9 +52,11 @@ export class Doctor {
 
   @Prop({
     type: NotificationSettings,
-    default: () => ({ emailEnabled: false }),
+    default: () => ({ emailEnabled: true }),
   })
   notificationSettings!: NotificationSettings;
+
+  @Prop({ type: Boolean, default: false }) isBanned!: boolean;
 
   @Prop({ default: 0, min: 0 }) completedCount!: number;
   @Prop({ type: Number, default: 0, min: 0, max: 5 }) avgRating!: number;

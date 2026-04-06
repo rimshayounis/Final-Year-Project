@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [fpShowConf, setFpShowConf] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
 
-  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

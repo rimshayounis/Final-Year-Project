@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp } from '@react-navigation/native';
@@ -26,17 +26,25 @@ type DashboardScreenProps = {
 export default function DashboardScreen({ route, navigation }: DashboardScreenProps) {
   const { id, role } = route.params;
 
-  const [activeTab, setActiveTab] = useState<TabName>('Feed');
+  const [activeTab, setActiveTab] = useState<TabName>((route.params?.initialTab as TabName) ?? 'Feed');
+
+  useEffect(() => {
+    if (route.params?.initialTab) {
+      setActiveTab(route.params.initialTab as TabName);
+    }
+  }, [route.params?.initialTab]);
   const [viewingDoctorId, setViewingDoctorId] = useState<string | null>(null);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
 
   const handleNavigateToDoctorProfile = useCallback((doctorId: string) => {
+    if (doctorId === id) { setActiveTab('Profile'); return; }
     setViewingDoctorId(doctorId);
-  }, []);
+  }, [id]);
 
   const handleNavigateToUserProfile = useCallback((userId: string) => {
+    if (userId === id) { setActiveTab('Profile'); return; }
     setViewingUserId(userId);
-  }, []);
+  }, [id]);
 
   const handleBackFromDoctor = useCallback(() => {
     setViewingDoctorId(null);
@@ -87,6 +95,7 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
             role={role}
             onNavigateToDoctorProfile={handleNavigateToDoctorProfile}
             onNavigateToUserProfile={handleNavigateToUserProfile}
+            onNavigateToOwnProfile={() => setActiveTab('Profile')}
             onFindPeople={role === 'user' ? () => navigation.navigate('PeopleList', { myUserId: id }) : undefined}
           />
         );
@@ -130,6 +139,7 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
             role={role}
             onNavigateToDoctorProfile={handleNavigateToDoctorProfile}
             onNavigateToUserProfile={handleNavigateToUserProfile}
+            onNavigateToOwnProfile={() => setActiveTab('Profile')}
           />
         );
     }

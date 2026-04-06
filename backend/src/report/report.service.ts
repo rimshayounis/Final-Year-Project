@@ -3,11 +3,15 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Report, ReportDocument } from './schemas/report.schema';
 import { CreateReportDto } from './dto/create-report.dto';
+import { User, UserDocument } from '../users/schemas/user.schema';
+import { Doctor, DoctorDocument } from '../doctors/schemas/doctor.schema';
 
 @Injectable()
 export class ReportService {
   constructor(
-    @InjectModel(Report.name) private reportModel: Model<ReportDocument>,
+    @InjectModel(Report.name)   private reportModel:  Model<ReportDocument>,
+    @InjectModel(User.name)     private userModel:    Model<UserDocument>,
+    @InjectModel(Doctor.name)   private doctorModel:  Model<DoctorDocument>,
   ) {}
 
   async create(dto: CreateReportDto): Promise<ReportDocument> {
@@ -62,5 +66,40 @@ export class ReportService {
     );
     if (!report) throw new NotFoundException('Report not found');
     return report;
+  }
+
+  async banAccount(
+    reportId: string,
+    reportedId: string,
+    reportedModel: 'User' | 'Doctor',
+  ): Promise<{ success: boolean }> {
+    if (!Types.ObjectId.isValid(reportedId)) throw new BadRequestException('Invalid reportedId');
+
+    if (reportedModel === 'Doctor') {
+      await this.doctorModel.findByIdAndUpdate(reportedId, { isBanned: true });
+    } else {
+      await this.userModel.findByIdAndUpdate(reportedId, { isBanned: true });
+    }
+
+    if (Types.ObjectId.isValid(reportId)) {
+      await this.reportModel.findByIdAndUpdate(reportId, { status: 'reviewed' });
+    }
+
+    return { success: true };
+  }
+
+  async unbanAccount(
+    reportedId: string,
+    reportedModel: 'User' | 'Doctor',
+  ): Promise<{ success: boolean }> {
+    if (!Types.ObjectId.isValid(reportedId)) throw new BadRequestException('Invalid reportedId');
+
+    if (reportedModel === 'Doctor') {
+      await this.doctorModel.findByIdAndUpdate(reportedId, { isBanned: false });
+    } else {
+      await this.userModel.findByIdAndUpdate(reportedId, { isBanned: false });
+    }
+
+    return { success: true };
   }
 }
