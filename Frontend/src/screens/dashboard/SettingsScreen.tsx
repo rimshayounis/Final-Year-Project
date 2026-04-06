@@ -534,21 +534,6 @@ export default function SettingsScreen() {
               <View style={styles.divider} />
               <SettingRow
                 icon={
-                  <Ionicons
-                    name="notifications-outline"
-                    size={20}
-                    color="#F6A623"
-                  />
-                }
-                label="Appointment Alerts"
-                sublabel="Email, WhatsApp & app notifications"
-                onPress={() =>
-                  navigation.navigate("NotificationSettings", { doctorId: id })
-                }
-              />
-              <View style={styles.divider} />
-              <SettingRow
-                icon={
                   <Ionicons name="card-outline" size={20} color="#6B7FED" />
                 }
                 label="Bank Details"

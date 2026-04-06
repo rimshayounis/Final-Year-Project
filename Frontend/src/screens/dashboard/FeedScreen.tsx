@@ -69,6 +69,7 @@ type FeedScreenProps = {
   role: "user" | "doctor";
   onNavigateToDoctorProfile?: (doctorId: string) => void;
   onNavigateToUserProfile?: (userId: string) => void;
+  onNavigateToOwnProfile?: () => void;
   onFindPeople?: () => void;
 };
 
@@ -201,6 +202,7 @@ export default function FeedScreen({
   role,
   onNavigateToDoctorProfile,
   onNavigateToUserProfile,
+  onNavigateToOwnProfile,
   onFindPeople,
 }: FeedScreenProps) {
   const insets = useSafeAreaInsets();
@@ -725,6 +727,7 @@ export default function FeedScreen({
             activeOpacity={0.7}
             onPress={() => {
               if (!authorId) return;
+              if (isOwnPost) { onNavigateToOwnProfile?.(); return; }
               if (isDoc && onNavigateToDoctorProfile) onNavigateToDoctorProfile(authorId);
               else if (!isDoc && onNavigateToUserProfile) onNavigateToUserProfile(authorId);
             }}

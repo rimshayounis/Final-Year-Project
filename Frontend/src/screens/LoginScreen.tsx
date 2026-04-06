@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity,
-  Alert, ActivityIndicator, StatusBar, ScrollView, KeyboardAvoidingView, Platform,
+  Alert, ActivityIndicator, StatusBar, ScrollView, KeyboardAvoidingView, Platform, Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -10,6 +10,7 @@ import { CommonActions } from "@react-navigation/native";
 import { RootStackParamList } from "../../App";
 import { Ionicons } from "@expo/vector-icons";
 import { userAPI, doctorAPI } from "../services/api";
+import apiClient from "../services/api";
 import { storeUser } from "../services/storage";
 
 type LoginScreenProps = {
@@ -20,10 +21,14 @@ type LoginScreenProps = {
 export default function LoginScreen({ navigation, route }: LoginScreenProps) {
   const { userType } = route.params;
 
-  const [email,        setEmail]        = useState("");
-  const [password,     setPassword]     = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading,      setLoading]      = useState(false);
+  const [email,           setEmail]           = useState("");
+  const [password,        setPassword]        = useState("");
+  const [showPassword,    setShowPassword]    = useState(false);
+  const [loading,         setLoading]         = useState(false);
+  const [bannedModal,     setBannedModal]     = useState(false);
+  const [bannedUserId,    setBannedUserId]    = useState<string>("");
+  const [justification,   setJustification]  = useState("");
+  const [sendingRequest,  setSendingRequest] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim()) {
@@ -83,12 +88,40 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
       }
     } catch (error: any) {
       console.log("Error Response:", JSON.stringify(error.response?.data, null, 2));
-      Alert.alert(
-        "Login Failed",
-        error.response?.data?.message || "Invalid email or password",
-      );
+      const errData = error.response?.data;
+      const status  = error.response?.status;
+      // 403 with banned flag OR just 403 (only thrown on login for banned accounts)
+      if (errData?.banned === true || status === 403) {
+        setBannedUserId(errData?.userId || "");
+        setJustification("");
+        setBannedModal(true);
+      } else {
+        Alert.alert("Login Failed", errData?.message || "Invalid email or password");
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendJustification = async () => {
+    if (justification.trim().length < 10) {
+      Alert.alert("Too short", "Please write at least 10 characters explaining your situation.");
+      return;
+    }
+    setSendingRequest(true);
+    try {
+      await apiClient.post('/support-requests', {
+        userId:      bannedUserId || 'unknown',
+        userRole:    userType,
+        purpose:     'account',
+        description: justification.trim(),
+      });
+      setBannedModal(false);
+      Alert.alert("Request Sent", "Your justification request has been submitted. Our team will review it shortly.");
+    } catch {
+      Alert.alert("Error", "Failed to send request. Please try again.");
+    } finally {
+      setSendingRequest(false);
     }
   };
 
@@ -107,6 +140,53 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
 
   return (
     <SafeAreaView style={styles.container}>
+
+      {/* Ban Modal */}
+      <Modal visible={bannedModal} transparent animationType="fade" onRequestClose={() => setBannedModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+        <View style={styles.banOverlay}>
+          <View style={styles.banCard}>
+            <View style={styles.banIconRow}>
+              <Ionicons name="ban" size={40} color="#dc2626" />
+            </View>
+            <Text style={styles.banTitle}>Account Banned</Text>
+            <Text style={styles.banSubtitle}>
+              Your account has been banned by the admin. If you believe this is a mistake, you can request a justification review.
+            </Text>
+
+            <Text style={styles.banInputLabel}>Explain your situation</Text>
+            <TextInput
+              style={styles.banInput}
+              placeholder="Describe why you think the ban should be reviewed (min 10 characters)..."
+              placeholderTextColor="#aaa"
+              multiline
+              numberOfLines={4}
+              value={justification}
+              onChangeText={setJustification}
+              editable={!sendingRequest}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity
+              style={[styles.banRequestBtn, sendingRequest && { opacity: 0.6 }]}
+              onPress={handleSendJustification}
+              disabled={sendingRequest}
+            >
+              {sendingRequest
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.banRequestBtnText}>Send Request for Justification</Text>
+              }
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.banCloseBtn} onPress={() => setBannedModal(false)} disabled={sendingRequest}>
+              <Text style={styles.banCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
       <StatusBar barStyle="light-content" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -223,4 +303,42 @@ const styles = StyleSheet.create({
   signUpContainer:        { flexDirection: "row", justifyContent: "center" },
   signUpText:             { fontSize: 13 },
   signUpLink:             { fontSize: 13, color: "#6B7FED" },
+
+  // ── Ban Modal ──────────────────────────────────────────────────────────────
+  banOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  banCard: {
+    backgroundColor: '#fff', borderRadius: 20,
+    padding: 28, width: '100%', maxWidth: 400,
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 16, elevation: 8,
+  },
+  banIconRow: { alignItems: 'center', marginBottom: 14 },
+  banTitle: {
+    fontSize: 20, fontWeight: '800', color: '#dc2626',
+    textAlign: 'center', marginBottom: 10,
+  },
+  banSubtitle: {
+    fontSize: 14, color: '#555', textAlign: 'center',
+    lineHeight: 20, marginBottom: 20,
+  },
+  banInputLabel: {
+    fontSize: 13, fontWeight: '700', color: '#333', marginBottom: 8,
+  },
+  banInput: {
+    backgroundColor: '#f8f8fc', borderRadius: 12,
+    borderWidth: 1, borderColor: '#e0e0ef',
+    padding: 14, fontSize: 14, color: '#333',
+    minHeight: 100, marginBottom: 16,
+  },
+  banRequestBtn: {
+    backgroundColor: '#6B7FED', borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center', marginBottom: 10,
+  },
+  banRequestBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  banCloseBtn: {
+    paddingVertical: 10, alignItems: 'center',
+  },
+  banCloseBtnText: { fontSize: 14, color: '#888', fontWeight: '600' },
 });

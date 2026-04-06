@@ -194,24 +194,33 @@ function ScheduleTab({ doctorId, onCreateSchedule }: { doctorId: string; onCreat
         </View>
 
         {/* Date & time slots */}
-        <Text style={styles.slotsTitle}>Available Dates & Time Slots</Text>
+        <View style={styles.slotsSectionHeader}>
+          <Text style={styles.slotsTitle}>Available Dates & Time Slots</Text>
+          <Text style={styles.slotsCount}>{availability.specificDates.length} date{availability.specificDates.length !== 1 ? 's' : ''}</Text>
+        </View>
         {availability.specificDates.length === 0 ? (
           <Text style={styles.noSlotsText}>No dates configured.</Text>
         ) : (
-          availability.specificDates.map((d, i) => (
-            <View key={i} style={styles.dateSlotRow}>
-              <Text style={styles.dateSlotDate}>{formatDisplayDate(d.date)}</Text>
-              <View style={styles.slotPills}>
-                {d.timeSlots.map((ts, j) => (
-                  <View key={j} style={styles.slotPill}>
-                    <Text style={styles.slotPillText}>
-                      {formatDisplayTime(ts.start)} – {formatDisplayTime(ts.end)}
-                    </Text>
-                  </View>
-                ))}
+          <ScrollView
+            style={styles.slotsScrollArea}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+          >
+            {availability.specificDates.map((d, i) => (
+              <View key={i} style={styles.dateSlotRow}>
+                <Text style={styles.dateSlotDate}>{formatDisplayDate(d.date)}</Text>
+                <View style={styles.slotPills}>
+                  {d.timeSlots.map((ts, j) => (
+                    <View key={j} style={styles.slotPill}>
+                      <Text style={styles.slotPillText}>
+                        {formatDisplayTime(ts.start)} – {formatDisplayTime(ts.end)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               </View>
-            </View>
-          ))
+            ))}
+          </ScrollView>
         )}
 
         {/* Edit schedule */}
@@ -350,6 +359,31 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
           },
         },
       ]
+    );
+  };
+
+  const handleUserCancel = (appt: Appointment) => {
+    Alert.alert(
+      'Cancel Appointment',
+      `Are you sure you want to cancel your appointment with ${getDoctorName(appt)}?\n\nThis action cannot be undone.`,
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Cancel Appointment',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelLoadingId(appt._id);
+            try {
+              await bookedAppointmentAPI.cancel(appt._id, 'Cancelled by user before payment');
+              await loadAppointments();
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.message || 'Could not cancel. Please try again.');
+            } finally {
+              setCancelLoadingId(null);
+            }
+          },
+        },
+      ],
     );
   };
 
@@ -496,12 +530,17 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
     const statusColors      = getStatusColors(item.status);
     const timeReached       = isTimeReached(item.date, item.time);
     const timeUntil         = getTimeUntil(item.date, item.time);
-    const isThisChatLoading = chatLoadingId === item._id;
-    const isActionLoading   = actionLoadingId === item._id;
-    const isPayLoading      = payLoadingId === item._id;
+    const isThisChatLoading  = chatLoadingId === item._id;
+    const isActionLoading    = actionLoadingId === item._id;
+    const isPayLoading       = payLoadingId === item._id;
+    const isCancelLoading    = cancelLoadingId === item._id;
 
     const showDoctorActions = role === 'doctor' && item.status === 'pending';
     const showPayBtn = role === 'user' && item.status === 'confirmed' && item.paymentStatus === 'pending_payment';
+    const showUserCancelBtn = role === 'user' && (
+      item.status === 'pending' ||
+      (item.status === 'confirmed' && item.paymentStatus === 'pending_payment')
+    );
     const paymentOk = !item.paymentStatus || item.paymentStatus === 'not_required' || item.paymentStatus === 'payment_held' || item.paymentStatus === 'released';
     const canStartSession = item.status === 'confirmed' && timeReached && paymentOk;
     const showSessionBtn  = (item.status === 'confirmed' || item.status === 'pending') && !showPayBtn;
@@ -581,6 +620,19 @@ export default function AppointmentScreen({ id, role }: AppointmentScreenProps) 
         {showPayBtn && (
           <TouchableOpacity style={styles.payBtn} onPress={() => handlePay(item)} disabled={isPayLoading}>
             {isPayLoading ? <ActivityIndicator size="small" color="#FFF" /> : <><Ionicons name="card" size={16} color="#FFF" /><Text style={styles.payBtnTxt}>Pay PKR {item.consultationFee}</Text></>}
+          </TouchableOpacity>
+        )}
+
+        {showUserCancelBtn && (
+          <TouchableOpacity
+            style={styles.userCancelBtn}
+            onPress={() => handleUserCancel(item)}
+            disabled={isCancelLoading}
+            activeOpacity={0.8}
+          >
+            {isCancelLoading
+              ? <ActivityIndicator size="small" color="#E53E3E" />
+              : <><Ionicons name="close-circle-outline" size={16} color="#E53E3E" /><Text style={styles.userCancelBtnTxt}>Cancel Appointment</Text></>}
           </TouchableOpacity>
         )}
 
@@ -1027,6 +1079,9 @@ const styles = StyleSheet.create({
   payBtn:                     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F6A623', paddingVertical: 12, borderRadius: 20, marginTop: 12, gap: 8 },
   payBtnTxt:                  { color: '#FFF', fontSize: 14, fontWeight: '700' },
 
+  userCancelBtn:              { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#E53E3E', paddingVertical: 11, borderRadius: 20, marginTop: 10, gap: 6 },
+  userCancelBtnTxt:           { color: '#E53E3E', fontSize: 14, fontWeight: '700' },
+
   continueButton:             { backgroundColor: PURPLE, paddingVertical: 11, borderRadius: 20, alignItems: 'center', marginTop: 12, flexDirection: 'row', justifyContent: 'center', gap: 8 },
   continueButtonDisabled:     { backgroundColor: '#E8E8E8', borderWidth: 1, borderColor: '#DDD' },
   continueButtonText:         { color: '#FFF', fontSize: 14, fontWeight: '600' },
@@ -1070,7 +1125,10 @@ const styles = StyleSheet.create({
   scheduleInfoItem:           { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F0F2FF', borderRadius: 12, padding: 12 },
   scheduleInfoLabel:          { fontSize: 11, color: '#888', fontWeight: '500' },
   scheduleInfoValue:          { fontSize: 15, fontWeight: '700', color: '#2C3E50', marginTop: 2 },
-  slotsTitle:                 { fontSize: 14, fontWeight: '700', color: '#555', marginBottom: 10 },
+  slotsSectionHeader:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  slotsTitle:                 { fontSize: 14, fontWeight: '700', color: '#555' },
+  slotsCount:                 { fontSize: 12, color: PURPLE, fontWeight: '600', backgroundColor: '#EEF0FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  slotsScrollArea:            { maxHeight: 220 },
   noSlotsText:                { fontSize: 13, color: '#AAA', fontStyle: 'italic' },
   dateSlotRow:                { marginBottom: 12 },
   dateSlotDate:               { fontSize: 13, fontWeight: '700', color: '#2C3E50', marginBottom: 6 },

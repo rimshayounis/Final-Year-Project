@@ -201,8 +201,16 @@ export default function DoctorAppointmentDetailScreen() {
                 consultationFee,
                 healthConcern,
               });
-              Alert.alert('Booked! 🎉', 'Your appointment request has been sent to the doctor.', [
-                { text: 'OK', onPress: () => navigation.goBack() },
+              Alert.alert('Booked!', 'Your appointment request has been sent to the doctor.', [
+                {
+                  text: 'View Appointments',
+                  onPress: () =>
+                    navigation.navigate('Dashboard', {
+                      id: userId,
+                      role: 'user',
+                      initialTab: 'Appointment',
+                    }),
+                },
               ]);
             } catch (e: any) {
               const errData = e.response?.data;

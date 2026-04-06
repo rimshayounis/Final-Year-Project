@@ -222,15 +222,45 @@ export class BookedAppointmentService {
     };
   }
 
-  // ── Cancel appointment ─────────────────────────────────────────────────────
+  // ── Cancel appointment (user-initiated) ───────────────────────────────────
   async cancelAppointment(
     appointmentId: string,
     cancelReason?: string,
   ): Promise<any> {
-    return this.updateStatus(appointmentId, {
-      status: 'cancelled',
-      cancelReason,
-    });
+    const appointment = await this.bookedAppointmentModel.findById(appointmentId);
+    if (!appointment) throw new NotFoundException('Appointment not found');
+
+    if (appointment.status === 'completed' || appointment.status === 'cancelled') {
+      throw new BadRequestException(`Cannot cancel a ${appointment.status} appointment`);
+    }
+
+    const wasConfirmed = appointment.status === 'confirmed';
+
+    appointment.status       = 'cancelled';
+    appointment.cancelledAt  = new Date();
+    appointment.cancelReason = cancelReason || 'Cancelled by user';
+    if (appointment.paymentStatus === 'payment_held') {
+      appointment.paymentStatus = 'refunded';
+    }
+
+    await appointment.save();
+
+    // Only notify doctor if they had already confirmed the appointment
+    if (wasConfirmed) {
+      this.notificationService.notifyDoctorUserCancelled({
+        doctorId:        appointment.doctorId.toString(),
+        userId:          appointment.userId.toString(),
+        date:            appointment.date,
+        time:            appointment.time,
+        consultationFee: appointment.consultationFee,
+      }).catch((e) => console.error('[Notification] Cancel notify failed:', e.message));
+    }
+
+    return {
+      success: true,
+      message: 'Appointment cancelled successfully',
+      data:    appointment,
+    };
   }
 
   // ── Get user upcoming ──────────────────────────────────────────────────────

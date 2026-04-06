@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL
-  ? `${process.env.NEXT_PUBLIC_API_URL}/api`
-  : 'http://localhost:3001/api';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 interface SupportTicket {
   _id: string;
@@ -21,6 +19,7 @@ interface SupportTicket {
 }
 
 type FilterStatus = 'all' | 'open' | 'in_progress' | 'resolved' | 'closed';
+type FilterCategory = 'all' | 'accounts';
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
   open:        { label: 'Open',        color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
@@ -118,6 +117,11 @@ export default function SupportPage() {
   const [adminNote, setAdminNote]       = useState('');
   const [sending, setSending]           = useState(false);
   const [updatingStatus, setUpdStatus]  = useState<string | null>(null);
+  // ban status per userId: true = banned, false = active, undefined = not yet fetched
+  const [category, setCategory]         = useState<FilterCategory>('all');
+  const [bannedMap, setBannedMap]       = useState<Record<string, boolean>>({});
+  const [banUpdating, setBanUpdating]   = useState(false);
+  const [banToast, setBanToast]         = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -167,8 +171,52 @@ export default function SupportPage() {
     }
   };
 
+  const showBanToast = (msg: string, type: 'success' | 'error') => {
+    setBanToast({ msg, type });
+    setTimeout(() => setBanToast(null), 3000);
+  };
+
+  // Fetch ban status for a ticket's user when selected (account-purpose tickets only)
+  const fetchBanStatus = async (ticket: SupportTicket) => {
+    if (ticket.purpose !== 'account' || !ticket.userId) return;
+    if (bannedMap[ticket.userId] !== undefined) return; // already fetched
+    const model = ticket.userRole === 'doctor' ? 'doctors' : 'users';
+    try {
+      const res  = await fetch(`${BASE_URL}/${model}/${ticket.userId}`);
+      const data = await res.json();
+      const doc  = data.doctor ?? data.user ?? data.data ?? data;
+      setBannedMap(prev => ({ ...prev, [ticket.userId]: !!doc?.isBanned }));
+    } catch {
+      setBannedMap(prev => ({ ...prev, [ticket.userId]: false }));
+    }
+  };
+
+  const unbanAccount = async (ticket: SupportTicket) => {
+    if (!ticket.userId) return;
+    setBanUpdating(true);
+    try {
+      const model = ticket.userRole === 'doctor' ? 'Doctor' : 'User';
+      const res = await fetch(`${BASE_URL}/reports/unban/${ticket.userId}?model=${model}`, {
+        method: 'PATCH',
+      });
+      if (res.ok) {
+        setBannedMap(prev => ({ ...prev, [ticket.userId]: false }));
+        showBanToast(`${model} account unbanned successfully`, 'success');
+        // auto-update ticket status to resolved
+        await updateStatus(ticket._id, 'resolved', 'Account has been unbanned.');
+      } else {
+        const d = await res.json().catch(() => ({}));
+        showBanToast(d?.message || 'Failed to unban account', 'error');
+      }
+    } catch { showBanToast('Failed to unban account', 'error'); }
+    finally { setBanUpdating(false); }
+  };
+
+
   const filtered = tickets.filter(t => {
-    const matchStatus = filterStatus === 'all' || t.status === filterStatus;
+    const matchStatus   = filterStatus === 'all' || t.status === filterStatus;
+    const matchCategory = category === 'all'
+      || (category === 'accounts' && t.purpose === 'account');
     const q = search.toLowerCase();
     const matchSearch = !q ||
       t.purpose?.toLowerCase().includes(q) ||
@@ -176,14 +224,18 @@ export default function SupportPage() {
       t.userName?.toLowerCase().includes(q) ||
       t.userEmail?.toLowerCase().includes(q) ||
       t.userId?.toLowerCase().includes(q);
-    return matchStatus && matchSearch;
+    return matchStatus && matchCategory && matchSearch;
   });
 
+  const categoryTickets = category === 'accounts'
+    ? tickets.filter(t => t.purpose === 'account')
+    : tickets;
+
   const counts = {
-    open:        tickets.filter(t => t.status === 'open').length,
-    in_progress: tickets.filter(t => t.status === 'in_progress').length,
-    resolved:    tickets.filter(t => t.status === 'resolved').length,
-    closed:      tickets.filter(t => t.status === 'closed').length,
+    open:        categoryTickets.filter(t => t.status === 'open').length,
+    in_progress: categoryTickets.filter(t => t.status === 'in_progress').length,
+    resolved:    categoryTickets.filter(t => t.status === 'resolved').length,
+    closed:      categoryTickets.filter(t => t.status === 'closed').length,
   };
 
   const timeAgo = (d: string) => {
@@ -229,6 +281,23 @@ export default function SupportPage() {
         </div>
       </div>
 
+      {/* ── Category Tabs ── */}
+      <div className="sp-category-tabs">
+        {([
+          { key: 'all',      label: 'All Queries',     count: tickets.length },
+          { key: 'accounts', label: 'Account Requests', count: tickets.filter(t => t.purpose === 'account').length },
+        ] as { key: FilterCategory; label: string; count: number }[]).map(tab => (
+          <button
+            key={tab.key}
+            className={`sp-cat-tab ${category === tab.key ? 'active' : ''}`}
+            onClick={() => { setCategory(tab.key); setSelected(null); }}
+          >
+            {tab.label}
+            <span className="sp-cat-count">{tab.count}</span>
+          </button>
+        ))}
+      </div>
+
       {/* ── Toolbar ── */}
       <div className="sp-toolbar">
         <div className="sp-filters">
@@ -244,7 +313,7 @@ export default function SupportPage() {
                 <span className="sp-filter-count">{counts[f as keyof typeof counts]}</span>
               )}
               {f === 'all' && (
-                <span className="sp-filter-count">{tickets.length}</span>
+                <span className="sp-filter-count">{categoryTickets.length}</span>
               )}
             </button>
           ))}
@@ -291,7 +360,7 @@ export default function SupportPage() {
                   <div
                     key={t._id}
                     className={`sp-ticket ${selected?._id === t._id ? 'selected' : ''} ${t.status === 'open' ? 'urgent' : ''}`}
-                    onClick={() => { setSelected(selected?._id === t._id ? null : t); setAdminNote(''); }}
+                    onClick={() => { const next = selected?._id === t._id ? null : t; setSelected(next); setAdminNote(''); if (next) fetchBanStatus(next); }}
                   >
                     {/* Avatar */}
                     <div className={`sp-avatar ${isDoc ? 'doc' : 'usr'}`}>
@@ -348,6 +417,13 @@ export default function SupportPage() {
           const isDoc = selected.userRole === 'doctor';
           return (
             <div className="sp-detail">
+
+              {/* Ban toast */}
+              {banToast && (
+                <div className={`sp-ban-toast ${banToast.type}`}>
+                  {banToast.type === 'success' ? '✓' : '✕'} {banToast.msg}
+                </div>
+              )}
 
               {/* Detail header */}
               <div className="sp-detail-head">
@@ -407,6 +483,35 @@ export default function SupportPage() {
                     Admin Response
                   </div>
                   <div className="sp-admin-note-display">{selected.adminNote}</div>
+                </div>
+              )}
+
+              {/* Ban / Unban — only for account-purpose tickets */}
+              {selected.purpose === 'account' && selected.userId && (
+                <div className="sp-detail-section">
+                  <div className="sp-section-label">
+                    <IconStatus />
+                    Account Action
+                  </div>
+                  <div className="sp-ban-status-row">
+                    {bannedMap[selected.userId] === undefined ? (
+                      <span className="sp-ban-checking">Checking account status…</span>
+                    ) : bannedMap[selected.userId] ? (
+                      <>
+                        <div className="sp-ban-status-badge banned">🚫 Account is currently banned</div>
+                        <button
+                          className="sp-unban-btn"
+                          disabled={banUpdating}
+                          onClick={() => unbanAccount(selected)}
+                        >
+                          {banUpdating ? <span className="sp-btn-spinner" /> : '✓'}
+                          {banUpdating ? 'Unbanning…' : 'Unban Account'}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="sp-ban-status-badge active">✓ Account is currently active</div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -556,6 +661,41 @@ export default function SupportPage() {
           color: #111;
           line-height: 1;
         }
+
+        /* ── Category Tabs ── */
+        .sp-category-tabs {
+          display: flex;
+          gap: 8px;
+          border-bottom: 2px solid #f0f0f5;
+          padding-bottom: 0;
+        }
+        .sp-cat-tab {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          padding: 10px 18px;
+          background: none;
+          border: none;
+          border-bottom: 2px solid transparent;
+          margin-bottom: -2px;
+          font-size: 13px;
+          font-weight: 600;
+          color: #9ca3af;
+          cursor: pointer;
+          transition: color 0.15s, border-color 0.15s;
+          white-space: nowrap;
+        }
+        .sp-cat-tab:hover { color: #6B7FED; }
+        .sp-cat-tab.active { color: #6B7FED; border-bottom-color: #6B7FED; }
+        .sp-cat-count {
+          background: #f0f0f8;
+          color: #888;
+          border-radius: 20px;
+          padding: 1px 8px;
+          font-size: 11px;
+          font-weight: 700;
+        }
+        .sp-cat-tab.active .sp-cat-count { background: #eef0fd; color: #6B7FED; }
 
         /* ── Toolbar ── */
         .sp-toolbar {
@@ -981,6 +1121,83 @@ export default function SupportPage() {
           text-align: center;
           padding-top: 4px;
         }
+
+        /* Ban toast */
+        .sp-ban-toast {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 14px;
+          border-radius: 10px;
+          font-size: 13px;
+          font-weight: 600;
+          animation: fadeIn 0.2s ease;
+        }
+        .sp-ban-toast.success {
+          background: #f0fdf4;
+          color: #065f46;
+          border: 1px solid #bbf7d0;
+        }
+        .sp-ban-toast.error {
+          background: #fef2f2;
+          color: #991b1b;
+          border: 1px solid #fecaca;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Ban status row */
+        .sp-ban-status-row {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .sp-ban-checking {
+          font-size: 13px;
+          color: #9ca3af;
+          font-style: italic;
+        }
+        .sp-ban-status-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 7px 12px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 600;
+        }
+        .sp-ban-status-badge.banned {
+          background: #fef2f2;
+          color: #991b1b;
+          border: 1px solid #fecaca;
+        }
+        .sp-ban-status-badge.active {
+          background: #f0fdf4;
+          color: #065f46;
+          border: 1px solid #bbf7d0;
+        }
+
+        /* Unban / Ban buttons */
+        .sp-unban-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          border: none;
+          border-radius: 10px;
+          padding: 10px 14px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: opacity 0.15s, box-shadow 0.15s;
+          width: 100%;
+        }
+        .sp-unban-btn {
+          background: linear-gradient(135deg, #10b981, #059669);
+          color: #fff;
+          box-shadow: 0 3px 10px rgba(16,185,129,0.25);
+        }
+        .sp-unban-btn:hover:not(:disabled) { opacity: 0.9; box-shadow: 0 4px 14px rgba(16,185,129,0.35); }
+        .sp-unban-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
       `}</style>
     </div>
   );

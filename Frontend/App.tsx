@@ -51,7 +51,7 @@ export type RootStackParamList = {
   DoctorUnverified: { doctorId: string; doctorName: string; selectedPlan?: string };
   HealthProfile: { userId: string };
   EmergencyContact: { userId: string };
-  Dashboard: { id: string; role: 'user' | 'doctor' };
+  Dashboard: { id: string; role: 'user' | 'doctor'; initialTab?: string };
   BookAppointments: undefined;
   userSession: undefined;
   CreateAppointment: { doctorId: string };

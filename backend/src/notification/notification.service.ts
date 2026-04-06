@@ -90,7 +90,7 @@ export class NotificationService {
     ).catch((e) => console.error('[Notification] Email error:', e.message));
   }
 
-  // ── 3. Doctor notified when user pays ────────────────────────────────────
+  // ── 3. Doctor & user notified when user pays ─────────────────────────────
   async notifyDoctorPaymentReceived(data: {
     doctorId:        string;
     userId:          string;
@@ -99,10 +99,8 @@ export class NotificationService {
     consultationFee: number;
   }): Promise<void> {
     const [doctor, patient] = await Promise.all([
-      this.doctorModel.findById(data.doctorId)
-        .select('fullName email').exec(),
-      this.userModel.findById(data.userId)
-        .select('fullName').exec(),
+      this.doctorModel.findById(data.doctorId).select('fullName email').exec(),
+      this.userModel.findById(data.userId).select('fullName email').exec(),
     ]);
 
     if (!doctor) return;
@@ -110,16 +108,21 @@ export class NotificationService {
     const doctorName  = (doctor as any).fullName  ?? 'Doctor';
     const patientName = (patient as any)?.fullName ?? 'Patient';
 
-    await this.sendPaymentReceivedEmail(
-      (doctor as any).email,
-      {
-        doctorName,
-        patientName,
-        date:            data.date,
-        time:            data.time,
-        consultationFee: data.consultationFee,
-      },
-    ).catch((e) => console.error('[Notification] Email error:', e.message));
+    await Promise.all([
+      // Email to doctor
+      this.sendPaymentReceivedEmail(
+        (doctor as any).email,
+        { doctorName, patientName, date: data.date, time: data.time, consultationFee: data.consultationFee },
+      ).catch((e) => console.error('[Notification] Payment email (doctor) error:', e.message)),
+
+      // Email to user
+      (patient && (patient as any).email)
+        ? this.sendPaymentConfirmationEmail(
+            (patient as any).email,
+            { patientName, doctorName, date: data.date, time: data.time, consultationFee: data.consultationFee },
+          ).catch((e) => console.error('[Notification] Payment email (user) error:', e.message))
+        : Promise.resolve(),
+    ]);
   }
 
   // ── Post like/comment notification ────────────────────────────────────────
@@ -154,14 +157,64 @@ export class NotificationService {
     // ── Email to doctor ───────────────────────────────────────────────────
     await this.sendSessionStartedEmail(
       (doctor as any).email,
-      { recipientName: `Dr. ${doctorName}`, otherPartyName: patientName, role: 'doctor', date: data.date, time: data.time, sessionDuration: data.sessionDuration },
+      { recipientName: doctorName, otherPartyName: patientName, role: 'doctor', date: data.date, time: data.time, sessionDuration: data.sessionDuration },
     ).catch((e) => console.error('[Notification] Session email error:', e.message));
 
     // ── Email to patient ──────────────────────────────────────────────────
     await this.sendSessionStartedEmail(
       (patient as any).email,
-      { recipientName: patientName, otherPartyName: `Dr. ${doctorName}`, role: 'patient', date: data.date, time: data.time, sessionDuration: data.sessionDuration },
+      { recipientName: patientName, otherPartyName: doctorName, role: 'patient', date: data.date, time: data.time, sessionDuration: data.sessionDuration },
     ).catch((e) => console.error('[Notification] Session email error:', e.message));
+  }
+
+  // ── 4b. Doctor notified when user cancels a confirmed appointment ─────────
+  async notifyDoctorUserCancelled(data: {
+    doctorId:        string;
+    userId:          string;
+    date:            string;
+    time:            string;
+    consultationFee: number;
+  }): Promise<void> {
+    const [doctor, patient] = await Promise.all([
+      this.doctorModel.findById(data.doctorId).select('fullName email').exec(),
+      this.userModel.findById(data.userId).select('fullName').exec(),
+    ]);
+
+    if (!doctor) return;
+
+    const doctorName  = (doctor as any).fullName  ?? 'Doctor';
+    const patientName = (patient as any)?.fullName ?? 'Patient';
+
+    await this.transporter.sendMail({
+      from:    `"TruHeal Link" <${process.env.GMAIL_USER}>`,
+      to:      (doctor as any).email,
+      subject: `❌ Appointment Cancelled by Patient — ${data.date}`,
+      html: `
+        <div style="font-family:Arial,sans-serif; max-width:520px;
+                    margin:0 auto; border-radius:12px; overflow:hidden;
+                    border:1px solid #e8eaf6;">
+          <div style="background:#E53E3E; padding:24px 28px;">
+            <h2 style="color:#fff; margin:0;">TruHeal Link</h2>
+            <p style="color:rgba(255,255,255,0.85); margin:4px 0 0;">Appointment Cancelled by Patient</p>
+          </div>
+          <div style="padding:28px;">
+            <p style="color:#555;">
+              Hello <strong>${doctorName}</strong>,<br>
+              <strong>${patientName}</strong> has cancelled their confirmed appointment.
+              The slot is now available again.
+            </p>
+            <table style="width:100%; border-collapse:collapse; margin-top:16px;">
+              ${row('👤 Patient', patientName)}
+              ${row('📅 Date',    data.date)}
+              ${row('🕐 Time',    data.time)}
+              ${row('💰 Fee',     `PKR ${data.consultationFee}`)}
+            </table>
+          </div>
+        </div>
+      `,
+    }).catch((e) => console.error('[Notification] Doctor cancel email error:', e.message));
+
+    console.log(`[Notification] User-cancelled email sent to doctor ${(doctor as any).email}`);
   }
 
   // ── Auto-cancellation emails → both user and doctor ──────────────────────
@@ -183,8 +236,8 @@ export class NotificationService {
     const subject = `❌ Appointment Auto-Cancelled — ${data.date}`;
 
     const userMessage = isConfirmTimeout
-      ? `Your appointment on <strong>${data.date}</strong> at <strong>${data.time}</strong> with Dr. <strong>${data.doctorName}</strong> was automatically cancelled because the doctor did not confirm within 10 minutes. Please book another slot.`
-      : `Your appointment on <strong>${data.date}</strong> at <strong>${data.time}</strong> with Dr. <strong>${data.doctorName}</strong> was automatically cancelled because payment was not completed within 10 minutes. Please book again and complete payment promptly.`;
+      ? `Your appointment on <strong>${data.date}</strong> at <strong>${data.time}</strong> with <strong>${data.doctorName}</strong> was automatically cancelled because the doctor did not confirm within 10 minutes. Please book another slot.`
+      : `Your appointment on <strong>${data.date}</strong> at <strong>${data.time}</strong> with <strong>${data.doctorName}</strong> was automatically cancelled because payment was not completed within 10 minutes. Please book again and complete payment promptly.`;
 
     const doctorMessage = isConfirmTimeout
       ? `An appointment request from <strong>${data.userName}</strong> on <strong>${data.date}</strong> at <strong>${data.time}</strong> was automatically cancelled because it was not confirmed within 10 minutes.`
@@ -226,7 +279,7 @@ export class NotificationService {
         from:    `"TruHeal Link" <${process.env.GMAIL_USER}>`,
         to:      data.doctorEmail,
         subject,
-        html:    makeHtml(`Dr. ${data.doctorName}`, doctorMessage),
+        html:    makeHtml(data.doctorName, doctorMessage),
       }).catch((e) => console.error('[Notification] Auto-cancel doctor email error:', e.message)),
     ]);
 
@@ -264,7 +317,7 @@ export class NotificationService {
           </div>
           <div style="padding:28px;">
             <p style="color:#555;">
-              Hello Dr. <strong>${d.doctorName}</strong>,<br>
+              Hello <strong>${d.doctorName}</strong>,<br>
               A new appointment has been booked.
               Please open the app to confirm or reject.
             </p>
@@ -307,10 +360,10 @@ export class NotificationService {
     const headerColor = isConfirmed ? '#00B374' : '#E53E3E';
     const statusText  = isConfirmed ? '✅ Confirmed' : '❌ Rejected';
     const bodyMessage = isConfirmed
-      ? `Your appointment with Dr. <strong>${d.doctorName}</strong> has been
+      ? `Your appointment with <strong>${d.doctorName}</strong> has been
          <strong>confirmed</strong>! Please complete the payment of
          <strong>PKR ${d.consultationFee}</strong> to secure your slot.`
-      : `Unfortunately your appointment with Dr. <strong>${d.doctorName}</strong>
+      : `Unfortunately your appointment with <strong>${d.doctorName}</strong>
          has been <strong>rejected</strong>. Please book another slot.`;
 
     await this.transporter.sendMail({
@@ -332,7 +385,7 @@ export class NotificationService {
               Hi <strong>${d.userName}</strong>,<br>${bodyMessage}
             </p>
             <table style="width:100%; border-collapse:collapse; margin-top:16px;">
-              ${row('👨‍⚕️ Doctor', `Dr. ${d.doctorName}`)}
+              ${row('👨‍⚕️ Doctor', d.doctorName)}
               ${row('📅 Date',    d.date)}
               ${row('🕐 Time',    d.time)}
               ${isConfirmed
@@ -382,7 +435,7 @@ export class NotificationService {
           </div>
           <div style="padding:28px;">
             <p style="color:#555;">
-              Hello Dr. <strong>${d.doctorName}</strong>,<br>
+              Hello <strong>${d.doctorName}</strong>,<br>
               <strong>${d.patientName}</strong> has completed the payment
               for their appointment.
             </p>
@@ -404,6 +457,55 @@ export class NotificationService {
       `,
     });
     console.log(`[Notification] Payment email sent to ${to}`);
+  }
+
+  // ── Email: Payment Confirmation → User ───────────────────────────────────
+  private async sendPaymentConfirmationEmail(
+    to: string,
+    d: {
+      patientName:     string;
+      doctorName:      string;
+      date:            string;
+      time:            string;
+      consultationFee: number;
+    },
+  ): Promise<void> {
+    if (!process.env.GMAIL_USER) return;
+
+    await this.transporter.sendMail({
+      from:    `"TruHeal Link" <${process.env.GMAIL_USER}>`,
+      to,
+      subject: `✅ Payment Confirmed — Your Appointment on ${d.date}`,
+      html: `
+        <div style="font-family:Arial,sans-serif; max-width:520px;
+                    margin:0 auto; border-radius:12px; overflow:hidden;
+                    border:1px solid #e8eaf6;">
+          <div style="background:#00B374; padding:24px 28px;">
+            <h2 style="color:#fff; margin:0;">TruHeal Link</h2>
+            <p style="color:rgba(255,255,255,0.85); margin:4px 0 0;">Payment Confirmed</p>
+          </div>
+          <div style="padding:28px;">
+            <p style="color:#555;">
+              Hi <strong>${d.patientName}</strong>,<br>
+              Your payment has been received and your appointment is now fully secured.
+            </p>
+            <table style="width:100%; border-collapse:collapse; margin-top:16px;">
+              ${row('👨‍⚕️ Doctor', d.doctorName)}
+              ${row('📅 Date',    d.date)}
+              ${row('🕐 Time',    d.time)}
+              ${row('💰 Amount Paid', `PKR ${d.consultationFee}`)}
+            </table>
+            <div style="margin-top:24px; padding:16px; background:#f0fff8;
+                        border-radius:10px; text-align:center;">
+              <p style="color:#00B374; font-weight:700; margin:0;">
+                Your slot is confirmed — open TruHeal Link to join your session
+              </p>
+            </div>
+          </div>
+        </div>
+      `,
+    });
+    console.log(`[Notification] Payment confirmation email sent to ${to}`);
   }
 
   // ── Email: Session Started → Doctor & Patient ─────────────────────────────

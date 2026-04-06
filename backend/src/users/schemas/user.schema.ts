@@ -71,6 +71,9 @@ export class User {
   @Prop({ type: Boolean, default: true })
   sosShareProfile!: boolean;
 
+  @Prop({ type: Boolean, default: false })
+  isBanned!: boolean;
+
   // ── Blocked users ──────────────────────────────────────────────────────
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
   blockedUsers!: Types.ObjectId[];
