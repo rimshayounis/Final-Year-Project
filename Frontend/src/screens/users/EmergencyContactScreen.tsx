@@ -25,9 +25,8 @@ type EmergencyContactScreenProps = {
 interface EmergencyContact {
   id:           string;
   fullName:     string;
-  phoneNumber:  string;
   relationship: string;
-  email:        string; // 👈 NEW
+  email:        string;
 }
 
 export default function EmergencyContactScreen({
@@ -36,7 +35,7 @@ export default function EmergencyContactScreen({
 }: EmergencyContactScreenProps) {
   const { userId } = route.params;
   const [contacts, setContacts] = useState<EmergencyContact[]>([
-    { id: '1', fullName: '', phoneNumber: '', relationship: '', email: '' },
+    { id: '1', fullName: '', relationship: '', email: '' },
   ]);
   const [loading, setLoading] = useState(false);
 
@@ -56,13 +55,7 @@ export default function EmergencyContactScreen({
     if (contacts.length < 3) {
       setContacts([
         ...contacts,
-        {
-          id:           Date.now().toString(),
-          fullName:     '',
-          phoneNumber:  '',
-          relationship: '',
-          email:        '', // 👈 NEW
-        },
+        { id: Date.now().toString(), fullName: '', relationship: '', email: '' },
       ]);
     }
   };
@@ -74,26 +67,23 @@ export default function EmergencyContactScreen({
   };
 
   const validateContacts = () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     for (const contact of contacts) {
       if (!contact.fullName.trim()) {
         Alert.alert('Error', 'Please enter contact name');
-        return false;
-      }
-      if (!contact.phoneNumber.trim() || contact.phoneNumber.length < 10) {
-        Alert.alert('Error', 'Please enter a valid phone number (at least 10 digits)');
         return false;
       }
       if (!contact.relationship.trim()) {
         Alert.alert('Error', 'Please select relationship');
         return false;
       }
-      // 👈 NEW — validate email format if provided
-      if (contact.email.trim()) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(contact.email.trim())) {
-          Alert.alert('Error', `Please enter a valid email for ${contact.fullName}`);
-          return false;
-        }
+      if (!contact.email.trim()) {
+        Alert.alert('Error', 'Please enter an email address');
+        return false;
+      }
+      if (!emailRegex.test(contact.email.trim())) {
+        Alert.alert('Error', `Please enter a valid email for ${contact.fullName}`);
+        return false;
       }
     }
     return true;
@@ -105,11 +95,10 @@ export default function EmergencyContactScreen({
     setLoading(true);
     try {
       const contactsData: EmergencyContactData[] = contacts.map(
-        ({ fullName, phoneNumber, relationship, email }) => ({
+        ({ fullName, relationship, email }) => ({
           fullName,
-          phoneNumber,
           relationship,
-          email: email.trim() || undefined, // 👈 only send if provided
+          email: email.trim(),
         })
       );
 
@@ -187,26 +176,10 @@ export default function EmergencyContactScreen({
                 />
               </View>
 
-              {/* Phone Number */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Phone Number</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="+923145161073"
-                  value={contact.phoneNumber}
-                  onChangeText={(value) =>
-                    handleContactChange(contact.id, 'phoneNumber', value)
-                  }
-                  keyboardType="phone-pad"
-                  placeholderTextColor="#999"
-                />
-              </View>
-
-              {/* Email — NEW */}
+              {/* Email */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
                   <Text style={styles.label}>Email Address</Text>
-                  <Text style={styles.optionalTag}>Optional</Text>
                 </View>
                 <View style={styles.inputWithIcon}>
                   <MaterialIcons

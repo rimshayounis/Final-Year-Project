@@ -40,13 +40,10 @@ export class EmergencyContactDto {
   fullName: string;
 
   @IsNotEmpty() @IsString()
-  phoneNumber: string;
-
-  @IsNotEmpty() @IsString()
   relationship: string;
 
-  @IsOptional() @IsEmail()
-  email?: string;
+  @IsNotEmpty() @IsEmail()
+  email: string;
 }
 
 export class CreateEmergencyContactsDto {

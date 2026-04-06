@@ -2,6 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { getConnectionToken } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
 import { join } from 'path';
 import * as fs from 'fs';
 
@@ -47,6 +49,15 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
+
+  // Drop the old strict unique index — cancelled slots must be re-bookable
+  try {
+    const conn = app.get<Connection>(getConnectionToken());
+    await conn.db!.collection('bookedappointments').dropIndex('doctorId_1_date_1_time_1');
+    console.log('✅ Dropped legacy unique slot index');
+  } catch {
+    // Already gone — ignore
+  }
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');

@@ -142,8 +142,14 @@ export default function DoctorCreateAppointmentScreen() {
         setConsultationFee(data.consultationFee.toString());
 
         if (data.specificDates && data.specificDates.length > 0) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const futureDates = data.specificDates.filter((sd: any) => {
+            const d = new Date(sd.date + "T00:00:00");
+            return d >= today;
+          });
           setSelectedDates(
-            data.specificDates.map((sd: any) => ({
+            futureDates.map((sd: any) => ({
               date: sd.date,
               timeSlots: sd.timeSlots,
             }))
@@ -204,6 +210,13 @@ export default function DoctorCreateAppointmentScreen() {
 
   const toTimeString = (date: Date) =>
     `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+
+  const formatTime12h = (time: string) => {
+    const [h, m] = time.split(":").map(Number);
+    const period = h >= 12 ? "PM" : "AM";
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    return `${hour12}:${m.toString().padStart(2, "0")} ${period}`;
+  };
 
   const buildTempTime = (timeString: string) => {
     const [h, m] = timeString.split(":").map(Number);
@@ -741,7 +754,7 @@ export default function DoctorCreateAppointmentScreen() {
                   >
                     <MaterialIcons name="schedule" size={16} color={t.accent} />
                     <Text style={[styles.timeText, { color: t.textPrimary }]}>
-                      {slot.start}
+                      {formatTime12h(slot.start)}
                     </Text>
                   </TouchableOpacity>
 
@@ -758,7 +771,7 @@ export default function DoctorCreateAppointmentScreen() {
                   >
                     <MaterialIcons name="schedule" size={16} color={t.accent} />
                     <Text style={[styles.timeText, { color: t.textPrimary }]}>
-                      {slot.end}
+                      {formatTime12h(slot.end)}
                     </Text>
                   </TouchableOpacity>
 

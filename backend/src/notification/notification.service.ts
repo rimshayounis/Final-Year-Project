@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as nodemailer from 'nodemailer';
-import * as https from 'https';
 import { Doctor, DoctorDocument } from '../doctors/schemas/doctor.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
 
@@ -33,46 +32,28 @@ export class NotificationService {
   }): Promise<void> {
     const [doctor, patient] = await Promise.all([
       this.doctorModel.findById(apptData.doctorId)
-        .select('fullName email notificationSettings expoPushToken').exec(),
+        .select('fullName email').exec(),
       this.userModel.findById(apptData.userId)
         .select('fullName').exec(),
     ]);
 
     if (!doctor) return;
 
-    const settings    = (doctor as any).notificationSettings;
     const doctorName  = (doctor as any).fullName  ?? 'Doctor';
     const patientName = (patient as any)?.fullName ?? 'Patient';
 
-    const details = {
-      patientName,
-      doctorName,
-      date:            apptData.date,
-      time:            apptData.time,
-      sessionDuration: apptData.sessionDuration,
-      consultationFee: apptData.consultationFee,
-      healthConcern:   apptData.healthConcern,
-    };
-
-    if (settings?.emailEnabled) {
-      await this.sendNewAppointmentEmail(
-        (doctor as any).email, details,
-      ).catch((e) => console.error('[Notification] Email error:', e.message));
-    }
-
-    if (settings?.pushEnabled) {
-      const pushToken = (doctor as any).expoPushToken;
-      if (pushToken) {
-        await this.sendRawPush(
-          pushToken,
-          '📅 New Appointment Booked',
-          `${patientName} · ${apptData.date} at ${apptData.time}`,
-          { patientName, date: apptData.date, time: apptData.time },
-        ).catch((e) => console.error('[Notification] Push error:', e.message));
-      } else {
-        console.log(`[Notification] No push token for Dr. ${doctorName}`);
-      }
-    }
+    // Always send booking confirmation — not gated by emailEnabled
+    await this.sendNewAppointmentEmail(
+      (doctor as any).email, {
+        patientName,
+        doctorName,
+        date:            apptData.date,
+        time:            apptData.time,
+        sessionDuration: apptData.sessionDuration,
+        consultationFee: apptData.consultationFee,
+        healthConcern:   apptData.healthConcern,
+      },
+    ).catch((e) => console.error('[Notification] Email error:', e.message));
   }
 
   // ── 2. User notified when doctor confirms or rejects ──────────────────────
@@ -86,7 +67,7 @@ export class NotificationService {
   }): Promise<void> {
     const [user, doctor] = await Promise.all([
       this.userModel.findById(data.userId)
-        .select('fullName email expoPushToken notificationSettings').exec(),
+        .select('fullName email').exec(),
       this.doctorModel.findById(data.doctorId)
         .select('fullName').exec(),
     ]);
@@ -95,24 +76,7 @@ export class NotificationService {
 
     const userName    = (user as any).fullName   ?? 'Patient';
     const doctorName  = (doctor as any)?.fullName ?? 'Doctor';
-    const isConfirmed = data.status === 'confirmed';
 
-    // ── Push notification ────────────────────────────────────────────────
-    const pushToken = (user as any).expoPushToken;
-    if (pushToken) {
-      await this.sendRawPush(
-        pushToken,
-        isConfirmed
-          ? '✅ Appointment Confirmed!'
-          : '❌ Appointment Rejected',
-        isConfirmed
-          ? `Dr. ${doctorName} confirmed your appointment on ${data.date}. Please complete payment.`
-          : `Dr. ${doctorName} rejected your appointment on ${data.date}.`,
-        { status: data.status, date: data.date, time: data.time },
-      ).catch((e) => console.error('[Notification] Push error:', e.message));
-    }
-
-    // ── Email ─────────────────────────────────────────────────────────────
     await this.sendAppointmentStatusEmail(
       (user as any).email,
       {
@@ -136,7 +100,7 @@ export class NotificationService {
   }): Promise<void> {
     const [doctor, patient] = await Promise.all([
       this.doctorModel.findById(data.doctorId)
-        .select('fullName email notificationSettings expoPushToken').exec(),
+        .select('fullName email').exec(),
       this.userModel.findById(data.userId)
         .select('fullName').exec(),
     ]);
@@ -145,20 +109,7 @@ export class NotificationService {
 
     const doctorName  = (doctor as any).fullName  ?? 'Doctor';
     const patientName = (patient as any)?.fullName ?? 'Patient';
-    const settings    = (doctor as any).notificationSettings;
 
-    // ── Push notification ────────────────────────────────────────────────
-    const pushToken = (doctor as any).expoPushToken;
-    if (pushToken) {
-      await this.sendRawPush(
-        pushToken,
-        '💰 Payment Received!',
-        `${patientName} paid PKR ${data.consultationFee} for appointment on ${data.date}.`,
-        { date: data.date, time: data.time, amount: data.consultationFee },
-      ).catch((e) => console.error('[Notification] Push error:', e.message));
-    }
-
-    // ── Email — always send for payment events ───────────────────────────
     await this.sendPaymentReceivedEmail(
       (doctor as any).email,
       {
@@ -172,38 +123,14 @@ export class NotificationService {
   }
 
   // ── Post like/comment notification ────────────────────────────────────────
-  async notifyUserPostActivity(params: {
+  async notifyUserPostActivity(_params: {
     postAuthorId: string;
     authorModel:  'User' | 'Doctor';
     actorName:    string;
     activity:     'liked' | 'commented on';
     postTitle:    string;
   }): Promise<void> {
-    let token:       string | null = null;
-    let pushEnabled: boolean       = false;
-
-    if (params.authorModel === 'User') {
-      const user = await this.userModel
-        .findById(params.postAuthorId)
-        .select('expoPushToken notificationSettings').exec();
-      token       = (user as any)?.expoPushToken ?? null;
-      pushEnabled = (user as any)?.notificationSettings?.pushEnabled ?? false;
-    } else {
-      const doctor = await this.doctorModel
-        .findById(params.postAuthorId)
-        .select('expoPushToken notificationSettings').exec();
-      token       = (doctor as any)?.expoPushToken ?? null;
-      pushEnabled = (doctor as any)?.notificationSettings?.pushEnabled ?? false;
-    }
-
-    if (!pushEnabled || !token) return;
-
-    const title = params.activity === 'liked' ? '❤️ New Like' : '💬 New Comment';
-    const body  = `${params.actorName} ${params.activity} your post "${params.postTitle}"`;
-
-    await this.sendRawPush(token, title, body).catch((e) =>
-      console.error('[Notification] User push error:', e.message),
-    );
+    // Push notifications removed — alerts shown in-app only
   }
 
   // ── 5. Both notified when session starts ──────────────────────────────────
@@ -215,36 +142,14 @@ export class NotificationService {
     sessionDuration: number;
   }): Promise<void> {
     const [doctor, patient] = await Promise.all([
-      this.doctorModel.findById(data.doctorId).select('fullName email expoPushToken').exec(),
-      this.userModel.findById(data.userId).select('fullName email expoPushToken notificationSettings').exec(),
+      this.doctorModel.findById(data.doctorId).select('fullName email').exec(),
+      this.userModel.findById(data.userId).select('fullName email').exec(),
     ]);
 
     if (!doctor || !patient) return;
 
     const doctorName  = (doctor as any).fullName  ?? 'Doctor';
     const patientName = (patient as any).fullName ?? 'Patient';
-
-    // ── Push to doctor ────────────────────────────────────────────────────
-    const doctorToken = (doctor as any).expoPushToken;
-    if (doctorToken) {
-      await this.sendRawPush(
-        doctorToken,
-        '🟢 Session Started',
-        `Your session with ${patientName} is now live!`,
-        { date: data.date, time: data.time },
-      ).catch((e) => console.error('[Notification] Push error:', e.message));
-    }
-
-    // ── Push to patient ───────────────────────────────────────────────────
-    const patientToken = (patient as any).expoPushToken;
-    if (patientToken) {
-      await this.sendRawPush(
-        patientToken,
-        '🟢 Session Started',
-        `Your session with Dr. ${doctorName} is now live!`,
-        { date: data.date, time: data.time },
-      ).catch((e) => console.error('[Notification] Push error:', e.message));
-    }
 
     // ── Email to doctor ───────────────────────────────────────────────────
     await this.sendSessionStartedEmail(
@@ -257,6 +162,75 @@ export class NotificationService {
       (patient as any).email,
       { recipientName: patientName, otherPartyName: `Dr. ${doctorName}`, role: 'patient', date: data.date, time: data.time, sessionDuration: data.sessionDuration },
     ).catch((e) => console.error('[Notification] Session email error:', e.message));
+  }
+
+  // ── Auto-cancellation emails → both user and doctor ──────────────────────
+  async notifyAutoCancellation(data: {
+    userId:      string;
+    doctorId:    string;
+    date:        string;
+    time:        string;
+    reason:      'confirmation_timeout' | 'payment_timeout';
+    userEmail:   string;
+    userName:    string;
+    doctorEmail: string;
+    doctorName:  string;
+  }): Promise<void> {
+    if (!process.env.GMAIL_USER) return;
+
+    const isConfirmTimeout = data.reason === 'confirmation_timeout';
+
+    const subject = `❌ Appointment Auto-Cancelled — ${data.date}`;
+
+    const userMessage = isConfirmTimeout
+      ? `Your appointment on <strong>${data.date}</strong> at <strong>${data.time}</strong> with Dr. <strong>${data.doctorName}</strong> was automatically cancelled because the doctor did not confirm within 10 minutes. Please book another slot.`
+      : `Your appointment on <strong>${data.date}</strong> at <strong>${data.time}</strong> with Dr. <strong>${data.doctorName}</strong> was automatically cancelled because payment was not completed within 10 minutes. Please book again and complete payment promptly.`;
+
+    const doctorMessage = isConfirmTimeout
+      ? `An appointment request from <strong>${data.userName}</strong> on <strong>${data.date}</strong> at <strong>${data.time}</strong> was automatically cancelled because it was not confirmed within 10 minutes.`
+      : `The appointment with <strong>${data.userName}</strong> on <strong>${data.date}</strong> at <strong>${data.time}</strong> was automatically cancelled because the patient did not complete payment within 10 minutes.`;
+
+    const makeHtml = (recipientName: string, message: string) => `
+      <div style="font-family:Arial,sans-serif; max-width:520px;
+                  margin:0 auto; border-radius:12px; overflow:hidden;
+                  border:1px solid #e8eaf6;">
+        <div style="background:#E53E3E; padding:24px 28px;">
+          <h2 style="color:#fff; margin:0;">TruHeal Link</h2>
+          <p style="color:rgba(255,255,255,0.85); margin:4px 0 0;">Appointment Auto-Cancelled</p>
+        </div>
+        <div style="padding:28px;">
+          <p style="color:#555;">Hi <strong>${recipientName}</strong>,<br><br>${message}</p>
+          <table style="width:100%; border-collapse:collapse; margin-top:16px;">
+            ${row('📅 Date', data.date)}
+            ${row('🕐 Time', data.time)}
+          </table>
+          <div style="margin-top:24px; padding:16px; background:#fff5f5;
+                      border-radius:10px; text-align:center;">
+            <p style="color:#E53E3E; font-weight:700; margin:0;">
+              Open TruHeal Link to book a new appointment
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await Promise.all([
+      this.transporter.sendMail({
+        from:    `"TruHeal Link" <${process.env.GMAIL_USER}>`,
+        to:      data.userEmail,
+        subject,
+        html:    makeHtml(data.userName, userMessage),
+      }).catch((e) => console.error('[Notification] Auto-cancel user email error:', e.message)),
+
+      this.transporter.sendMail({
+        from:    `"TruHeal Link" <${process.env.GMAIL_USER}>`,
+        to:      data.doctorEmail,
+        subject,
+        html:    makeHtml(`Dr. ${data.doctorName}`, doctorMessage),
+      }).catch((e) => console.error('[Notification] Auto-cancel doctor email error:', e.message)),
+    ]);
+
+    console.log(`[Notification] Auto-cancel emails sent for appt ${data.date} ${data.time}`);
   }
 
   // ── Email: New Appointment → Doctor ──────────────────────────────────────
@@ -487,43 +461,6 @@ export class NotificationService {
     console.log(`[Notification] Session-started email sent to ${to}`);
   }
 
-  // ── Raw Expo Push ─────────────────────────────────────────────────────────
-  async sendRawPush(
-    token: string,
-    title: string,
-    body:  string,
-    data?: Record<string, any>,
-  ): Promise<void> {
-    const payload = JSON.stringify({
-      to:        token,
-      title,
-      body,
-      sound:     'default',
-      channelId: 'default',
-      priority:  'high',
-      data:      data ?? {},
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      const req = https.request(
-        {
-          hostname: 'exp.host',
-          path:     '/--/api/v2/push/send',
-          method:   'POST',
-          headers: {
-            'Content-Type':   'application/json',
-            'Content-Length': Buffer.byteLength(payload),
-          },
-        },
-        (res) => { res.resume(); res.on('end', () => resolve()); },
-      );
-      req.on('error', reject);
-      req.write(payload);
-      req.end();
-    });
-
-    console.log(`[Notification] Push sent to ${token.slice(0, 20)}...`);
-  }
 }
 
 // ── HTML row helper ───────────────────────────────────────────────────────────
