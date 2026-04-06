@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import { AppointmentAvailabilityService } from './appointment-availability.service';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
@@ -52,17 +53,17 @@ async getAvailableSlots(@Query() query: GetAvailableSlotsDto) {
   // Get doctor's availability (first-time safe)
 @Get('doctor/:doctorId')
 async getDoctorAvailability(@Param('doctorId') doctorId: string) {
-  let availability;
-  try {
-    availability = await this.availabilityService.getDoctorAvailability(doctorId);
-  } catch (err) {
-    // If 404, return null instead of throwing
-    if (err.status === 404) {
-      availability = null;
-    } else {
-      throw err; // re-throw other errors
-    }
+let availability;
+try {
+  availability = await this.availabilityService.getDoctorAvailability(doctorId);
+} catch (err) {
+  // If 404, return null instead of throwing
+  if (err instanceof HttpException && err.getStatus() === 404) {
+    availability = null;
+  } else {
+    throw err; // re-throw other errors
   }
+}
 
   return {
     success: true,

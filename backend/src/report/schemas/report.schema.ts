@@ -6,25 +6,25 @@ export type ReportDocument = Report & Document;
 @Schema({ timestamps: true })
 export class Report {
   @Prop({ type: String, enum: ['User', 'Doctor'], default: 'User' })
-  reporterModel: string;
+  reporterModel!: string;
 
   @Prop({ type: Types.ObjectId, refPath: 'reporterModel', required: true })
-  reporterId: Types.ObjectId;
+  reporterId!: Types.ObjectId;
 
   @Prop({ type: String, enum: ['User', 'Doctor'], default: 'User' })
-  reportedModel: string;
+  reportedModel!: string;
 
   @Prop({ type: Types.ObjectId, refPath: 'reportedModel', required: true })
-  reportedId: Types.ObjectId;
+  reportedId!: Types.ObjectId;
 
   @Prop({ required: true, trim: true })
-  reason: string;
+  reason!: string;
 
   @Prop({ type: String, enum: ['pending', 'reviewed'], default: 'pending' })
-  status: string;
+  status!: string;
 
   @Prop({ type: Types.ObjectId, ref: 'Post', default: null })
-  postId: Types.ObjectId | null;
+  postId!: Types.ObjectId | null;
 }
 
 export const ReportSchema = SchemaFactory.createForClass(Report);

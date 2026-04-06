@@ -14,7 +14,7 @@ import { Server, Socket } from 'socket.io';
 })
 export class AppointmentGateway {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   @SubscribeMessage('join-appointment')
   handleJoin(

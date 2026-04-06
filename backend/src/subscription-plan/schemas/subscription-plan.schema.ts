@@ -17,41 +17,41 @@ export const PLAN_CONFIG: Record<PlanName, { pricePKR: number; durationDays: num
 @Schema({ timestamps: true, collection: 'subscription_plans' })
 export class SubscriptionPlanRecord {
   @Prop({ type: Types.ObjectId, ref: 'Doctor', required: true })
-  doctorId: Types.ObjectId;
+  doctorId!: Types.ObjectId;
 
   @Prop({
     type: String,
     enum: ['free_trial', 'basic', 'professional', 'premium'],
     required: true,
   })
-  plan: PlanName;
+  plan!: PlanName;
 
   @Prop({ required: true })
-  startDate: Date;
+  startDate!: Date;
 
   @Prop({ required: true })
-  endDate: Date;
+  endDate!: Date;
 
   @Prop({
     type: String,
     enum: ['active', 'expired', 'cancelled'],
     default: 'active',
   })
-  status: PlanStatus;
+  status!: PlanStatus;
 
   @Prop({ default: 0 })
-  pricePKR: number;
+  pricePKR!: number;
 
   // e.g. 'easypaisa' | 'jazzcash' | 'bank_transfer' | null
   @Prop({ default: null })
-  paymentMethod: string;
+  paymentMethod: string | null = null;
 
   /** Reference to the Transaction record for this subscription payment */
   @Prop({ type: Types.ObjectId, ref: 'Transaction', default: null })
-  transactionId: Types.ObjectId | null;
+  transactionId: Types.ObjectId | null = null;
 
   @Prop({ default: null })
-  cancelledAt: Date;
+  cancelledAt: Date | null = null;
 
   @Prop({ default: null })
   cancelReason?: string;

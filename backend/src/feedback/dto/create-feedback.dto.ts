@@ -2,18 +2,18 @@ import { IsString, IsNumber, IsOptional, Min, Max } from 'class-validator';
 
 export class CreateFeedbackDto {
   @IsString()
-  appointmentId: string;
+  appointmentId!: string;
 
   @IsString()
-  userId: string;
+  userId!: string;
 
   @IsString()
-  doctorId: string;
+  doctorId!: string;
 
   @IsNumber()
   @Min(1)
   @Max(5)
-  rating: number;
+  rating!: number;
 
   @IsOptional()
   @IsString()

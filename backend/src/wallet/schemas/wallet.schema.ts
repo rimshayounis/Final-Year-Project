@@ -17,22 +17,22 @@ export class WalletTransaction {
   _id?: Types.ObjectId;
 
   @Prop({ required: true })
-  type: WalletTxType;
+  type!: WalletTxType;
 
   @Prop({ required: true })
-  amount: number; // PKR
+  amount!: number; // PKR
 
   @Prop({ default: 0 })
-  pointsUsed: number; // only for points_converted
+  pointsUsed!: number; // only for points_converted
 
   @Prop({ required: true })
-  description: string;
+  description!: string;
 
   @Prop({ type: String, default: null })
-  status: WithdrawalStatus | null; // only for withdrawal entries
+  status!: WithdrawalStatus | null; // only for withdrawal entries
 
   @Prop({ default: () => new Date() })
-  createdAt: Date;
+  createdAt!: Date;
 
   // ── Appointment earning fields (optional) ─────────────────────────────────
   @Prop({ type: String, default: null }) patientName?:     string | null;
@@ -48,19 +48,19 @@ export class WalletTransaction {
 @Schema({ timestamps: true, collection: 'doctor_wallet' })
 export class Wallet {
   @Prop({ type: Types.ObjectId, ref: 'Doctor', required: true, unique: true })
-  doctorId: Types.ObjectId;
+  doctorId!: Types.ObjectId;
 
   @Prop({ default: 0 })
-  balance: number; // PKR available balance
+  balance!: number; // PKR available balance
 
   @Prop({ default: 0 })
-  totalEarned: number; // lifetime PKR earned via conversions
+  totalEarned!: number; // lifetime PKR earned via conversions
 
   @Prop({ default: 0 })
-  totalWithdrawn: number; // lifetime PKR withdrawn
+  totalWithdrawn!: number; // lifetime PKR withdrawn
 
   @Prop({ type: [Object], default: [] })
-  transactions: WalletTransaction[];
+  transactions!: WalletTransaction[];
 }
 
 export const WalletSchema = SchemaFactory.createForClass(Wallet);

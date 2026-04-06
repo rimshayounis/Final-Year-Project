@@ -11,25 +11,25 @@ export type ConversationDocument = Conversation & Document;
 export class Conversation {
   /** The patient (User) side of the conversation */
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  patientId: Types.ObjectId;
+  patientId!: Types.ObjectId;
 
   /** The doctor (Doctor) side of the conversation */
   @Prop({ type: Types.ObjectId, ref: 'Doctor', required: true })
-  doctorId: Types.ObjectId;
+  doctorId!: Types.ObjectId;
 
   @Prop({ default: '' })
-  lastMessage: string;
+  lastMessage!: string;
 
   @Prop({ default: () => new Date() })
-  lastMessageAt: Date;
+  lastMessageAt!: Date;
 
   /** Unread messages for the patient side */
   @Prop({ default: 0 })
-  patientUnreadCount: number;
+  patientUnreadCount!: number;
 
   /** Unread messages for the doctor side */
   @Prop({ default: 0 })
-  doctorUnreadCount: number;
+  doctorUnreadCount!: number;
 }
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);

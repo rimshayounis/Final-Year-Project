@@ -4,24 +4,24 @@ import { IsString, IsNotEmpty, IsNumber, Min } from 'class-validator';
 export class HandleLikeMilestoneDto {
   @IsString()
   @IsNotEmpty()
-  postId: string;
+  postId!: string;
 
   @IsNumber()
   @Min(0)
-  currentLikes: number;
+  currentLikes!: number;
 
   @IsString()
   @IsNotEmpty()
-  approvingDoctorId: string; // doctor who approved this post
+  approvingDoctorId!: string; // doctor who approved this post
 }
 
 // Called from BookedAppointmentService when status → 'completed'
 export class HandleBookingCompletedDto {
   @IsString()
   @IsNotEmpty()
-  doctorId: string;
+  doctorId!: string;
 
   @IsString()
   @IsNotEmpty()
-  yearMonth: string; // 'YYYY-MM'
+  yearMonth!: string; // 'YYYY-MM'
 }

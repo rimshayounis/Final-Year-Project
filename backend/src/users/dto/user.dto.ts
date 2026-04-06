@@ -11,18 +11,18 @@ import {
 import { Type } from 'class-transformer';
 
 export class RegisterUserDto {
-  @IsNotEmpty() @IsString()  fullName:  string;
-  @IsNotEmpty() @IsNumber()  age:       number;
-  @IsNotEmpty() @IsEmail()   email:     string;
-  @IsNotEmpty() @IsString()  @MinLength(8) password: string;
-  @IsNotEmpty() @IsString()  gender:    string;
-  @IsNotEmpty() @IsString()  userType:  string;
+  @IsNotEmpty() @IsString()  fullName!:  string;
+  @IsNotEmpty() @IsNumber()  age!:       number;
+  @IsNotEmpty() @IsEmail()   email!:     string;
+  @IsNotEmpty() @IsString()  @MinLength(8) password!: string;
+  @IsNotEmpty() @IsString()  gender!:    string;
+  @IsNotEmpty() @IsString()  userType!:  string;
   @IsOptional() @IsString()  phoneNumber?: string;
 }
 
 export class LoginDto {
-  @IsNotEmpty() @IsEmail()  email:     string;
-  @IsNotEmpty() @IsString() password:  string;
+  @IsNotEmpty() @IsEmail()  email!:     string;
+  @IsNotEmpty() @IsString() password!:  string;
   @IsOptional() @IsString() userType?: string;
 }
 
@@ -37,50 +37,50 @@ export class CreateHealthProfileDto {
 // ── Emergency Contact ──────────────────────────────────────────────────────
 export class EmergencyContactDto {
   @IsNotEmpty() @IsString()
-  fullName: string;
+  fullName!: string;
 
   @IsNotEmpty() @IsString()
-  relationship: string;
+  relationship!: string;
 
   @IsNotEmpty() @IsEmail()
-  email: string;
+  email!: string;
 }
 
 export class CreateEmergencyContactsDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => EmergencyContactDto)
-  contacts: EmergencyContactDto[];
+  contacts!: EmergencyContactDto[];
 }
 
 // ── SOS Message ────────────────────────────────────────────────────────────
 export class UpdateSosMessageDto {
   @IsNotEmpty()
   @IsString()
-  sosMessage: string;
+  sosMessage!: string;
 }
 
 // ── Forgot Password DTOs ───────────────────────────────────────────────────
 export class ForgotPasswordDto {
   @IsNotEmpty() @IsEmail()
-  email: string;
+  email!: string;
 }
 
 export class VerifyOtpDto {
   @IsNotEmpty() @IsEmail()
-  email: string;
+  email!: string;
 
   @IsNotEmpty() @IsString()
-  otpCode: string;
+  otpCode!: string;
 }
 
 export class ResetPasswordDto {
   @IsNotEmpty() @IsEmail()
-  email: string;
+  email!: string;
 
   @IsNotEmpty() @IsString()
-  otpCode: string;
+  otpCode!: string;
 
   @IsNotEmpty() @IsString() @MinLength(8)
-  newPassword: string;
+  newPassword!: string;
 }

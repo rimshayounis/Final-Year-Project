@@ -6,19 +6,19 @@ export type FeedbackDocument = Feedback & Document;
 @Schema({ timestamps: true })
 export class Feedback {
   @Prop({ type: Types.ObjectId, ref: 'BookedAppointment', required: true, unique: true })
-  appointmentId: Types.ObjectId;
+  appointmentId!: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  userId: Types.ObjectId;
+  userId!: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'Doctor', required: true })
-  doctorId: Types.ObjectId;
+  doctorId!: Types.ObjectId;
 
   @Prop({ type: Number, required: true, min: 1, max: 5 })
-  rating: number;
+  rating!: number;
 
   @Prop({ type: String, default: '' })
-  description: string;
+  description!: string;
 }
 
 export const FeedbackSchema = SchemaFactory.createForClass(Feedback);

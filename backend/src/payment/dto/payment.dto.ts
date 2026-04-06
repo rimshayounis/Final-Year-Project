@@ -2,23 +2,23 @@ import { IsString, IsIn, IsOptional } from 'class-validator';
 
 export class CreatePaymentIntentDto {
   @IsString()
-  doctorId: string;
+  doctorId!: string;
 
   @IsString()
   @IsIn(['basic', 'professional', 'premium'])
-  plan: 'basic' | 'professional' | 'premium';
+  plan!: 'basic' | 'professional' | 'premium';
 }
 
 export class ConfirmPaymentDto {
   @IsString()
-  doctorId: string;
+  doctorId!: string;
 
   @IsString()
   @IsIn(['basic', 'professional', 'premium'])
-  plan: 'basic' | 'professional' | 'premium';
+  plan!: 'basic' | 'professional' | 'premium';
 
   @IsString()
-  paymentIntentId: string;
+  paymentIntentId!: string;
 
   @IsString()
   @IsOptional()
@@ -27,15 +27,15 @@ export class ConfirmPaymentDto {
 
 export class CreateAppointmentPaymentDto {
   @IsString()
-  appointmentId: string;
+  appointmentId!: string;
 }
 
 export class ConfirmAppointmentPaymentDto {
   @IsString()
-  appointmentId: string;
+  appointmentId!: string;
 
   @IsString()
-  paymentIntentId: string;
+  paymentIntentId!: string;
 
   @IsString()
   @IsOptional()

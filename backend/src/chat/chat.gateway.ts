@@ -23,7 +23,7 @@ interface SendMessagePayload {
   pingInterval: 25000,
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
-  @WebSocketServer() server: Server;
+  @WebSocketServer() server!: Server;
   private onlineUsers = new Map<string, string>();
 
   constructor(private readonly chatService: ChatService) {}

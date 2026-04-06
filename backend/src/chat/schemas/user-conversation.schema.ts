@@ -6,22 +6,22 @@ export type UserConversationDocument = UserConversation & Document;
 @Schema({ timestamps: true })
 export class UserConversation {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  user1Id: Types.ObjectId;
+  user1Id!: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  user2Id: Types.ObjectId;
+  user2Id!: Types.ObjectId;
 
   @Prop({ default: '' })
-  lastMessage: string;
+  lastMessage!: string;
 
   @Prop({ default: () => new Date() })
-  lastMessageAt: Date;
+  lastMessageAt!: Date;
 
   @Prop({ default: 0 })
-  user1UnreadCount: number;
+  user1UnreadCount!: number;
 
   @Prop({ default: 0 })
-  user2UnreadCount: number;
+  user2UnreadCount!: number;
 }
 
 export const UserConversationSchema = SchemaFactory.createForClass(UserConversation);

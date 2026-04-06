@@ -3,19 +3,19 @@ import { IsNotEmpty, IsString, IsOptional, IsArray, IsIn } from 'class-validator
 export class CreatePostDto {
   @IsNotEmpty()
   @IsString()
-  userId: string;
+  userId!: string;
 
   @IsNotEmpty()
   @IsString()
-  title: string;
+  title!: string;
 
   @IsNotEmpty()
   @IsString()
-  description: string;
+  description!: string;
 
   @IsNotEmpty()
   @IsString()
-  category: string;
+  category!: string;
 
   @IsOptional()
   @IsArray()

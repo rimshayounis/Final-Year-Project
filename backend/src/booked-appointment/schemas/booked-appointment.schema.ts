@@ -9,25 +9,25 @@ export type PaymentStatus = 'not_required' | 'pending_payment' | 'payment_held' 
 @Schema({ timestamps: true })
 export class BookedAppointment {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  userId: Types.ObjectId;
+  userId!: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'Doctor', required: true })
-  doctorId: Types.ObjectId;
+  doctorId!: Types.ObjectId;
 
   @Prop({ required: true })
-  date: string; // YYYY-MM-DD
+  date!: string; // YYYY-MM-DD
 
   @Prop({ required: true })
-  time: string; // HH:MM (24h)
+  time!: string; // HH:MM (24h)
 
   @Prop({ required: true, min: 15, max: 120 })
-  sessionDuration: number; // minutes
+  sessionDuration!: number; // minutes
 
   @Prop({ required: true, min: 0 })
-  consultationFee: number; // PKR
+  consultationFee!: number; // PKR
 
   @Prop({ required: true })
-  healthConcern: string;
+  healthConcern!: string;
 
   @Prop({
     type: String,
@@ -35,19 +35,19 @@ export class BookedAppointment {
     
     default: 'pending',
   })
-  status: AppointmentStatus;
+  status!: AppointmentStatus;
 
   @Prop({ type: Date, default: null })
-  confirmedAt: Date | null;
+  confirmedAt!: Date | null;
 
   @Prop({ type: Date, default: null })
-  cancelledAt: Date | null;
+  cancelledAt!: Date | null;
 
   @Prop({ type: String, default: null })
-  cancelReason: string | null;
+  cancelReason!: string | null;
 
   @Prop({ type: Date, default: null })
-  completedAt: Date | null;
+  completedAt!: Date | null;
 
   // ── Payment fields ────────────────────────────────────────────────────────
   @Prop({
@@ -55,30 +55,30 @@ export class BookedAppointment {
     enum: ['not_required', 'pending_payment', 'payment_held', 'released', 'refunded'],
     default: 'not_required',
   })
-  paymentStatus: PaymentStatus;
+  paymentStatus!: PaymentStatus;
 
   @Prop({ type: String, default: null })
-  paymentIntentId: string | null;
+  paymentIntentId!: string | null;
 
   /** Full amount paid by user and held by admin */
   @Prop({ type: Number, default: 0 })
-  heldAmount: number;
+  heldAmount!: number;
 
   /** Amount to be released to doctor (after commission) */
   @Prop({ type: Number, default: 0 })
-  doctorEarning: number;
+  doctorEarning!: number;
 
   /** Commission amount kept by admin */
   @Prop({ type: Number, default: 0 })
-  commissionAmount: number;
+  commissionAmount!: number;
 
   /** Commission rate applied (e.g. 0.20 = 20%) */
   @Prop({ type: Number, default: 0 })
-  commissionRate: number;
+  commissionRate!: number;
 
   /** True once the user has submitted feedback for this completed appointment */
   @Prop({ type: Boolean, default: false })
-  hasFeedback: boolean;
+  hasFeedback!: boolean;
 }
 
 export const BookedAppointmentSchema = SchemaFactory.createForClass(BookedAppointment);

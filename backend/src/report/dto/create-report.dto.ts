@@ -2,19 +2,19 @@ import { IsString, IsOptional, IsMongoId } from 'class-validator';
 
 export class CreateReportDto {
   @IsString()
-  reporterModel: string;
+  reporterModel!: string;
 
   @IsMongoId()
-  reporterId: string;
+  reporterId!: string;
 
   @IsString()
-  reportedModel: string;
+  reportedModel!: string;
 
   @IsMongoId()
-  reportedId: string;
+  reportedId!: string;
 
   @IsString()
-  reason: string;
+  reason!: string;
 
   @IsMongoId()
   @IsOptional()

@@ -2,7 +2,7 @@ import { IsString, IsIn, MinLength, MaxLength, IsOptional } from 'class-validato
 
 export class CreateSupportRequestDto {
   @IsString()
-  userId: string;
+  userId!: string;
 
   @IsOptional()
   @IsString()
@@ -11,10 +11,10 @@ export class CreateSupportRequestDto {
 
   @IsString()
   @IsIn(['technical', 'billing', 'account', 'appointment', 'content', 'doctor', 'other'])
-  purpose: string;
+  purpose!: string;
 
   @IsString()
   @MinLength(10)
   @MaxLength(1000)
-  description: string;
+  description!: string;
 }

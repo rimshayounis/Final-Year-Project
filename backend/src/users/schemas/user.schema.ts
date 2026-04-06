@@ -5,50 +5,50 @@ export type UserDocument = User & Document;
 
 @Schema({ _id: false })
 export class UserNotificationSettings {
-  @Prop({ default: false }) emailEnabled: boolean;
+  @Prop({ default: false }) emailEnabled!: boolean;
 }
 
 @Schema({ _id: false })
 export class HealthProfile {
-  @Prop({ required: false }) sleepDuration:    number;
-  @Prop({ required: false }) stressLevel:      string;
-  @Prop({ required: false }) dietPreference:   string;
+  @Prop({ required: false }) sleepDuration!:    number;
+  @Prop({ required: false }) stressLevel!:      string;
+  @Prop({ required: false }) dietPreference!:   string;
   @Prop({ required: false }) additionalNotes?: string;
-  @Prop({ type: [String], default: [] }) interests: string[];
+  @Prop({ type: [String], default: [] }) interests!: string[];
 }
 
 @Schema({ _id: false })
 export class EmergencyContact {
-  @Prop({ required: true }) fullName:     string;
-  @Prop({ required: true }) relationship: string;
-  @Prop({ required: true }) email:        string;
+  @Prop({ required: true }) fullName!:     string;
+  @Prop({ required: true }) relationship!: string;
+  @Prop({ required: true }) email!:        string;
 }
 
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true })
-  fullName: string;
+  fullName!: string;
 
   @Prop({ required: true })
-  age: number;
+  age!: number;
 
   @Prop({ required: true, unique: true })
-  email: string;
+  email!: string;
 
   @Prop({ required: true })
-  password: string;
+  password!: string;
 
   @Prop({ required: true })
-  gender: string;
+  gender!: string;
 
   @Prop({ required: true })
-  userType: string;
+  userType!: string;
 
   @Prop({ required: false })
   phoneNumber?: string;
 
   @Prop({ type: String, default: null })
-  profileImage: string | null;
+  profileImage!: string | null;
 
   @Prop({ type: HealthProfile, required: false })
   healthProfile?: HealthProfile;
@@ -60,27 +60,27 @@ export class User {
     type: UserNotificationSettings,
     default: () => ({ emailEnabled: false }),
   })
-  notificationSettings: UserNotificationSettings;
+  notificationSettings!: UserNotificationSettings;
 
   @Prop({
     type:    String,
     default: 'I need emergency help! Please contact me immediately.',
   })
-  sosMessage: string;
+  sosMessage!: string;
 
   @Prop({ type: Boolean, default: true })
-  sosShareProfile: boolean;
+  sosShareProfile!: boolean;
 
   // ── Blocked users ──────────────────────────────────────────────────────
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
-  blockedUsers: Types.ObjectId[];
+  blockedUsers!: Types.ObjectId[];
 
   // ── OTP fields ─────────────────────────────────────────────────────────
   @Prop({ type: String, default: null })
-  otpCode: string | null;
+  otpCode!: string | null;
 
   @Prop({ type: Date, default: null })
-  otpExpiry: Date | null;
+  otpExpiry!: Date | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -7,27 +7,27 @@ export type AdminWalletDocument = AdminWallet & Document;
 export class AdminWallet {
   /** Running total of all successful payments received */
   @Prop({ default: 0 })
-  totalBalance: number;
+  totalBalance!: number;
 
   /** Cumulative earnings (never decreases) */
   @Prop({ default: 0 })
-  totalEarned: number;
+  totalEarned!: number;
 
   /** Total commissions earned from appointment payouts */
   @Prop({ default: 0 })
-  totalCommission: number;
+  totalCommission!: number;
 
   /** Funds currently held for pending appointment payouts (not yet earned) */
   @Prop({ default: 0 })
-  heldBalance: number;
+  heldBalance!: number;
 
   /** Total number of successful transactions */
   @Prop({ default: 0 })
-  totalTransactions: number;
+  totalTransactions!: number;
 
   /** Currency code */
   @Prop({ default: 'PKR' })
-  currency: string;
+  currency!: string;
 }
 
 export const AdminWalletSchema = SchemaFactory.createForClass(AdminWallet);

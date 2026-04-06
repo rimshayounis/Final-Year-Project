@@ -6,16 +6,16 @@ export type UserProfileDocument = UserProfile & Document;
 @Schema({ timestamps: true })
 export class UserProfile {
   @Prop({ type: Types.ObjectId, required: true, refPath: 'ownerType' })
-  ownerId: Types.ObjectId;
+  ownerId!: Types.ObjectId;
 
   @Prop({ type: String, required: true, enum: ['User', 'Doctor'] })
-  ownerType: string;
+  ownerType!: string;
 
   @Prop({ type: String, default: null })
-  bio: string;
+  bio: string | null = null;
 
   @Prop({ type: String, default: null })
-  profileImage: string;
+  profileImage: string | null = null;
 }
 
 export const UserProfileSchema = SchemaFactory.createForClass(UserProfile);

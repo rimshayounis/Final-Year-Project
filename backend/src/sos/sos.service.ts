@@ -56,7 +56,8 @@ export class SosService {
         user.emergencyContacts.length,
       );
     } catch (err) {
-      console.error('❌ User confirmation email failed:', err.message);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('❌ User confirmation email failed:', errorMessage);
     }
 
     // 6. Send alert to each emergency contact
@@ -94,8 +95,9 @@ export class SosService {
           contactResult.emailStatus = 'sent ✅';
           console.log(`✅ SOS email sent to ${contact.fullName}`);
         } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
           contactResult.emailStatus = 'failed ❌';
-          console.error(`❌ SOS email failed for ${contact.fullName}:`, err.message);
+          console.error(`❌ SOS email failed for ${contact.fullName}:`, errorMessage);
         }
       }
 

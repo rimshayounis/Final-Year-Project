@@ -7,16 +7,16 @@ export type PostDocument = Post & Document;
 @Schema({ _id: true, timestamps: true })
 export class Comment {
   @Prop({ type: Types.ObjectId, required: true })
-  userId: Types.ObjectId;
+  userId!: Types.ObjectId;
 
   @Prop({ default: 'User' })
-  userName: string;
+  userName!: string;
 
   @Prop({ required: true })
-  text: string;
+  text!: string;
 
   @Prop({ default: () => new Date() })
-  createdAt: Date;
+  createdAt!: Date;
 }
 
 export const CommentSchema = SchemaFactory.createForClass(Comment);
@@ -26,60 +26,60 @@ export const CommentSchema = SchemaFactory.createForClass(Comment);
 export class Post {
   // userModel tracks which collection userId belongs to
   @Prop({ type: String, enum: ['User', 'Doctor'], default: 'User' })
-  userModel: string;
+  userModel!: string;
 
   @Prop({ type: Types.ObjectId, refPath: 'userModel', required: true })
-  userId: Types.ObjectId;
+  userId!: Types.ObjectId;
 
   @Prop({ required: true, trim: true })
-  title: string;
+  title!: string;
 
   @Prop({ required: true })
-  description: string;
+  description!: string;
 
   @Prop({ required: true })
-  category: string;
+  category!: string;
 
   @Prop({ type: [String], default: [] })
-  mediaUrls: string[];
+  mediaUrls!: string[];
 
   @Prop({ default: null })
-  backgroundColor: string;
+  backgroundColor!: string;
 
   @Prop({
     type: String,
     enum: ['pending', 'approved', 'rejected'],
     default: 'pending',
   })
-  status: string;
+  status!: string;
 
   // approvedByModel tracks which collection approvedBy belongs to (always Doctor)
   @Prop({ type: String, enum: ['User', 'Doctor'], default: 'Doctor' })
-  approvedByModel: string;
+  approvedByModel!: string;
 
   @Prop({ type: Types.ObjectId, refPath: 'approvedByModel', default: null })
-  approvedBy: Types.ObjectId;
+  approvedBy!: Types.ObjectId;
 
   @Prop({ default: null })
-  approvedAt: Date;
+  approvedAt!: Date;
 
   @Prop({ default: null })
-  rejectionReason: string;
+  rejectionReason!: string;
 
   @Prop({ default: 0 })
-  likes: number;
+  likes!: number;
 
   @Prop({ default: 0 })
-  comments: number;
+  comments!: number;
 
   @Prop({ default: 0 })
-  shares: number;
+  shares!: number;
 
   @Prop({ type: [CommentSchema], default: [] })
-  commentsList: Comment[];
+  commentsList!: Comment[];
 
   @Prop({ default: true })
-  isActive: boolean; // false = private (owner only); true = public
+  isActive!: boolean; // false = private (owner only); true = public
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

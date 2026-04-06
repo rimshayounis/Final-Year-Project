@@ -71,8 +71,10 @@ export class MailService {
     try {
       await this.transporter.sendMail(mailOptions);
       console.log('✅ OTP email sent to:', toEmail);
-    } catch (error) {
-      console.error('❌ Mail send error:', error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error('❌ Mail send error:', errorMessage);
       throw new InternalServerErrorException(
         'Failed to send OTP email. Please try again.',
       );
@@ -299,8 +301,10 @@ export class MailService {
     try {
       await this.transporter.sendMail(mailOptions);
       console.log(`✅ SOS alert sent to contact: ${contactEmail}`);
-    } catch (error) {
-      console.error(`❌ SOS alert failed for ${contactEmail}:`, error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(`❌ SOS alert failed for ${contactEmail}:`, errorMessage);
     }
   }
 
@@ -356,8 +360,10 @@ export class MailService {
     try {
       await this.transporter.sendMail(mailOptions);
       console.log(`✅ SOS confirmation sent to user: ${userEmail}`);
-    } catch (error) {
-      console.error(`❌ SOS confirmation failed:`, error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(`❌ SOS confirmation failed:`, errorMessage);
     }
   }
 }

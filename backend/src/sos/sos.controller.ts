@@ -6,18 +6,18 @@ import { ChatMessage } from './sos.types'; // 👈 import from types file
 
 class ChatMessageDto implements ChatMessage { // 👈 implements the interface
   @IsString()
-  role: string;
+  role!: string;
 
   @IsString()
-  text: string;
+  text!: string;
 }
 
 class TriggerSosDto {
   @IsNumber()
-  lat: number;
+  lat!: number;
 
   @IsNumber()
-  lng: number;
+  lng!: number;
 
   @IsOptional()
   @IsArray()
