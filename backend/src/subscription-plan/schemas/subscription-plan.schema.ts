@@ -43,14 +43,14 @@ export class SubscriptionPlanRecord {
   pricePKR!: number;
 
   // e.g. 'easypaisa' | 'jazzcash' | 'bank_transfer' | null
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   paymentMethod: string | null = null;
 
   /** Reference to the Transaction record for this subscription payment */
   @Prop({ type: Types.ObjectId, ref: 'Transaction', default: null })
   transactionId: Types.ObjectId | null = null;
 
-  @Prop({ default: null })
+  @Prop({ type: Date, default: null })
   cancelledAt: Date | null = null;
 
   @Prop({ default: null })
