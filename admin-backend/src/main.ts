@@ -8,7 +8,7 @@ async function bootstrap() {
 
   // Global validation
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
-
+app.setGlobalPrefix('api'); // ← Add this line
   // CORS — allow Next.js frontend
 app.enableCors({
   origin: ['http://localhost:3000', 'http://localhost:3002'],
