@@ -73,6 +73,14 @@ type FeedScreenProps = {
   onFindPeople?: () => void;
 };
 
+/* ── helper: safely extract authorId from any userId shape ── */
+const extractAuthorId = (userId: Post["userId"]): string | null => {
+  if (!userId) return null;
+  if (typeof userId === "object") return (userId as PostAuthor)._id ?? null;
+  if (typeof userId === "string" && userId.trim() !== "") return userId;
+  return null;
+};
+
 /* ── Reject Modal ── */
 function RejectModal({
   visible,
@@ -237,10 +245,11 @@ export default function FeedScreen({
   const [searchQuery, setSearchQuery] = useState("");
   const [isPersonalized, setIsPersonalized] = useState(false);
   const [matchedCategories, setMatchedCategories] = useState<string[]>([]);
+  const [mySpecialization, setMySpecialization] = useState<string>("");
 
-  const [reportPost, setReportPost]           = useState<Post | null>(null);
-  const [reportReason, setReportReason]       = useState("");
-  const [reportLoading, setReportLoading]     = useState(false);
+  const [reportPost, setReportPost] = useState<Post | null>(null);
+  const [reportReason, setReportReason] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
 
   const categories = [
@@ -256,6 +265,16 @@ export default function FeedScreen({
     { key: "pending", label: "Pending", color: "#F6A623" },
     { key: "approved", label: "Approved", color: "#00B374" },
   ];
+
+  /** Returns true if the logged-in doctor is a psychologist / psychiatrist */
+  const isPsychologist = (): boolean => {
+    const spec = mySpecialization.toLowerCase();
+    return (
+      spec.includes("psycholog") ||
+      spec.includes("psychiatr") ||
+      spec.includes("mental health")
+    );
+  };
 
   const fetchDoctorInfo = async (doctorId: string): Promise<DoctorInfo | null> => {
     if (doctorInfoCache[doctorId]) return doctorInfoCache[doctorId];
@@ -292,6 +311,8 @@ export default function FeedScreen({
       const dr = drRes.data?.doctor ?? drRes.data ?? {};
       const plan = dr.subscriptionPlan ?? "free_trial";
       setDoctorPlan(plan);
+      const spec = dr.doctorProfile?.specialization ?? "";
+      setMySpecialization(spec);
       if (plan === "free_trial") { setSlotsRemaining(0); return; }
       const slotsRes = await apiClient.get(`/points-reward/${id}/verification-slots?plan=${plan}`);
       setSlotsRemaining(slotsRes.data?.data?.remainingSlots ?? 0);
@@ -323,7 +344,6 @@ export default function FeedScreen({
         }
       } else {
         if (selectedCategory === "All") {
-          // Use personalized recommended feed for users
           const res = await apiClient.get(`/posts/feed/recommended?userId=${id}`);
           list = res.data.data || [];
           setIsPersonalized(res.data.isPersonalized ?? false);
@@ -336,13 +356,15 @@ export default function FeedScreen({
         }
       }
 
+      // ── collect all unique author IDs (handles both string and object shapes) ──
       const uniqueIds = [
         ...new Set(
           list
-            .map((p) => typeof p.userId === "object" ? (p.userId as any)?._id : null)
+            .map((p) => extractAuthorId(p.userId))
             .filter(Boolean) as string[],
         ),
       ];
+
       const dSet = new Set<string>();
       const nMap: Record<string, string> = {};
       const iMap: Record<string, string> = {};
@@ -392,16 +414,17 @@ export default function FeedScreen({
         list = list.filter((p) => p.category?.toLowerCase() === selectedCategory.toLowerCase());
       }
 
+      // ── author type filter using extractAuthorId ──
       const filtered =
         selectedAuthorType === "All"
           ? list
           : selectedAuthorType === "professionals"
             ? list.filter((p) => {
-                const a = typeof p.userId === "object" ? (p.userId as any)?._id : null;
+                const a = extractAuthorId(p.userId);
                 return a && dSet.has(a);
               })
             : list.filter((p) => {
-                const a = typeof p.userId === "object" ? (p.userId as any)?._id : null;
+                const a = extractAuthorId(p.userId);
                 return a && !dSet.has(a);
               });
 
@@ -566,23 +589,22 @@ export default function FeedScreen({
     setReportSubmitted(false);
   };
 
-  // ── UPDATED: now sends postId ──
   const handleSubmitReport = async () => {
     if (!reportPost) return;
     setReportLoading(true);
     try {
-      const postAuthor = typeof reportPost.userId === 'object'
+      const postAuthor = typeof reportPost.userId === "object"
         ? reportPost.userId as PostAuthor
         : null;
       const reportedId = postAuthor?._id ?? (reportPost.userId as string);
 
       await reportAPI.submit({
-        reporterId:    id,
-        reporterModel: role === 'doctor' ? 'Doctor' : 'User',
+        reporterId: id,
+        reporterModel: role === "doctor" ? "Doctor" : "User",
         reportedId,
-        reportedModel: doctorIds.has(reportedId) ? 'Doctor' : 'User',
-        reason:        reportReason.trim() || 'Reported post',
-        postId:        reportPost._id,  // ← NOW INCLUDED
+        reportedModel: doctorIds.has(reportedId) ? "Doctor" : "User",
+        reason: reportReason.trim() || "Reported post",
+        postId: reportPost._id,
       });
     } catch {
       // silent — show success regardless
@@ -706,12 +728,15 @@ export default function FeedScreen({
     const hasMedia = (item.mediaUrls?.length ?? 0) > 0;
     const descLimit = 150;
     const needsExpand = item.description.length > descLimit && !hasColor && !hasMedia;
+
+    // ── use extractAuthorId for consistent ID extraction ──
+    const authorId = extractAuthorId(item.userId) ?? "";
     const author = typeof item.userId === "object" ? (item.userId as PostAuthor) : null;
-    const authorId = author?._id ?? "";
+
     const resolvedName = authorNames[authorId] || author?.fullName || "";
     const isDoc = doctorIds.has(authorId);
     const authorName = resolvedName
-      ? resolvedName.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+      ? resolvedName.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
       : "...";
     const authorInitial = resolvedName ? resolvedName.charAt(0).toUpperCase() : "?";
     const authorImage = profileImages[authorId] ?? null;
@@ -763,9 +788,18 @@ export default function FeedScreen({
               </View>
             </View>
           </TouchableOpacity>
+
           {(() => {
             if (role !== "doctor" || isOwnPost || item.status !== "pending") return null;
-            if (item.category?.toLowerCase() === "mental health") return null;
+
+            const isMentalHealth = item.category?.toLowerCase() === "mental health";
+
+            // Psychologist: can ONLY review mental health posts
+            if (isPsychologist() && !isMentalHealth) return null;
+
+            // Non-psychologist: can review everything EXCEPT mental health
+            if (!isPsychologist() && isMentalHealth) return null;
+
             return (
               <View style={s.reviewBtns}>
                 {doctorPlan === "free_trial" ? (
@@ -960,7 +994,7 @@ export default function FeedScreen({
           <Text style={s.topNavTitle}>{"Health Feed"}</Text>
         )}
         <View style={s.topNavRight}>
-          {role === 'user' && onFindPeople && (
+          {role === "user" && onFindPeople && (
             <TouchableOpacity style={s.navIconBtn} onPress={onFindPeople}>
               <Ionicons name="people-outline" size={20} color="#FFF" />
             </TouchableOpacity>
@@ -990,7 +1024,8 @@ export default function FeedScreen({
       ) : (
         <FlatList
           data={posts.filter((p) => {
-            const authorId = typeof p.userId === "object" ? (p.userId as any)?._id : p.userId;
+            // ── use extractAuthorId in FlatList filter too ──
+            const authorId = extractAuthorId(p.userId);
             if (p.isActive === false && authorId !== id) return false;
             if (searchQuery.trim()) {
               const keywords = searchQuery.trim().toLowerCase().split(/\s+/);
@@ -1038,7 +1073,7 @@ export default function FeedScreen({
           <View style={s.reportOverlay} />
         </TouchableWithoutFeedback>
         <View style={s.reportCenterWrap} pointerEvents="box-none">
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
             <View style={s.reportCard}>
               {reportSubmitted ? (
                 <View style={s.reportSuccessWrap}>
@@ -1052,7 +1087,7 @@ export default function FeedScreen({
                   <View style={s.reportCardHeader}>
                     <Ionicons name="flag" size={18} color="#E53E3E" />
                     <Text style={s.reportCardTitle}>Report Post</Text>
-                    <TouchableOpacity onPress={() => setReportPost(null)} style={{ marginLeft: 'auto' }}>
+                    <TouchableOpacity onPress={() => setReportPost(null)} style={{ marginLeft: "auto" }}>
                       <Ionicons name="close" size={20} color="#888" />
                     </TouchableOpacity>
                   </View>
@@ -1460,40 +1495,40 @@ const s = StyleSheet.create({
   rejectBtnText: { fontSize: 11, fontWeight: "700", color: "#E53E3E" },
   threeDotBtn: { padding: 4, marginLeft: 4 },
   reportOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   reportCenterWrap: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 24,
   },
-  reportCard: { backgroundColor: '#FFF', borderRadius: 18, padding: 20, width: '100%', elevation: 10 },
-  reportCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  reportCardTitle: { fontSize: 16, fontWeight: '800', color: '#1A1D2E' },
-  reportCardSub: { fontSize: 13, color: '#888', marginBottom: 14, lineHeight: 20 },
+  reportCard: { backgroundColor: "#FFF", borderRadius: 18, padding: 20, width: "100%", elevation: 10 },
+  reportCardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  reportCardTitle: { fontSize: 16, fontWeight: "800", color: "#1A1D2E" },
+  reportCardSub: { fontSize: 13, color: "#888", marginBottom: 14, lineHeight: 20 },
   reportInput: {
-    backgroundColor: '#F5F7FF',
+    backgroundColor: "#F5F7FF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E8EAF6',
+    borderColor: "#E8EAF6",
     padding: 12,
     fontSize: 14,
-    color: '#1A1D2E',
+    color: "#1A1D2E",
     minHeight: 100,
     marginBottom: 16,
   },
-  reportBtnRow: { flexDirection: 'row', gap: 10 },
+  reportBtnRow: { flexDirection: "row", gap: 10 },
   reportCancelBtn: {
     flex: 1, paddingVertical: 12, borderRadius: 12,
-    borderWidth: 1.5, borderColor: '#E0E4FF', alignItems: 'center',
+    borderWidth: 1.5, borderColor: "#E0E4FF", alignItems: "center",
   },
-  reportCancelTxt: { fontSize: 14, fontWeight: '600', color: '#888' },
-  reportSubmitBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#E53E3E', alignItems: 'center' },
-  reportSubmitTxt: { fontSize: 14, fontWeight: '700', color: '#FFF' },
-  reportSuccessWrap: { alignItems: 'center', paddingVertical: 20, gap: 14 },
-  reportSuccessText: { fontSize: 16, fontWeight: '700', color: '#1A1D2E', textAlign: 'center' },
+  reportCancelTxt: { fontSize: 14, fontWeight: "600", color: "#888" },
+  reportSubmitBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: "#E53E3E", alignItems: "center" },
+  reportSubmitTxt: { fontSize: 14, fontWeight: "700", color: "#FFF" },
+  reportSuccessWrap: { alignItems: "center", paddingVertical: 20, gap: 14 },
+  reportSuccessText: { fontSize: 16, fontWeight: "700", color: "#1A1D2E", textAlign: "center" },
   catChip: {
     alignSelf: "flex-start",
     backgroundColor: "#EEF0FB",

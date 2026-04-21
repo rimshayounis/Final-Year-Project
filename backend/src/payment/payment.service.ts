@@ -462,7 +462,7 @@ export class PaymentService {
 
   async getHeldPayments(): Promise<any> {
     const held = await this.appointmentModel
-      .find({ paymentStatus: 'payment_held' })
+      .find({ paymentStatus: 'payment_held' }) 
       .populate('userId',   'fullName email')
       .populate('doctorId', 'fullName email')
       .sort({ createdAt: -1 })
