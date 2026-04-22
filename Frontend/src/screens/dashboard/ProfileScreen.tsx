@@ -867,136 +867,56 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
      Profile Header — memoized so the avatar image does not reload
      when modal-only state (bioText, editName, etc.) changes
   ══════════════════════════════════ */
-  const ProfileHeader = useCallback(() => (
-    <View>
-      {/* White Profile Card */}
-      <View style={styles.profileCard}>
-        {/* Row: Avatar | Name+Stats */}
-        <View style={styles.profileTopRow}>
-          {/* Avatar */}
-          <TouchableOpacity
-            onPress={isOwner ? handlePickPhoto : undefined}
-            activeOpacity={isOwner ? 0.7 : 1}
-            style={styles.avatarTouchable}
-          >
-            {avatarSource ? (
-              <Image
-                source={avatarSource}
-                style={styles.avatarImage}
-              />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitial}>
-                  {userProfile?.fullName?.charAt(0)?.toUpperCase() ?? "?"}
-                </Text>
-              </View>
-            )}
-            {isOwner && (
-              <View style={styles.cameraBadge}>
-                <Ionicons name="camera" size={11} color="#FFF" />
-              </View>
-            )}
-          </TouchableOpacity>
+/* ══════════════════════════════════
+   Profile Header — Memoized
+══════════════════════════════════ */
+const ProfileHeader = useCallback(() => (
+  <View>
+    {/* White Profile Card */}
+    <View style={styles.profileCard}>
+      {/* Row: Avatar | Name+Stats */}
+      <View style={styles.profileTopRow}>
+        {/* Avatar */}
+        <TouchableOpacity
+          onPress={isOwner ? handlePickPhoto : undefined}
+          activeOpacity={isOwner ? 0.7 : 1}
+          style={styles.avatarTouchable}
+        >
+          {avatarSource ? (
+            <Image
+              source={avatarSource}
+              style={styles.avatarImage}
+            />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarInitial}>
+                {userProfile?.fullName?.charAt(0)?.toUpperCase() ?? "?"}
+              </Text>
+            </View>
+          )}
+          {isOwner && (
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={11} color="#FFF" />
+            </View>
+          )}
+        </TouchableOpacity>
 
-          {/* Name + Stats */}
-          <View style={styles.nameStatsCol}>
-            <View style={styles.nameRow}>
-              <View style={styles.nameWithTick}>
-                <Text style={styles.profileName} numberOfLines={1}>
-                  {displayName(userProfile?.fullName)}
-                </Text>
-                {role === "doctor" && userProfile?.subscriptionPlan === "premium" && (
-                  <Ionicons name="checkmark-circle" size={17} color="#1D9BF0" />
-                )}
-              </View>
-              {isOwner && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setEditName(userProfile?.fullName ?? "");
-                    setEditModal(true);
-                  }}
-                  style={styles.pencilBtn}
-                >
-                  <Ionicons name="pencil" size={13} color="#6B7FED" />
-                </TouchableOpacity>
+        {/* Name + Stats */}
+        <View style={styles.nameStatsCol}>
+          <View style={styles.nameRow}>
+            <View style={styles.nameWithTick}>
+              <Text style={styles.profileName} numberOfLines={1}>
+                {displayName(userProfile?.fullName)}
+              </Text>
+              {role === "doctor" && userProfile?.subscriptionPlan === "premium" && (
+                <Ionicons name="checkmark-circle" size={17} color="#1D9BF0" />
               )}
             </View>
-
-            {role === "doctor" && (
-              <View style={styles.doctorBadge}>
-                <FontAwesome5 name="user-md" size={10} color="#6B7FED" />
-                <Text style={styles.doctorBadgeText}>Verified by PMDC</Text>
-                {userProfile?.specialization ? (
-                  <>
-                    <View style={styles.badgeDivider} />
-                    <Text style={styles.doctorBadgeSpec}>{userProfile.specialization}</Text>
-                  </>
-                ) : null}
-              </View>
-            )}
-
-            {role === "doctor" && userProfile?.subscriptionPlan === "premium" && (
-              <View style={styles.premiumBadge}>
-                <Ionicons name="star" size={10} color="#C8960C" />
-                <Text style={styles.premiumBadgeText}>Premium Member</Text>
-              </View>
-            )}
-
-            {/* Stats */}
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNum}>{posts.length}</Text>
-                <Text style={styles.statLabel}>Posts</Text>
-              </View>
-              {role === "doctor" ? (
-                <>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statNum}>{approvedByDoctorCount}</Text>
-                    <Text style={styles.statLabel}>Approved</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statNum}>{appointmentCount}</Text>
-                    <Text style={styles.statLabel}>Sessions</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                      <Ionicons name="star" size={13} color="#F6A623" />
-                      <Text style={styles.statNum}>
-                        {doctorRating && doctorRating.ratingCount > 0
-                          ? doctorRating.avgRating.toFixed(1)
-                          : '—'}
-                      </Text>
-                    </View>
-                    <Text style={styles.statLabel}>Rating</Text>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statNum}>{pendingCount}</Text>
-                    <Text style={styles.statLabel}>Pending</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statNum}>{publishedCount}</Text>
-                    <Text style={styles.statLabel}>Published</Text>
-                  </View>
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Bio */}
-        <View style={styles.bioSection}>
-          <View style={styles.bioHeaderRow}>
-            <Text style={styles.bioSectionLabel}>
-              {isOwner ? "About yourself" : "About"}
-            </Text>
             {isOwner && (
               <TouchableOpacity
                 onPress={() => {
-                  setBioText(userProfile?.bio ?? "");
-                  setBioModal(true);
+                  setEditName(userProfile?.fullName ?? "");
+                  setEditModal(true);
                 }}
                 style={styles.pencilBtn}
               >
@@ -1004,206 +924,280 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
               </TouchableOpacity>
             )}
           </View>
-          <Text style={styles.bioText}>
-            {userProfile?.bio || (isOwner ? "No bio yet. Tap the pencil to add one." : "No bio available.")}
-          </Text>
-        </View>
 
-        {/* Points & Mentor Level — visible to ALL users on doctor profiles */}
-        {role === "doctor" && pointsSummary !== null && (
-          <View style={styles.pointsCard}>
-            {!onBookAppointment && (
-              <View style={styles.pointsCardHeader}>
-                <Text style={styles.pointsCardTitle}>Points & Rewards</Text>
-                <TouchableOpacity onPress={handlePointsRefresh} disabled={pointsRefreshing} style={styles.pointsRefreshBtn}>
-                  {pointsRefreshing
-                    ? <ActivityIndicator size={14} color="#6B7FED" />
-                    : <Ionicons name="refresh" size={16} color="#6B7FED" />}
-                </TouchableOpacity>
-              </View>
-            )}
-            <View style={styles.pointsRow}>
-
-              {/* Points — only visible to the doctor on their own profile */}
-              {!onBookAppointment && (
+          {role === "doctor" && (
+            <View style={styles.doctorBadge}>
+              <FontAwesome5 name="user-md" size={10} color="#6B7FED" />
+              <Text style={styles.doctorBadgeText}>Verified by PMDC</Text>
+              {userProfile?.specialization ? (
                 <>
-                  <TouchableOpacity
-                    style={styles.pointsItem}
-                    onPress={() => { setConvertInput(""); setConvertModal(true); }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="star" size={18} color="#F6A623" />
-                    <Text style={styles.pointsNum}>{pointsSummary.totalPoints}</Text>
-                    <Text style={styles.pointsLabel}>My Points</Text>
-                    <Text style={styles.pointsCash}>
-                      PKR {pointsSummary.cashValue.toFixed(0)}
-                    </Text>
-                    <Text style={styles.pointsTapHint}>Tap to convert</Text>
-                  </TouchableOpacity>
-                  <View style={styles.pointsVertDivider} />
+                  <View style={styles.badgeDivider} />
+                  <Text style={styles.doctorBadgeSpec}>{userProfile.specialization}</Text>
                 </>
-              )}
+              ) : null}
+            </View>
+          )}
 
-              {/* Mentor Level */}
-              {mentorLevel && (
-                <>
-                  <View style={styles.pointsItem}>
-                    <Ionicons
-                      name="ribbon"
-                      size={18}
-                      color={
-                        mentorLevel.level === 5 ? "#7B1FA2"
-                        : mentorLevel.level === 4 ? "#F9A825"
-                        : mentorLevel.level === 3 ? "#6B7FED"
-                        : mentorLevel.level === 2 ? "#00B374"
-                        : "#999"
-                      }
-                    />
-                    <Text style={styles.pointsNum}>Lv.{mentorLevel.level}</Text>
-                    <Text style={styles.pointsLabel}>{mentorLevel.title}</Text>
-                    <Text style={styles.pointsCash}>
-                      {mentorLevel.nextScore
-                        ? `${mentorLevel.score}/${mentorLevel.nextScore}`
-                        : `${mentorLevel.score} pts`}
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNum}>{posts.length}</Text>
+              <Text style={styles.statLabel}>Posts</Text>
+            </View>
+            {role === "doctor" ? (
+              <>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNum}>{approvedByDoctorCount}</Text>
+                  <Text style={styles.statLabel}>Approved</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNum}>{appointmentCount}</Text>
+                  <Text style={styles.statLabel}>Sessions</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <Ionicons name="star" size={13} color="#F6A623" />
+                    <Text style={styles.statNum}>
+                      {doctorRating && doctorRating.ratingCount > 0
+                        ? doctorRating.avgRating.toFixed(1)
+                        : '—'}
                     </Text>
                   </View>
-                </>
-              )}
-            </View>
+                  <Text style={styles.statLabel}>Rating</Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNum}>{pendingCount}</Text>
+                  <Text style={styles.statLabel}>Pending</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNum}>{publishedCount}</Text>
+                  <Text style={styles.statLabel}>Published</Text>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </View>
 
-            {/* Hint — only for doctor's own profile */}
-            {!onBookAppointment && (
+      {/* Bio */}
+      <View style={styles.bioSection}>
+        <View style={styles.bioHeaderRow}>
+          <Text style={styles.bioSectionLabel}>
+            {isOwner ? "About yourself" : "About"}
+          </Text>
+          {isOwner && (
+            <TouchableOpacity
+              onPress={() => {
+                setBioText(userProfile?.bio ?? "");
+                setBioModal(true);
+              }}
+              style={styles.pencilBtn}
+            >
+              <Ionicons name="pencil" size={13} color="#6B7FED" />
+            </TouchableOpacity>
+          )}
+        </View>
+        <Text style={styles.bioText}>
+          {userProfile?.bio || (isOwner ? "No bio yet. Tap the pencil to add one." : "No bio available.")}
+        </Text>
+      </View>
+
+      {/* ── Points & Mentor Level ── */}
+      {role === "doctor" && (pointsSummary !== null || mentorLevel !== null) && (
+        <View style={styles.pointsCard}>
+          {/* Header (Only for Owner) */}
+          {isOwner && (
+            <View style={styles.pointsCardHeader}>
+              <Text style={styles.pointsCardTitle}>Points & Rewards</Text>
+              <TouchableOpacity onPress={handlePointsRefresh} disabled={pointsRefreshing} style={styles.pointsRefreshBtn}>
+                {pointsRefreshing
+                  ? <ActivityIndicator size={14} color="#6B7FED" />
+                  : <Ionicons name="refresh" size={16} color="#6B7FED" />}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View style={styles.pointsRow}>
+            {/* Points (HIDDEN FOR VISITORS) */}
+            {isOwner && pointsSummary && (
+              <>
+                <TouchableOpacity
+                  style={styles.pointsItem}
+                  onPress={() => { setConvertInput(""); setConvertModal(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="star" size={18} color="#F6A623" />
+                  <Text style={styles.pointsNum}>{pointsSummary.totalPoints}</Text>
+                  <Text style={styles.pointsLabel}>My Points</Text>
+                  <Text style={styles.pointsCash}>
+                    PKR {pointsSummary.cashValue.toFixed(0)}
+                  </Text>
+                  <Text style={styles.pointsTapHint}>Tap to convert</Text>
+                </TouchableOpacity>
+                <View style={styles.pointsVertDivider} />
+              </>
+            )}
+
+            {/* Mentor Level (VISIBLE TO ALL) */}
+            {mentorLevel && (
+              <View style={styles.pointsItem}>
+                <Ionicons
+                  name="ribbon"
+                  size={18}
+                  color={
+                    mentorLevel.level === 5 ? "#7B1FA2"
+                    : mentorLevel.level === 4 ? "#F9A825"
+                    : mentorLevel.level === 3 ? "#6B7FED"
+                    : mentorLevel.level === 2 ? "#00B374"
+                    : "#999"
+                  }
+                />
+                <Text style={styles.pointsNum}>Lv.{mentorLevel.level}</Text>
+                <Text style={styles.pointsLabel}>{mentorLevel.title}</Text>
+                <Text style={styles.pointsCash}>
+                  {mentorLevel.nextScore
+                    ? `${mentorLevel.score}/${mentorLevel.nextScore}`
+                    : `${mentorLevel.score} pts`}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Hint & Slots (HIDDEN FOR VISITORS) */}
+          {isOwner && (
+            <>
               <View style={styles.pointsHint}>
                 <Ionicons name="information-circle-outline" size={13} color="#6B7FED" />
                 <Text style={styles.pointsHintText}>
                   Earn pts when posts you approve go viral · 1 pt = PKR 0.10
                 </Text>
               </View>
-            )}
 
-            {/* Verification Slots — only for doctor's own profile */}
-            {!onBookAppointment && verificationSlots !== null && (
-              <View style={styles.slotsRow}>
-                <Ionicons name="checkmark-circle" size={14} color="#00B374" />
-                <Text style={styles.slotsLabel}>Post verify credits this month:</Text>
-                <View style={styles.slotsPillWrap}>
-                  {Array.from({ length: verificationSlots.totalSlots }).map((_, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.slotPill,
-                        i < verificationSlots.usedSlots ? styles.slotPillUsed : styles.slotPillFree,
-                      ]}
-                    />
-                  ))}
-                  {verificationSlots.totalSlots === 0 && (
-                    <Text style={styles.slotsNone}>No slots (upgrade plan)</Text>
-                  )}
-                </View>
-                <Text style={styles.slotsCount}>
-                  {verificationSlots.remainingSlots}/{verificationSlots.totalSlots}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Message button — shown when viewing another user's profile */}
-        {!isOwner && viewerId && role === 'user' && (
-          <TouchableOpacity
-            style={profileMsgStyles.msgBtn}
-            onPress={handleMessageUser}
-            disabled={messagingLoading}
-            activeOpacity={0.8}
-          >
-            {messagingLoading
-              ? <ActivityIndicator size="small" color="#FFF" />
-              : <>
-                  <Ionicons name="chatbubble-outline" size={18} color="#FFF" />
-                  <Text style={profileMsgStyles.msgBtnText}>Message</Text>
-                </>
-            }
-          </TouchableOpacity>
-        )}
-
-        {/* Book Appointment — only shown when doctor is active and has availability */}
-        {onBookAppointment && doctorIsActive ? (
-          <TouchableOpacity
-            style={styles.bookBtn}
-            onPress={() =>
-              onBookAppointment({
-                _id: id,
-                fullName: userProfile?.fullName ?? "",
-                specialization: userProfile?.specialization ?? "",
-                email: userProfile?.email ?? "",
-                profileImage: userProfile?.profileImage,
-              })
-            }
-          >
-            <Ionicons name="calendar-outline" size={18} color="#FFF" />
-            <Text style={styles.bookBtnText}>Book Appointment</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {/* Create Appointments — only shown to doctor on their own profile */}
-        {onCreateAppointment ? (
-          <TouchableOpacity
-            style={styles.createAppointmentBtn}
-            onPress={onCreateAppointment}
-          >
-            <Ionicons name="add-circle-outline" size={18} color="#6B7FED" />
-            <Text style={styles.createAppointmentBtnText}>Create Appointments</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {/* ── Patient Reviews — visible on doctor profiles ── */}
-        {role === "doctor" && doctorRating !== null && (
-          <View style={styles.reviewsSection}>
-            <View style={styles.reviewsHeader}>
-              <Ionicons name="star" size={16} color="#F6A623" />
-              <Text style={styles.reviewsTitle}>Patient Reviews</Text>
-              {doctorRating.ratingCount > 0 && (
-                <Text style={styles.reviewsAvg}>
-                  {doctorRating.avgRating.toFixed(1)} · {doctorRating.ratingCount} {doctorRating.ratingCount === 1 ? 'review' : 'reviews'}
-                </Text>
-              )}
-            </View>
-
-            {doctorRating.feedbacks.length === 0 ? (
-              <Text style={styles.reviewsEmpty}>No reviews yet.</Text>
-            ) : (
-              doctorRating.feedbacks.map(fb => (
-                <View key={fb._id} style={styles.reviewCard}>
-                  <View style={styles.reviewTopRow}>
-                    <View style={styles.reviewStars}>
-                      {[1,2,3,4,5].map(s => (
-                        <Ionicons
-                          key={s}
-                          name={s <= fb.rating ? 'star' : 'star-outline'}
-                          size={13}
-                          color={s <= fb.rating ? '#F6A623' : '#DDD'}
-                        />
-                      ))}
-                    </View>
-                    <Text style={styles.reviewName}>
-                      {fb.userId?.fullName ?? 'Anonymous'}
-                    </Text>
-                    <Text style={styles.reviewDate}>
-                      {new Date(fb.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </Text>
+              {verificationSlots !== null && (
+                <View style={styles.slotsRow}>
+                  <Ionicons name="checkmark-circle" size={14} color="#00B374" />
+                  <Text style={styles.slotsLabel}>Post verify credits this month:</Text>
+                  <View style={styles.slotsPillWrap}>
+                    {Array.from({ length: verificationSlots.totalSlots }).map((_, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.slotPill,
+                          i < verificationSlots.usedSlots ? styles.slotPillUsed : styles.slotPillFree,
+                        ]}
+                      />
+                    ))}
                   </View>
-                  {!!fb.description && (
-                    <Text style={styles.reviewDesc}>{fb.description}</Text>
-                  )}
+                  <Text style={styles.slotsCount}>
+                    {verificationSlots.remainingSlots}/{verificationSlots.totalSlots}
+                  </Text>
                 </View>
-              ))
+              )}
+            </>
+          )}
+        </View>
+      )}
+
+      {/* Message button (Visitor View Only) */}
+      {!isOwner && viewerId && role === 'user' && (
+        <TouchableOpacity
+          style={profileMsgStyles.msgBtn}
+          onPress={handleMessageUser}
+          disabled={messagingLoading}
+          activeOpacity={0.8}
+        >
+          {messagingLoading
+            ? <ActivityIndicator size="small" color="#FFF" />
+            : <>
+                <Ionicons name="chatbubble-outline" size={18} color="#FFF" />
+                <Text style={profileMsgStyles.msgBtnText}>Message</Text>
+              </>
+          }
+        </TouchableOpacity>
+      )}
+
+      {/* Book Appointment (Visitor View Only) */}
+      {!isOwner && onBookAppointment && doctorIsActive && (
+        <TouchableOpacity
+          style={styles.bookBtn}
+          onPress={() =>
+            onBookAppointment({
+              _id: id,
+              fullName: userProfile?.fullName ?? "",
+              specialization: userProfile?.specialization ?? "",
+              email: userProfile?.email ?? "",
+              profileImage: userProfile?.profileImage,
+            })
+          }
+        >
+          <Ionicons name="calendar-outline" size={18} color="#FFF" />
+          <Text style={styles.bookBtnText}>Book Appointment</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Create Appointments (Owner Only) */}
+      {isOwner && onCreateAppointment && (
+        <TouchableOpacity
+          style={styles.createAppointmentBtn}
+          onPress={onCreateAppointment}
+        >
+          <Ionicons name="add-circle-outline" size={18} color="#6B7FED" />
+          <Text style={styles.createAppointmentBtnText}>Create Appointments</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Patient Reviews (Visible to ALL) */}
+      {role === "doctor" && doctorRating !== null && (
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeader}>
+            <Ionicons name="star" size={16} color="#F6A623" />
+            <Text style={styles.reviewsTitle}>Patient Reviews</Text>
+            {doctorRating.ratingCount > 0 && (
+              <Text style={styles.reviewsAvg}>
+                {doctorRating.avgRating.toFixed(1)} · {doctorRating.ratingCount} {doctorRating.ratingCount === 1 ? 'review' : 'reviews'}
+              </Text>
             )}
           </View>
-        )}
-      </View>
 
-      {/* ── Post Status Tabs ── */}
-      {role !== "doctor" && <View style={styles.postTabsRow}>
+          {doctorRating.feedbacks.length === 0 ? (
+            <Text style={styles.reviewsEmpty}>No reviews yet.</Text>
+          ) : (
+            doctorRating.feedbacks.map(fb => (
+              <View key={fb._id} style={styles.reviewCard}>
+                <View style={styles.reviewTopRow}>
+                  <View style={styles.reviewStars}>
+                    {[1,2,3,4,5].map(s => (
+                      <Ionicons
+                        key={s}
+                        name={s <= fb.rating ? 'star' : 'star-outline'}
+                        size={13}
+                        color={s <= fb.rating ? '#F6A623' : '#DDD'}
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.reviewName}>
+                    {fb.userId?.fullName ?? 'Anonymous'}
+                  </Text>
+                  <Text style={styles.reviewDate}>
+                    {new Date(fb.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </Text>
+                </View>
+                {!!fb.description && (
+                  <Text style={styles.reviewDesc}>{fb.description}</Text>
+                )}
+              </View>
+            ))
+          )}
+        </View>
+      )}
+    </View>
+
+    {/* Post Status Tabs (Only for User Role) */}
+    {role !== "doctor" && (
+      <View style={styles.postTabsRow}>
         {(
           [
             { key: "approved", icon: "checkmark-circle", color: "#00B374" },
@@ -1231,16 +1225,16 @@ export default function ProfileScreen({ id, role, isOwner = false, viewerId, vie
             </React.Fragment>
           );
         })}
-      </View>}
-    </View>
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [
-    userProfile, avatarSource, posts, isOwner, role,
-    approvedByDoctorCount, appointmentCount,
-    pointsSummary, pointsRefreshing, verificationSlots,
-    doctorIsActive, onBookAppointment, onCreateAppointment,
-    activeTab, pendingCount, publishedCount,
-  ]);
+      </View>
+    )}
+  </View>
+), [
+  userProfile, avatarSource, posts, isOwner, role,
+  approvedByDoctorCount, appointmentCount,
+  pointsSummary, pointsRefreshing, verificationSlots,
+  doctorIsActive, onBookAppointment, onCreateAppointment,
+  activeTab, pendingCount, publishedCount, doctorRating
+]);
 
   /* ══════════════════════════════════
      Post Card
