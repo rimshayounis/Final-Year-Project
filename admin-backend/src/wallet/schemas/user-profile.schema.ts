@@ -6,10 +6,10 @@ export type UserProfileDocument = UserProfile & Document;
 @Schema({ collection: 'userprofiles' })
 export class UserProfile {
   @Prop({ type: Types.ObjectId, required: true })
-  ownerId: Types.ObjectId;
+  ownerId!: Types.ObjectId;
 
   @Prop({ type: String, default: null })
-  profileImage: string;
+  profileImage!: string;
 }
 
 export const UserProfileSchema = SchemaFactory.createForClass(UserProfile);

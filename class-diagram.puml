@@ -1,0 +1,426 @@
+@startuml MindCare_ClassDiagram
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam backgroundColor #FFFFFF
+skinparam roundcorner 6
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 55
+skinparam ranksep 70
+skinparam defaultFontSize 11
+
+skinparam class {
+  BackgroundColor #EEF2FF
+  BorderColor #4F46E5
+  HeaderBackgroundColor #4F46E5
+  HeaderFontColor #FFFFFF
+  AttributeFontColor #1F2937
+  BorderThickness 1.5
+  FontSize 11
+}
+
+skinparam package {
+  BackgroundColor #F8FAFC
+  BorderColor #CBD5E1
+  FontColor #334155
+  FontStyle bold
+  BorderThickness 1.2
+}
+
+skinparam arrow {
+  Color #475569
+  Thickness 1.5
+  FontSize 10
+  FontColor #475569
+}
+
+' ================================================
+'  PACKAGE: Core Users
+' ================================================
+package "Core Users" #F0F9FF {
+
+  class User {
+    + _id : ObjectId <<PK>>
+    + fullName : String
+    + email : String <<unique>>
+    + password : String
+    + age : Number
+    + gender : String
+    + userType : String
+    + phoneNumber : String?
+    + profileImage : String?
+    + sosMessage : String
+    + sosShareProfile : Boolean
+    + blockedUsers : ObjectId[]
+    + otpCode : String?
+    + otpExpiry : Date?
+    + createdAt : Date
+    + updatedAt : Date
+    ..embedded..
+    - healthProfile : HealthProfile
+    - emergencyContacts : EmergencyContact[]
+    - notificationSettings : UserNotificationSettings
+  }
+
+  class Doctor {
+    + _id : ObjectId <<PK>>
+    + fullName : String
+    + email : String <<unique>>
+    + password : String
+    + subscriptionPlan : SubscriptionPlan
+    + completedCount : Number
+    + avgRating : Number
+    + ratingCount : Number
+    + otpCode : String?
+    + otpExpiry : Date?
+    + createdAt : Date
+    + updatedAt : Date
+    ..embedded..
+    - doctorProfile : DoctorProfile
+    - bankDetails : BankDetails?
+    - notificationSettings : NotificationSettings
+  }
+
+  class Admin {
+    + _id : ObjectId <<PK>>
+    + fullName : String
+    + username : String <<unique>>
+    + email : String <<unique>>
+    + password : String
+    + role : String
+    + resetOtp : String?
+    + resetOtpExpiry : Date?
+    + createdAt : Date
+    + updatedAt : Date
+  }
+}
+
+' ================================================
+'  PACKAGE: Profile
+' ================================================
+package "Profile" #FFF7ED {
+
+  class UserProfile {
+    + _id : ObjectId <<PK>>
+    + ownerId : ObjectId <<refPath>>
+    + ownerType : "User" | "Doctor"
+    + bio : String?
+    + profileImage : String?
+    + createdAt : Date
+    + updatedAt : Date
+  }
+}
+
+' ================================================
+'  PACKAGE: Appointments
+' ================================================
+package "Appointments" #F0FDF4 {
+
+  class AppointmentAvailability {
+    + _id : ObjectId <<PK>>
+    + doctorId : ObjectId <<FK>>
+    + sessionDuration : Number (min)
+    + consultationFee : Number (PKR)
+    + isActive : Boolean
+    + lastUpdated : Date
+    + createdAt : Date
+    + updatedAt : Date
+    ..embedded..
+    - specificDates : SpecificDate[]
+  }
+
+  class BookedAppointment {
+    + _id : ObjectId <<PK>>
+    + userId : ObjectId <<FK>>
+    + doctorId : ObjectId <<FK>>
+    + date : String (YYYY-MM-DD)
+    + time : String (HH:MM)
+    + sessionDuration : Number
+    + consultationFee : Number
+    + healthConcern : String
+    + status : AppointmentStatus
+    + paymentStatus : PaymentStatus
+    + heldAmount : Number
+    + doctorEarning : Number
+    + commissionAmount : Number
+    + commissionRate : Number
+    + paymentIntentId : String?
+    + hasFeedback : Boolean
+    + createdAt : Date
+    + updatedAt : Date
+  }
+
+  class Feedback {
+    + _id : ObjectId <<PK>>
+    + appointmentId : ObjectId <<FK, unique>>
+    + userId : ObjectId <<FK>>
+    + doctorId : ObjectId <<FK>>
+    + rating : Number (1–5)
+    + description : String
+    + createdAt : Date
+    + updatedAt : Date
+  }
+}
+
+' ================================================
+'  PACKAGE: Messaging
+' ================================================
+package "Messaging" #FDF4FF {
+
+  class Conversation {
+    + _id : ObjectId <<PK>>
+    + patientId : ObjectId <<FK>>
+    + doctorId : ObjectId <<FK>>
+    + lastMessage : String
+    + lastMessageAt : Date
+    + patientUnreadCount : Number
+    + doctorUnreadCount : Number
+    + createdAt : Date
+    + updatedAt : Date
+  }
+
+  class UserConversation {
+    + _id : ObjectId <<PK>>
+    + user1Id : ObjectId <<FK>>
+    + user2Id : ObjectId <<FK>>
+    + lastMessage : String
+    + lastMessageAt : Date
+    + user1UnreadCount : Number
+    + user2UnreadCount : Number
+    + createdAt : Date
+    + updatedAt : Date
+  }
+
+  class Message {
+    + _id : ObjectId <<PK>>
+    + conversationId : ObjectId <<FK>>
+    + senderId : ObjectId
+    + receiverId : ObjectId
+    + text : String?
+    + fileUrl : String?
+    + fileType : FileType?
+    + fileName : String?
+    + duration : Number
+    + read : Boolean
+    + edited : Boolean
+    + reactions : Reaction[]
+    + createdAt : Date
+    + updatedAt : Date
+  }
+}
+
+' ================================================
+'  PACKAGE: Content
+' ================================================
+package "Content" #FFFBEB {
+
+  class Post {
+    + _id : ObjectId <<PK>>
+    + userId : ObjectId <<refPath>>
+    + userModel : "User" | "Doctor"
+    + title : String
+    + description : String
+    + category : String
+    + mediaUrls : String[]
+    + status : "pending" | "approved" | "rejected"
+    + approvedBy : ObjectId?
+    + approvedByModel : String?
+    + rejectionReason : String?
+    + likes : Number
+    + comments : Number
+    + shares : Number
+    + isActive : Boolean
+    + createdAt : Date
+    + updatedAt : Date
+    ..embedded..
+    - commentsList : Comment[]
+  }
+
+  class Report {
+    + _id : ObjectId <<PK>>
+    + reporterId : ObjectId <<refPath>>
+    + reporterModel : "User" | "Doctor"
+    + reportedId : ObjectId <<refPath>>
+    + reportedModel : "User" | "Doctor"
+    + reason : String
+    + status : "pending" | "reviewed"
+    + postId : ObjectId?
+    + createdAt : Date
+    + updatedAt : Date
+  }
+}
+
+' ================================================
+'  PACKAGE: Financial
+' ================================================
+package "Financial" #FFF1F2 {
+
+  class Wallet {
+    + _id : ObjectId <<PK>>
+    + doctorId : ObjectId <<FK, unique>>
+    + balance : Number (PKR)
+    + totalEarned : Number
+    + totalWithdrawn : Number
+    + createdAt : Date
+    + updatedAt : Date
+    ..embedded..
+    - transactions : WalletTransaction[]
+  }
+
+  class Transaction {
+    + _id : ObjectId <<PK>>
+    + type : TransactionType
+    + doctorId : ObjectId <<FK>>
+    + doctorName : String
+    + userId : ObjectId? <<FK>>
+    + appointmentId : ObjectId? <<FK>>
+    + plan : String?
+    + description : String
+    + amount : Number (PKR)
+    + commissionRate : Number
+    + commissionAmount : Number
+    + currency : String
+    + stripePaymentIntentId : String?
+    + status : "succeeded" | "pending" | "failed"
+    + paymentMethod : String
+    + createdAt : Date
+    + updatedAt : Date
+  }
+
+  class AdminWallet {
+    + _id : ObjectId <<PK>>
+    + totalBalance : Number
+    + totalEarned : Number
+    + totalCommission : Number
+    + heldBalance : Number
+    + totalTransactions : Number
+    + currency : String
+    + createdAt : Date
+    + updatedAt : Date
+  }
+
+  class SubscriptionPlanRecord {
+    + _id : ObjectId <<PK>>
+    + doctorId : ObjectId <<FK>>
+    + plan : PlanName
+    + startDate : Date
+    + endDate : Date
+    + status : PlanStatus
+    + pricePKR : Number
+    + paymentMethod : String?
+    + transactionId : ObjectId? <<FK>>
+    + cancelledAt : Date?
+    + cancelReason : String?
+    + createdAt : Date
+    + updatedAt : Date
+  }
+}
+
+' ================================================
+'  PACKAGE: Gamification
+' ================================================
+package "Gamification" #ECFDF5 {
+
+  class PointsReward {
+    + _id : ObjectId <<PK>>
+    + doctorId : ObjectId <<FK, unique>>
+    + totalPoints : Number
+    + lifetimePointsEarned : Number
+    + pointsSpent : Number
+    + trustBadge : TrustBadge
+    + trustScore : Number
+    + createdAt : Date
+    + updatedAt : Date
+    ..embedded..
+    - transactions : PointTransaction[]
+    - postMilestones : PostMilestone[]
+    - monthlyBookings : MonthlyBooking[]
+    - verificationSlots : VerificationSlotMonth[]
+  }
+}
+
+' ================================================
+'  PACKAGE: Support
+' ================================================
+package "Support" #F0F4FF {
+
+  class ChatbotSession {
+    + _id : ObjectId <<PK>>
+    + userId : ObjectId <<FK>>
+    + message : String
+    + response : String
+    + imageUrl : String?
+    + fileUrl : String?
+    + metadata : Record?
+    + createdAt : Date
+    + updatedAt : Date
+  }
+
+  class SupportRequest {
+    + _id : ObjectId <<PK>>
+    + userId : String <<FK>>
+    + userRole : "user" | "doctor"
+    + purpose : SupportPurpose
+    + description : String
+    + status : SupportRequestStatus
+    + adminNote : String?
+    + createdAt : Date
+    + updatedAt : Date
+  }
+}
+
+' ================================================
+'  RELATIONSHIPS
+' ================================================
+
+' --- Core Users → Profile (polymorphic) ---
+User          "1" -down-> "1"    UserProfile          : has (ownerType=User)
+Doctor        "1" -down-> "1"    UserProfile          : has (ownerType=Doctor)
+
+' --- Doctor → Appointments ---
+Doctor        "1" -right-> "1"   AppointmentAvailability : defines >
+Doctor        "1" -down-> "0..*" BookedAppointment    : receives >
+User          "1" -right-> "0..*" BookedAppointment   : books >
+
+' --- Appointment → Feedback ---
+BookedAppointment "1" -down-> "0..1" Feedback         : generates >
+User          "1" -down-> "0..*" Feedback             : writes >
+Doctor        "1" -down-> "0..*" Feedback             : receives >
+
+' --- Users → Messaging ---
+User          "1" -right-> "0..*" Conversation        : participates >
+Doctor        "1" -left-> "0..*"  Conversation        : participates >
+Conversation  "1" -down-> "0..*"  Message             : contains >
+User          "1" -down-> "0..*"  UserConversation    : participates (peer) >
+
+' --- Users → Content ---
+User          "1" -right-> "0..*" Post                : creates >
+Doctor        "1" -right-> "0..*" Post                : creates / approves >
+User          "1" -down-> "0..*"  Report              : files >
+Doctor        "1" -down-> "0..*"  Report              : files >
+Post          "0..1" <-right-     "0..*" Report       : reported via >
+
+' --- Doctor → Financial ---
+Doctor        "1" -right-> "1"   Wallet               : owns >
+Doctor        "1" -right-> "0..*" SubscriptionPlanRecord : subscribes >
+Doctor        "1" -down-> "0..*" Transaction          : involved in >
+User          "1" -right-> "0..*" Transaction         : pays via >
+SubscriptionPlanRecord "0..*" -right-> "0..1" Transaction : references >
+BookedAppointment "0..*" -right-> "0..1" Transaction  : generates >
+
+' --- Admin → Financial ---
+Admin         "1" -right-> "1"   AdminWallet          : manages >
+
+' --- Doctor → Gamification ---
+Doctor        "1" -right-> "1"   PointsReward         : earns >
+
+' --- Users → Support ---
+User          "1" -right-> "0..*" ChatbotSession      : uses >
+User          "1" -down-> "0..*"  SupportRequest      : submits >
+Doctor        "1" -down-> "0..*"  SupportRequest      : submits >
+
+' --- Self-referential ---
+User          "0..*" -[hidden]-> "0..*" User
+
+@enduml

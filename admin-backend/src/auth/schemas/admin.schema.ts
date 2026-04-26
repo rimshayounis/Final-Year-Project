@@ -6,27 +6,27 @@ export type AdminDocument = Admin & Document;
 @Schema({ timestamps: true })
 export class Admin {
   @Prop({ required: true })
-  fullName: string;
+  fullName!: string;
 
   @Prop({ required: true, unique: true })
-  username: string;
+  username!: string;
 
   @Prop({ required: true, unique: true })
-  email: string;
+  email!: string;
 
   @Prop({ required: true })
-  password: string;
+  password!: string;
 
   @Prop({ default: 'admin' })
-  role: string;
+  role!: string;
 
   // ← explicit type: String fixes the error
   @Prop({ type: String, default: null })
-  resetOtp: string | null;
+  resetOtp!: string | null;
 
   // ← explicit type: Date fixes the error
   @Prop({ type: Date, default: null })
-  resetOtpExpiry: Date | null;
+  resetOtpExpiry!: Date | null;
 }
 
 export const AdminSchema = SchemaFactory.createForClass(Admin);

@@ -180,7 +180,7 @@ export class MailService {
       await this.transporter.sendMail(mailOptions);
       console.log(`✅ Withdrawal approval email sent to: ${toEmail}`);
     } catch (error) {
-      console.error(`❌ Withdrawal approval email failed for ${toEmail}:`, error.message);
+      console.error(`❌ Withdrawal approval email failed for ${toEmail}:`, (error as Error).message);
     }
   }
 }

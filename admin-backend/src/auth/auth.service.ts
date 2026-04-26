@@ -179,7 +179,7 @@ export class AuthService {
       console.log(`✅ OTP email sent to ${email}`);
 
     } catch (err) {
-      console.error('❌ Email send error:', err.message);
+      console.error('❌ Email send error:', (err as Error).message);
       throw new BadRequestException(
         'Failed to send OTP email. Please verify your Gmail credentials in .env'
       );

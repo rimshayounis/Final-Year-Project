@@ -6,22 +6,22 @@ export type AdminWalletDocument = AdminWallet & Document;
 @Schema({ timestamps: true, collection: 'admin_wallet' })
 export class AdminWallet {
   @Prop({ default: 0 })
-  totalBalance: number;
+  totalBalance!: number;
 
   @Prop({ default: 0 })
-  totalEarned: number;
+  totalEarned!: number;
 
   @Prop({ default: 0 })
-  totalCommission: number;
+  totalCommission!: number;
 
   @Prop({ default: 0 })
-  heldBalance: number;
+  heldBalance!: number;
 
   @Prop({ default: 0 })
-  totalTransactions: number;
+  totalTransactions!: number;
 
   @Prop({ default: 'PKR' })
-  currency: string;
+  currency!: string;
 }
 
 export const AdminWalletSchema = SchemaFactory.createForClass(AdminWallet);

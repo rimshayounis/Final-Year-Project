@@ -6,46 +6,46 @@ export type TransactionDocument = Transaction & Document;
 @Schema({ timestamps: true, collection: 'transactions' })
 export class Transaction {
   @Prop({ required: true })
-  type: string;
+  type!: string;
 
   @Prop({ type: Types.ObjectId, ref: 'Doctor', required: true })
-  doctorId: Types.ObjectId;
+  doctorId!: Types.ObjectId;
 
   @Prop({ default: '' })
-  doctorName: string;
+  doctorName!: string;
 
   @Prop({ type: Types.ObjectId, ref: 'User', default: null })
-  userId: Types.ObjectId | null;
+  userId!: Types.ObjectId | null;
 
   @Prop({ type: Types.ObjectId, ref: 'BookedAppointment', default: null })
-  appointmentId: Types.ObjectId | null;
+  appointmentId!: Types.ObjectId | null;
 
   @Prop({ type: String, default: null })
-  plan: string | null;
+  plan!: string | null;
 
   @Prop({ required: true })
-  description: string;
+  description!: string;
 
   @Prop({ required: true })
-  amount: number;
+  amount!: number;
 
   @Prop({ default: 0 })
-  commissionRate: number;
+  commissionRate!: number;
 
   @Prop({ default: 0 })
-  commissionAmount: number;
+  commissionAmount!: number;
 
   @Prop({ default: 'PKR' })
-  currency: string;
+  currency!: string;
 
   @Prop({ type: String, default: null })
-  stripePaymentIntentId: string | null;
+  stripePaymentIntentId!: string | null;
 
   @Prop({ default: 'succeeded' })
-  status: string;
+  status!: string;
 
   @Prop({ default: 'card' })
-  paymentMethod: string;
+  paymentMethod!: string;
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);
