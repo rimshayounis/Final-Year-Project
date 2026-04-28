@@ -148,11 +148,9 @@ export default function DashboardPage() {
 
   const fetchStats = async (from = '', to = '') => {
     setLoading(true);
-    // Date range helpers
-    const fromTs = from ? new Date(from).getTime()                  : 0;
-    const toTs   = to   ? new Date(to + 'T23:59:59').getTime()      : Infinity;
+    const fromTs = from ? new Date(from).getTime() : 0;
+    const toTs   = to   ? new Date(to + 'T23:59:59').getTime() : Infinity;
     const inTs   = (v: any) => { const t = new Date(v).getTime(); return !isNaN(t) && t >= fromTs && t <= toTs; };
-    // appointment.date is a YYYY-MM-DD string — compare directly
     const inDateStr = (s: string) => !!s && s >= from && s <= to;
     const filterItems = (arr: any[], ...fields: string[]) => {
       if (!from || !to) return arr;
@@ -160,7 +158,10 @@ export default function DashboardPage() {
     };
 
     try {
-      const [usersRes, doctorsRes, pendingPostsRes, walletRes, reportsRes, feedbackRes, heldRes, txRes, withdrawalsRes, pointsPayoutRes] = await Promise.allSettled([
+      const [
+        usersRes, doctorsRes, pendingPostsRes, walletRes, reportsRes,
+        feedbackRes, heldRes, txRes, withdrawalsRes, pointsPayoutRes, supportRes
+      ] = await Promise.allSettled([
         fetch(`${BASE_URL}/users`).then(r => r.json()),
         fetch(`${BASE_URL}/doctors`).then(r => r.json()),
         fetch(`${BASE_URL}/posts/pending?limit=100`).then(r => r.json()),
@@ -171,22 +172,24 @@ export default function DashboardPage() {
         fetch(`${BASE_URL}/payment/admin/transactions`).then(r => r.json()),
         fetch(`${ADMIN_BASE_URL}/wallet/admin/withdrawals`).then(r => r.json()),
         fetch(`${ADMIN_BASE_URL}/transactions/admin/points-payout`).then(r => r.json()),
+        fetch(`${BASE_URL}/support-requests`).then(r => r.json()),
       ]);
 
-      const usersRaw     = usersRes.status        === 'fulfilled' ? usersRes.value        : [];
-      const doctorsRaw   = doctorsRes.status      === 'fulfilled' ? doctorsRes.value      : [];
-      const pendingPosts = pendingPostsRes.status === 'fulfilled' ? pendingPostsRes.value : {};
-      const wallet       = walletRes.status       === 'fulfilled' ? walletRes.value       : {};
-      const reportsRaw   = reportsRes.status      === 'fulfilled' ? reportsRes.value      : [];
-      const feedbacksRaw = feedbackRes.status     === 'fulfilled' ? feedbackRes.value     : [];
-      const heldRaw      = heldRes.status         === 'fulfilled' ? heldRes.value         : {};
-      const txRaw           = txRes.status            === 'fulfilled' ? txRes.value            : [];
+      const usersRaw        = usersRes.status        === 'fulfilled' ? usersRes.value        : [];
+      const doctorsRaw      = doctorsRes.status      === 'fulfilled' ? doctorsRes.value      : [];
+      const pendingPosts    = pendingPostsRes.status === 'fulfilled' ? pendingPostsRes.value : {};
+      const wallet          = walletRes.status       === 'fulfilled' ? walletRes.value       : {};
+      const reportsRaw      = reportsRes.status      === 'fulfilled' ? reportsRes.value      : [];
+      const feedbacksRaw    = feedbackRes.status     === 'fulfilled' ? feedbackRes.value     : [];
+      const heldRaw         = heldRes.status         === 'fulfilled' ? heldRes.value         : {};
+      const txRaw           = txRes.status           === 'fulfilled' ? txRes.value           : [];
       const withdrawalsRaw  = withdrawalsRes.status  === 'fulfilled' ? withdrawalsRes.value  : {};
       const pointsPayoutRaw = pointsPayoutRes.status === 'fulfilled' ? pointsPayoutRes.value : {};
+      const supportRaw      = supportRes.status      === 'fulfilled' ? supportRes.value      : [];
 
-      const heldData        = heldRaw.data ?? heldRaw;
+      const heldData     = heldRaw.data ?? heldRaw;
       const allHeldAppts: HeldAppointment[] = heldData.appointments ?? [];
-      const heldApptList    = filterItems(allHeldAppts, 'date', 'createdAt') as HeldAppointment[];
+      const heldApptList = filterItems(allHeldAppts, 'date', 'createdAt') as HeldAppointment[];
       setHeldAppts(heldApptList);
 
       const rawUsers:    any[] = Array.isArray(usersRaw)     ? usersRaw     : (usersRaw.users     || usersRaw.data   || []);
@@ -194,19 +197,22 @@ export default function DashboardPage() {
       const rawReports:  any[] = Array.isArray(reportsRaw)   ? reportsRaw   : (reportsRaw.data     || []);
       const rawFeedbacks:any[] = Array.isArray(feedbacksRaw) ? feedbacksRaw : (feedbacksRaw.data   || []);
       const allTx:       any[] = Array.isArray(txRaw)        ? txRaw        : (txRaw.data || txRaw.transactions || []);
+      const rawSupport:  any[] = Array.isArray(supportRaw)   ? supportRaw   : (supportRaw.data     || []);
 
-      const allUsers   = filterItems(rawUsers,    'createdAt');
-      const allDoctors = filterItems(rawDoctors,  'createdAt');
-      const reports    = filterItems(rawReports,  'createdAt');
-      const feedbacks  = filterItems(rawFeedbacks,'createdAt');
-      const filteredTx = filterItems(allTx,       'createdAt');
+      const allUsers        = filterItems(rawUsers,    'createdAt');
+      const allDoctors      = filterItems(rawDoctors,  'createdAt');
+      const reports         = filterItems(rawReports,  'createdAt');
+      const feedbacks       = filterItems(rawFeedbacks,'createdAt');
+      const filteredTx      = filterItems(allTx,       'createdAt');
+      const filteredSupport = filterItems(rawSupport,  'createdAt');
 
       const pendingVerif      = allDoctors.filter(d => !d.doctorProfile?.isVerified).length;
       const verifiedDocs      = allDoctors.filter(d =>  d.doctorProfile?.isVerified).length;
       const pendingPostsCount = pendingPosts.pagination?.total || pendingPosts.data?.length || 0;
 
-      const pendingReports  = reports.filter((r: any) => r.status === 'pending').length;
-      const reviewedReports = reports.filter((r: any) => r.status === 'reviewed').length;
+      const pendingReports     = reports.filter((r: any) => r.status === 'pending').length;
+      const reviewedReports    = reports.filter((r: any) => r.status === 'reviewed').length;
+      const openSupportTickets = filteredSupport.filter((t: any) => t.status === 'open').length;
 
       const totalFeedbacks  = feedbacks.length;
       const avgDoctorRating = totalFeedbacks
@@ -221,7 +227,6 @@ export default function DashboardPage() {
         ratings => ratings.reduce((a, b) => a + b, 0) / ratings.length < 3
       ).length;
 
-      // Financials — only count types that represent actual platform income
       const txSource = from ? filteredTx : allTx;
       let totalEarned = 0, totalCommission = 0, subscriptionRevenue = 0;
       txSource.filter((t: any) => t.status === 'succeeded').forEach((t: any) => {
@@ -234,7 +239,6 @@ export default function DashboardPage() {
         }
       });
 
-      // Add 2% withdrawal fees from all succeeded withdrawals
       const allWithdrawals: any[] = Array.isArray(withdrawalsRaw?.data) ? withdrawalsRaw.data : [];
       const succeededWithdrawals  = from
         ? allWithdrawals.filter((w: any) => w.status === 'succeeded' && w.createdAt && inTs(w.createdAt))
@@ -246,13 +250,10 @@ export default function DashboardPage() {
       totalEarned     = +(totalEarned     + withdrawalFees).toFixed(2);
       totalCommission = +(totalCommission + withdrawalFees).toFixed(2);
 
-      // Deduct points-to-cash payouts (platform pays doctors from its revenue)
       const pointsPayoutTotal: number  = pointsPayoutRaw?.data?.total       ?? 0;
       const pointsPayoutPoints: number = pointsPayoutRaw?.data?.totalPoints ?? 0;
       totalEarned = +Math.max(0, totalEarned - pointsPayoutTotal).toFixed(2);
 
-      // Appointments — date field is YYYY-MM-DD string, use allDoctors (already filtered by createdAt)
-      // but appointments themselves are filtered by their own `date` field
       let totalApts = 0, completedApts = 0;
       if (allDoctors.length > 0) {
         const aptResults = await Promise.allSettled(
@@ -292,13 +293,13 @@ export default function DashboardPage() {
         totalFeedbacks,
         avgDoctorRating,
         lowRatedDoctors,
-        openSupportTickets: 0,
+        openSupportTickets,
       });
-      } catch (e) {
-        console.error('Dashboard fetch error:', e);
-      } finally {
-        setLoading(false);
-      }
+    } catch (e) {
+      console.error('Dashboard fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -489,7 +490,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Finance Row (first) ── */}
+      {/* ── Finance Row ── */}
       {loading ? (
         <div className="finance-row"><div className="stat-skeleton" /><div className="stat-skeleton" /></div>
       ) : (
@@ -543,7 +544,6 @@ export default function DashboardPage() {
 
           {stats && !loading && (
             <>
-              {/* Extra stats row */}
               <div className="extra-stats">
                 {extraStats.map((e, i) => (
                   e.href
@@ -564,62 +564,61 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              {/* Held Payments Panel — only shown when there are held payments */}
-              {stats.heldCount > 0 && <div className="held-panel">
-                <div className="held-panel-header" onClick={() => setShowHeld(v => !v)}>
-                  <div className="held-panel-left">
-                    <div className="held-icon-wrap">
-                      <Icons.Lock />
+              {stats.heldCount > 0 && (
+                <div className="held-panel">
+                  <div className="held-panel-header" onClick={() => setShowHeld(v => !v)}>
+                    <div className="held-panel-left">
+                      <div className="held-icon-wrap"><Icons.Lock /></div>
+                      <div>
+                        <div className="held-panel-title">Held Appointment Payments</div>
+                        <div className="held-panel-sub">{stats.heldCount} appointment{stats.heldCount !== 1 ? 's' : ''} awaiting release</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="held-panel-title">Held Appointment Payments</div>
-                      <div className="held-panel-sub">{stats.heldCount} appointment{stats.heldCount !== 1 ? 's' : ''} awaiting release</div>
+                    <div className="held-panel-right">
+                      <div className="held-amount">PKR {stats.heldBalance.toLocaleString()}</div>
+                      <svg className={`held-chevron ${showHeld ? 'open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
                     </div>
                   </div>
-                  <div className="held-panel-right">
-                    <div className="held-amount">PKR {stats.heldBalance.toLocaleString()}</div>
-                    <svg className={`held-chevron ${showHeld ? 'open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </div>
-                </div>
 
-                {showHeld && (
-                  <div className="held-list">
-                    {heldAppts.length === 0 ? (
-                      <div className="held-empty">No held payments at this time</div>
-                    ) : (
-                      <>
-                        <div className="held-table-head">
-                          <span>Patient</span>
-                          <span>Doctor</span>
-                          <span>Date & Time</span>
-                          <span>Amount</span>
-                          <span>Status</span>
-                        </div>
-                        {heldAppts.map(a => (
-                          <div key={a._id} className="held-row">
-                            <span className="held-cell">{(a.userId as any)?.fullName || '—'}</span>
-                            <span className="held-cell">Dr. {(a.doctorId as any)?.fullName || '—'}</span>
-                            <span className="held-cell">{a.date} · {a.time}</span>
-                            <span className="held-cell held-amt">PKR {(a.heldAmount || 0).toLocaleString()}</span>
-                            <span className="held-chip">Held</span>
+                  {showHeld && (
+                    <div className="held-list">
+                      {heldAppts.length === 0 ? (
+                        <div className="held-empty">No held payments at this time</div>
+                      ) : (
+                        <>
+                          <div className="held-table-head">
+                            <span>Patient</span>
+                            <span>Doctor</span>
+                            <span>Date & Time</span>
+                            <span>Amount</span>
+                            <span>Status</span>
                           </div>
-                        ))}
-                        <div className="held-total-row">
-                          <span>Total held</span>
-                          <span className="held-total-amt">PKR {stats.heldBalance.toLocaleString()}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>}
+                          {heldAppts.map(a => (
+                            <div key={a._id} className="held-row">
+                              <span className="held-cell">{(a.userId as any)?.fullName || '—'}</span>
+                              <span className="held-cell">Dr. {(a.doctorId as any)?.fullName || '—'}</span>
+                              <span className="held-cell">{a.date} · {a.time}</span>
+                              <span className="held-cell held-amt">PKR {(a.heldAmount || 0).toLocaleString()}</span>
+                              <span className="held-chip">Held</span>
+                            </div>
+                          ))}
+                          <div className="held-total-row">
+                            <span>Total held</span>
+                            <span className="held-total-amt">PKR {stats.heldBalance.toLocaleString()}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
 
-        {/* ── Right column: Platform Summary feed ── */}
+        {/* ── Right column: Platform Summary ── */}
         <div className="feed-section">
           <div className="section-header">
             <h2>Platform Summary</h2>
@@ -682,6 +681,17 @@ export default function DashboardPage() {
                   </div>
                   <span className={`feed-tag ${stats.pendingReports > 0 ? 'feed-tag-alert' : ''}`}>Reports</span>
                 </div>
+
+                {stats.openSupportTickets > 0 && (
+                  <div className="feed-item">
+                    <div className="feed-icon-wrap feed-icon-alert"><Icons.MessageCircle /></div>
+                    <div className="feed-content">
+                      <div className="feed-msg">{stats.openSupportTickets} support ticket{stats.openSupportTickets !== 1 ? 's' : ''} open</div>
+                      <div className="feed-time">Awaiting admin reply</div>
+                    </div>
+                    <span className="feed-tag feed-tag-alert">Support</span>
+                  </div>
+                )}
 
                 {stats.totalFeedbacks > 0 && (
                   <div className="feed-item">
@@ -753,9 +763,7 @@ export default function DashboardPage() {
             {moderationCards.map((c, i) => (
               <a href={c.href} key={i} className="mod-card" style={{ textDecoration: 'none' }}>
                 <div className="mod-top-row">
-                  <div className="mod-icon-wrap">
-                    <c.Icon />
-                  </div>
+                  <div className="mod-icon-wrap"><c.Icon /></div>
                   <span className={`mod-status-chip ${c.urgent ? 'urgent' : 'ok'}`}>
                     {c.urgentLabel}
                   </span>
@@ -776,7 +784,6 @@ export default function DashboardPage() {
       )}
 
       <style>{`
-        /* ── Layout ── */
         .page { display: flex; flex-direction: column; gap: 20px; }
         .page-header { display: flex; align-items: center; justify-content: space-between; }
         .page-title { font-size: 18px; font-weight: 800; color: #111; letter-spacing: -0.3px; }
@@ -785,22 +792,14 @@ export default function DashboardPage() {
         .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
         .section-header h2 { font-size: 14px; font-weight: 700; color: #111; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
 
-        /* Badges */
         .live-badge  { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #059669; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 3px 10px; border-radius: 20px; }
         .live-dot    { width: 5px; height: 5px; border-radius: 50%; background: #059669; animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
         .alert-badge { font-size: 11px; font-weight: 600; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; padding: 3px 10px; border-radius: 20px; }
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-        /* ── Finance Row ── */
         .finance-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-        .finance-card {
-          background: #fff; border-radius: 14px; padding: 16px 18px;
-          border: 1px solid #e5e7eb;
-          display: flex; align-items: center; gap: 12px;
-          cursor: pointer; text-decoration: none;
-          transition: box-shadow 0.18s, border-color 0.18s;
-        }
+        .finance-card { background: #fff; border-radius: 14px; padding: 16px 18px; border: 1px solid #e5e7eb; display: flex; align-items: center; gap: 12px; cursor: pointer; text-decoration: none; transition: box-shadow 0.18s, border-color 0.18s; }
         .finance-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.07); border-color: #C8D0FF; }
         .finance-icon { width: 38px; height: 38px; border-radius: 10px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .finance-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -808,20 +807,11 @@ export default function DashboardPage() {
         .finance-value { font-size: 17px; font-weight: 800; color: #111; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .finance-sub   { font-size: 11px; color: #aaa; margin-top: 1px; }
 
-        /* ── Stat Cards ── */
         .stats-loading { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
         .stat-skeleton { height: 130px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; border-radius: 14px; animation: shimmer 1.5s infinite; }
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-
-        .stat-card {
-          background: #fff; border-radius: 14px; padding: 18px;
-          border: 1px solid #e5e7eb;
-          display: flex; flex-direction: column; gap: 0;
-          cursor: pointer;
-          transition: box-shadow 0.18s, border-color 0.18s;
-        }
+        .stat-card { background: #fff; border-radius: 14px; padding: 18px; border: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 0; cursor: pointer; transition: box-shadow 0.18s, border-color 0.18s; }
         .stat-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.07); border-color: #C8D0FF; }
-
         .stat-header-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
         .stat-icon-wrap { width: 36px; height: 36px; border-radius: 9px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .stat-icon-wrap.icon-alert { background: #fff7ed; color: #b45309; }
@@ -833,48 +823,34 @@ export default function DashboardPage() {
         .stat-arrow { color: #ccc; transition: color 0.15s, transform 0.15s; }
         .stat-card:hover .stat-arrow { color: #6B7FED; transform: translateX(2px); }
 
-        /* ── Extra Stats ── */
         .extra-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-        .extra-stat {
-          background: #fff; border-radius: 12px; padding: 13px 12px;
-          border: 1px solid #e5e7eb;
-          display: flex; align-items: center; gap: 10px;
-          transition: box-shadow 0.15s; cursor: default;
-        }
+        .extra-stat { background: #fff; border-radius: 12px; padding: 13px 12px; border: 1px solid #e5e7eb; display: flex; align-items: center; gap: 10px; transition: box-shadow 0.15s; cursor: default; }
         a.extra-stat { cursor: pointer; }
         a.extra-stat:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.07); border-color: #C8D0FF; }
         .extra-icon-wrap { width: 32px; height: 32px; border-radius: 8px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .extra-val   { font-size: 14px; font-weight: 800; color: #111; }
         .extra-label { font-size: 10px; color: #888; margin-top: 2px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
 
-        /* ── Feed / Platform Summary ── */
         .feed-section { background: #fff; border-radius: 14px; padding: 20px; border: 1px solid #e5e7eb; display: flex; flex-direction: column; }
         .feed-list    { display: flex; flex-direction: column; gap: 0; height: 420px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #e0e4ff transparent; }
         .feed-skeleton { height: 48px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; border-radius: 8px; animation: shimmer 1.5s infinite; margin-bottom: 4px; }
         .feed-item    { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid #f3f4f6; }
         .feed-item:last-child { border-bottom: none; }
-        .feed-icon-wrap { width: 32px; height: 32px; border-radius: 8px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .feed-icon-wrap  { width: 32px; height: 32px; border-radius: 8px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .feed-icon-warn  { background: #fffbeb; color: #d97706; }
         .feed-icon-alert { background: #fff1f2; color: #e11d48; }
         .feed-icon-ok    { background: #f0fdf4; color: #16a34a; }
         .feed-content { flex: 1; min-width: 0; }
-        .feed-msg     { font-size: 12.5px; color: #222; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .feed-time    { font-size: 11px; color: #aaa; margin-top: 2px; }
-        .feed-tag      { font-size: 10px; font-weight: 600; padding: 2px 9px; border-radius: 20px; background: #f3f4f6; color: #555; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; border: 1px solid #e5e7eb; }
+        .feed-msg  { font-size: 12.5px; color: #222; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .feed-time { font-size: 11px; color: #aaa; margin-top: 2px; }
+        .feed-tag       { font-size: 10px; font-weight: 600; padding: 2px 9px; border-radius: 20px; background: #f3f4f6; color: #555; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; border: 1px solid #e5e7eb; }
         .feed-tag-warn  { background: #fffbeb; color: #b45309; border-color: #fde68a; }
         .feed-tag-alert { background: #fff1f2; color: #e11d48; border-color: #fecdd3; }
         .feed-tag-ok    { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
 
-        /* ── Moderation Cards ── */
         .mod-section { display: flex; flex-direction: column; }
         .mod-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-        .mod-card {
-          background: #fff; border-radius: 14px; padding: 18px;
-          border: 1px solid #e5e7eb;
-          display: flex; flex-direction: column; gap: 4px;
-          cursor: pointer;
-          transition: box-shadow 0.18s, border-color 0.18s;
-        }
+        .mod-card { background: #fff; border-radius: 14px; padding: 18px; border: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 4px; cursor: pointer; transition: box-shadow 0.18s, border-color 0.18s; }
         .mod-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.07); border-color: #C8D0FF; }
         .mod-top-row { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
         .mod-icon-wrap { width: 38px; height: 38px; border-radius: 10px; background: #f3f4f6; color: #6B7FED; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -888,7 +864,6 @@ export default function DashboardPage() {
         .mod-link { font-size: 11px; font-weight: 600; color: #6B7FED; }
         .mod-card:hover .mod-footer { color: #6B7FED; }
 
-        /* ── Held Payments Panel ── */
         .held-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; overflow: hidden; margin-top: 12px; }
         .held-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; cursor: pointer; transition: background 0.15s; gap: 12px; }
         .held-panel-header:hover { background: #fafafa; }
@@ -911,7 +886,6 @@ export default function DashboardPage() {
         .held-total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 0; border-top: 1px solid #f3f4f6; margin-top: 4px; font-size: 13px; font-weight: 700; color: #111; }
         .held-total-amt { font-size: 14px; font-weight: 800; color: #111; }
 
-        /* ── Date Filter ── */
         .filter-wrap { position: relative; }
         .filter-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; height: 34px; border-radius: 8px; background: #f3f4f6; border: 1px solid #e5e7eb; color: #555; cursor: pointer; transition: all 0.15s; position: relative; flex-shrink: 0; font-size: 12px; font-weight: 600; }
         .filter-btn-label { line-height: 1; }

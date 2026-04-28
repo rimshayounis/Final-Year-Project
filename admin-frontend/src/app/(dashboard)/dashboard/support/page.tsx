@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const BASE_URL = 'http://localhost:3000/api';
 
 interface SupportTicket {
   _id: string;
