@@ -326,15 +326,15 @@ export default function FeedScreen({
       let list: Post[] = [];
       if (role === "doctor") {
         if (selectedStatus === "pending") {
-          list = (await apiClient.get("/posts/pending")).data.data || [];
+          list = (await apiClient.get("/posts/pending?limit=100")).data.data || [];
         } else if (selectedStatus === "approved") {
           const cat = selectedCategory === "All" ? "" : selectedCategory;
-          const url = cat ? `/posts/category/${encodeURIComponent(cat)}` : "/posts/feed";
+          const url = cat ? `/posts/category/${encodeURIComponent(cat)}?limit=100` : "/posts/feed?limit=100";
           list = (await apiClient.get(url)).data.data || [];
         } else {
           const [a, p] = await Promise.all([
-            apiClient.get("/posts/feed"),
-            apiClient.get("/posts/pending"),
+            apiClient.get("/posts/feed?limit=100"),
+            apiClient.get("/posts/pending?limit=100"),
           ]);
           const map = new Map<string, Post>();
           [...(a.data.data || []), ...(p.data.data || [])].forEach((x) => map.set(x._id, x));
@@ -344,14 +344,14 @@ export default function FeedScreen({
         }
       } else {
         if (selectedCategory === "All") {
-          const res = await apiClient.get(`/posts/feed/recommended?userId=${id}`);
+          const res = await apiClient.get(`/posts/feed/recommended?userId=${id}&limit=100`);
           list = res.data.data || [];
           setIsPersonalized(res.data.isPersonalized ?? false);
           setMatchedCategories(res.data.matchedCategories ?? []);
         } else {
           setIsPersonalized(false);
           setMatchedCategories([]);
-          const url = `/posts/category/${encodeURIComponent(selectedCategory)}`;
+          const url = `/posts/category/${encodeURIComponent(selectedCategory)}?limit=100`;
           list = (await apiClient.get(url)).data.data || [];
         }
       }
@@ -813,7 +813,7 @@ export default function FeedScreen({
                   <View style={s.slotsExhausted}>
                     <Ionicons name="lock-closed" size={12} color="#F6A623" />
                     <Text style={s.slotsExhaustedText}>
-                      Verification limit reached for this month
+                       limit reached for this month
                     </Text>
                   </View>
                 ) : (
