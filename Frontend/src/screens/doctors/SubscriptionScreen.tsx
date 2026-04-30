@@ -169,6 +169,8 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
   const [fetchingPlan, setFetchingPlan]   = useState(true);
   const [cancelling, setCancelling]       = useState(false);
   const [loading, setLoading]             = useState(false);
+  const [trialAlreadyUsed, setTrialAlreadyUsed] = useState(false);
+  const [doctorVerified, setDoctorVerified] = useState<boolean | null>(null);
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   // Fetch the doctor's current active subscription
@@ -189,8 +191,35 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
           setPlanPrice(sub.pricePKR ?? 0);
           setMode('detail'); // show detail view if plan exists
         }
-      } catch {
+
+        // Fetch doctor's current verification status from database (not route params)
+       try {
+  const doctorRes = await apiClient.get(`/doctors/${doctorId}`);
+  const verified = doctorRes.data?.doctorProfile?.isVerified;
+  if (verified !== undefined) {
+    setDoctorVerified(verified);
+  }
+} catch (docErr) {
+  console.log('Error fetching doctor verification:', docErr);
+}
+
+        // Check if free trial was already used
+        const trialRes = await apiClient.get(`/subscriptions/${doctorId}/has-used-trial`);
+        if (trialRes.data?.hasUsedFreeTrial) {
+          setTrialAlreadyUsed(true);
+          // If no current plan and trial already used, default to basic
+          if (!sub || !sub.plan) {
+            setSelected('basic');
+          }
+        } else {
+          // Trial not used, can default to free trial
+          if (!sub || !sub.plan) {
+            setSelected('free_trial');
+          }
+        }
+      } catch (err) {
         // no active plan — go straight to select
+        console.log('Error fetching plan:', err);
       } finally {
         setFetchingPlan(false);
       }
@@ -239,6 +268,16 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
 
     // Free trial — no payment needed
     if (selected === 'free_trial') {
+      // ❌ Check if trial was already used
+      if (trialAlreadyUsed) {
+        Alert.alert(
+          'Free Trial Already Used',
+          'You have already used your free trial. Please purchase a paid plan (Basic, Professional, or Premium) to continue.',
+          [{ text: 'OK', style: 'default' }],
+        );
+        return;
+      }
+
       Alert.alert(
         'Confirm Free Trial',
         'Start your 15-day free trial now?',
@@ -252,11 +291,14 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
                 await apiClient.post('/subscriptions', { doctorId, plan: 'free_trial' });
               } catch (e: any) {
                 console.error(e?.response?.data?.message ?? e?.message);
+                Alert.alert('Error', e?.response?.data?.message ?? 'Failed to activate trial');
               } finally {
                 setLoading(false);
               }
-              if (isVerified) {
-                navigation.goBack();
+              // Use fetched doctorVerified status from database
+              const useVerifiedStatus = doctorVerified ?? false;
+              if (useVerifiedStatus) {
+                navigation.dispatch({ type: 'RESET', payload: { index: 0, routes: [{ name: 'Dashboard', params: { id: doctorId, role: 'doctor' } }] } });
               } else {
                 navigation.replace('DoctorUnverified', { doctorId, doctorName, selectedPlan: selected });
               }
@@ -330,8 +372,10 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
           {
             text: 'Continue',
             onPress: () => {
-              if (isVerified) {
-                navigation.goBack();
+              // Use fetched doctorVerified status from database
+              const useVerifiedStatus = doctorVerified ?? false;
+              if (useVerifiedStatus) {
+                navigation.dispatch({ type: 'RESET', payload: { index: 0, routes: [{ name: 'Dashboard', params: { id: doctorId, role: 'doctor' } }] } });
               } else {
                 navigation.replace('DoctorUnverified', { doctorId, doctorName, selectedPlan: selected });
               }
@@ -518,28 +562,39 @@ export default function SubscriptionScreen({ navigation, route }: Props) {
         {PLANS.map(plan => {
           const isSelected = selected === plan.key;
           const isCurrent  = currentPlan === plan.key;
+          const isFreeTrial = plan.key === 'free_trial';
+          const isTrialDisabled = isFreeTrial && trialAlreadyUsed;
+
           return (
             <TouchableOpacity
               key={plan.key}
               activeOpacity={0.85}
-              onPress={() => setSelected(plan.key)}
+              onPress={() => !isTrialDisabled && setSelected(plan.key)}
+              disabled={isTrialDisabled}
               style={[
                 styles.card,
                 isSelected && { borderColor: plan.color, borderWidth: 2.5 },
                 isCurrent  && { borderColor: plan.color, borderWidth: 2.5 },
+                isTrialDisabled && { opacity: 0.5 },
               ]}
             >
               {/* Card Header */}
               <View style={[styles.cardHeader, { backgroundColor: plan.color }]}>
                 <View style={styles.cardHeaderLeft}>
                   <Text style={styles.planName}>{plan.name}</Text>
-                  {isCurrent && (
+                  {isTrialDisabled && (
+                    <View style={styles.currentBadge}>
+                      <Ionicons name="alert-circle" size={12} color="#dc2626" />
+                      <Text style={{ color: '#dc2626', fontSize: 11, marginLeft: 4, fontWeight: '500' }}>Already Used</Text>
+                    </View>
+                  )}
+                  {isCurrent && !isTrialDisabled && (
                     <View style={styles.currentBadge}>
                       <Ionicons name="checkmark-circle" size={12} color={plan.color} />
                       <Text style={[styles.currentBadgeText, { color: plan.color }]}>Current Plan</Text>
                     </View>
                   )}
-                  {!isCurrent && plan.verifiedBadge && (
+                  {!isCurrent && plan.verifiedBadge && !isTrialDisabled && (
                     <View style={styles.blueTick}>
                       <MaterialIcons name="verified" size={14} color="#fff" />
                       <Text style={styles.blueTickText}>Blue Tick</Text>

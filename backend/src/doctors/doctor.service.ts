@@ -11,6 +11,7 @@ import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { Doctor, DoctorDocument } from './schemas/doctor.schema';
 import { MailService } from '../mail/mail.service';
+import { SubscriptionPlanService } from '../subscription-plan/subscription-plan.service';
 import {
   RegisterDoctorDto,
   LoginDoctorDto,
@@ -24,6 +25,7 @@ export class DoctorsService {
   constructor(
     @InjectModel(Doctor.name) private doctorModel: Model<DoctorDocument>,
     private readonly mailService: MailService,
+    private readonly subscriptionPlanService: SubscriptionPlanService,
   ) {}
 
   // ── Register ───────────────────────────────────────────────────────────────
@@ -52,6 +54,8 @@ export class DoctorsService {
 
   // ── Login ──────────────────────────────────────────────────────────────────
   async login(dto: LoginDoctorDto) {
+    console.log('[DoctorService] Login attempt:', dto.email);
+    
     const doctor = await this.doctorModel.findOne({ email: dto.email.toLowerCase() });
     if (!doctor) throw new NotFoundException('No account found with this email');
 
@@ -65,8 +69,27 @@ export class DoctorsService {
       );
     }
 
+    console.log('[DoctorService] Doctor authenticated, checking subscription...');
+    // Check subscription status
+    let subscriptionStatus = { isExpired: false };
+    try {
+      subscriptionStatus = await this.subscriptionPlanService.checkSubscriptionStatusForLogin(
+        doctor._id.toString()
+      );
+      console.log('[DoctorService] Subscription status:', subscriptionStatus);
+    } catch (error) {
+      console.error('[DoctorService] Error checking subscription:', error.message);
+      subscriptionStatus = { isExpired: false };
+    }
+
     const { password, otpCode, otpExpiry, ...result } = doctor.toObject();
-    return { success: true, doctor: result };
+    console.log('[DoctorService] Login response:', { subscription: subscriptionStatus });
+    
+    return { 
+      success: true, 
+      doctor: result,
+      subscription: subscriptionStatus, // ← Add subscription info
+    };
   }
 
   // ── Forgot Password — Step 1: Send OTP ────────────────────────────────────

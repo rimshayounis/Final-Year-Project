@@ -137,8 +137,9 @@ export default function PatientsPage() {
         fetch(`${BASE_URL}/posts/user/${p._id}`)
           .then(r => r.json())
           .then(d => {
-            const list: any[] = d.data?.posts || d.data || (Array.isArray(d) ? d : []);
-            return { id: p._id, count: list.length };
+            // Use pagination.total for accurate count instead of array length
+            const total = d.pagination?.total ?? (Array.isArray(d.data) ? d.data.length : 0);
+            return { id: p._id, count: total };
           })
           .catch(() => ({ id: p._id, count: 0 }))
       )

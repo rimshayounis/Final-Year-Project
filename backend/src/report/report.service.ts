@@ -68,6 +68,16 @@ export class ReportService {
     return report;
   }
 
+  async dismissReport(id: string) {
+  const report = await this.reportModel.findByIdAndUpdate(
+    id,
+    { status: 'dismissed' },
+    { new: true },
+  );
+  if (!report) throw new NotFoundException('Report not found');
+  return report;
+}
+
   async banAccount(
     reportId: string,
     reportedId: string,

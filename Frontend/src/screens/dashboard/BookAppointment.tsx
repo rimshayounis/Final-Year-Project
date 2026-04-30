@@ -205,12 +205,13 @@ export default function BookAppointmentScreen() {
         // Keep only doctors with at least one future availability date
         const todayMidnight = new Date();
         todayMidnight.setHours(0, 0, 0, 0);
-        const doctorsWithAvailability = doctorsData.filter((d) => {
-          if (!d.specificDates || d.specificDates.length === 0) return false;
-          return d.specificDates.some(
-            (sd) => new Date(sd.date + 'T00:00:00') >= todayMidnight,
-          );
-        });
+       const doctorsWithAvailability = doctorsData.filter((d) => {
+  if (!d.specificDates || d.specificDates.length === 0) return false;
+  if (!d.subscriptionPlan || d.subscriptionPlan === 'free_trial') return false; // ← add this
+  return d.specificDates.some(
+    (sd) => new Date(sd.date + 'T00:00:00') >= todayMidnight,
+  );
+});
 
         // Sort: interest-matched first, then by plan rank, then by mentor level
         doctorsWithAvailability.sort((a, b) => {

@@ -51,6 +51,18 @@ export class SubscriptionPlanController {
     return this.subscriptionPlanService.cancelSubscription(doctorId, dto);
   }
 
+  // GET /subscriptions/:doctorId/has-used-trial
+  // Check if doctor already used free trial
+  @Get(':doctorId/has-used-trial')
+  async checkUsedTrial(@Param('doctorId') doctorId: string) {
+    const hasUsed = await this.subscriptionPlanService.hasUsedFreeTrial(doctorId);
+    return {
+      success: true,
+      doctorId,
+      hasUsedFreeTrial: hasUsed,
+    };
+  }
+
   // POST /subscriptions/expire-overdue
   // Expire all subscriptions past their endDate (call from cron or admin)
   @Post('expire-overdue')

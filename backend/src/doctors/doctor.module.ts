@@ -5,12 +5,14 @@ import { DoctorsController } from './doctor.controller';
 import { DoctorsService } from './doctor.service';
 import { Doctor, DoctorSchema } from './schemas/doctor.schema';
 import { MailModule } from '../mail/mail.module';
+import { SubscriptionPlanModule } from '../subscription-plan/subscription-plan.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Doctor.name, schema: DoctorSchema }]),
     MulterModule.register({ dest: './uploads/certificates' }),
     MailModule,
+    SubscriptionPlanModule,
   ],
   controllers: [DoctorsController],
   providers: [DoctorsService],

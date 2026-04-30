@@ -37,6 +37,21 @@ export class SubscriptionPlanService {
       throw new BadRequestException(`Unknown plan: ${plan}`);
     }
 
+    // ❌ PREVENT: Can't re-use free trial
+    if (plan === 'free_trial') {
+      const previousTrial = await this.subscriptionModel.findOne({
+        doctorId: new Types.ObjectId(dto.doctorId),
+        plan: 'free_trial',
+        status: { $in: ['expired', 'cancelled'] },
+      });
+
+      if (previousTrial) {
+        throw new BadRequestException(
+          'Free trial can only be used once. Please purchase a paid plan (Basic, Professional, or Premium).',
+        );
+      }
+    }
+
     // Cancel any currently active subscription for this doctor
     await this.subscriptionModel.updateMany(
       {
@@ -211,5 +226,84 @@ export class SubscriptionPlanService {
       success: true,
       expiredCount: expired.length,
     };
+  }
+
+  // ── Check if free trial was already used by doctor ───────────────────────
+  async hasUsedFreeTrial(doctorId: string): Promise<boolean> {
+    const usedTrial = await this.subscriptionModel.findOne({
+      doctorId: new Types.ObjectId(doctorId),
+      plan: 'free_trial',
+      status: { $in: ['expired', 'cancelled'] },
+    });
+
+    return !!usedTrial;
+  }
+
+  // ── Check subscription status for login ────────────────────────────────────
+  async checkSubscriptionStatusForLogin(doctorId: string): Promise<{
+    isExpired: boolean;
+    plan?: string;
+    endDate?: Date;
+  }> {
+    const now = new Date();
+    const doctorObjectId = new Types.ObjectId(doctorId);
+
+    // Step 1: Check for active subscription that hasn't expired YET
+    const validSub = await this.subscriptionModel.findOne({
+      doctorId: doctorObjectId,
+      status: 'active',
+      endDate: { $gte: now },
+    });
+
+    if (validSub) {
+      console.log(`[SubscriptionService] Doctor ${doctorId} has valid active subscription`);
+      return { isExpired: false };
+    }
+
+    // Step 2: Check for active subscription with PAST endDate (needs to be marked expired)
+    const expiredActiveSub = await this.subscriptionModel.findOne({
+      doctorId: doctorObjectId,
+      status: 'active',
+      endDate: { $lt: now },
+    });
+
+    if (expiredActiveSub) {
+      console.log(`[SubscriptionService] Found expired active subscription, marking as expired...`);
+      
+      // Mark as expired in database
+      expiredActiveSub.status = 'expired';
+      await expiredActiveSub.save();
+
+      // Update doctor plan back to free_trial
+      await this.doctorModel.findByIdAndUpdate(doctorId, {
+        subscriptionPlan: 'free_trial',
+      });
+
+      console.log(`[SubscriptionService] Subscription marked as expired for doctor ${doctorId}`);
+
+      return {
+        isExpired: true,
+        plan: expiredActiveSub.plan,
+        endDate: expiredActiveSub.endDate,
+      };
+    }
+
+    // Step 3: Check for already expired subscription
+    const alreadyExpiredSub = await this.subscriptionModel.findOne({
+      doctorId: doctorObjectId,
+      status: 'expired',
+    }).sort({ endDate: -1 });
+
+    if (alreadyExpiredSub) {
+      console.log(`[SubscriptionService] Doctor ${doctorId} has already expired subscription`);
+      return {
+        isExpired: true,
+        plan: alreadyExpiredSub.plan,
+        endDate: alreadyExpiredSub.endDate,
+      };
+    }
+
+    console.log(`[SubscriptionService] No subscription found for doctor ${doctorId}`);
+    return { isExpired: false };
   }
 }

@@ -20,7 +20,7 @@ export class Report {
   @Prop({ required: true, trim: true })
   reason!: string;
 
-  @Prop({ type: String, enum: ['pending', 'reviewed'], default: 'pending' })
+  @Prop({ type: String, enum: ['pending', 'reviewed','dismissed'], default: 'pending' })
   status!: string;
 
   @Prop({ type: Types.ObjectId, ref: 'Post', default: null })
