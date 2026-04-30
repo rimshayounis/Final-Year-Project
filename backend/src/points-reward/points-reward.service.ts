@@ -619,8 +619,7 @@ export class PointsRewardService {
     const wallet = await this.getOrCreateWallet(doctorId);
 
     // Reset spendable balance and milestone tracking
-    // (lifetimePointsEarned is intentionally preserved — never decrements)
-    wallet.totalPoints = 0;
+    let calculatedEarnings = 0; // Track total lifetime earnings
     wallet.trustScore = 0;
     wallet.trustBadge = 'none';
     wallet.postMilestones = [] as any;
@@ -635,7 +634,7 @@ export class PointsRewardService {
       for (const m of LIKE_POINT_MILESTONES) {
         if (likes >= m.threshold) {
           pointMilestones.push(m.key);
-          wallet.totalPoints += m.points;
+          calculatedEarnings += m.points;
         }
       }
 
@@ -654,13 +653,16 @@ export class PointsRewardService {
     // Trust score = badge rank derived from highest badge earned
     wallet.trustScore = BADGE_RANK[wallet.trustBadge];
 
-    // Subtract points already converted to cash so they are not re-awarded
-    wallet.totalPoints = Math.max(0, wallet.totalPoints - (wallet.pointsSpent ?? 0));
+    // Set lifetimePointsEarned to the calculated total
+    wallet.lifetimePointsEarned = calculatedEarnings;
+
+    // Subtract points already converted to cash to get current available balance
+    wallet.totalPoints = Math.max(0, calculatedEarnings - (wallet.pointsSpent ?? 0));
 
     wallet.transactions.push({
       type: 'wallet_recalculated',
       points: 0,
-      description: `Wallet recalculated from ${posts.length} active approved post(s) — balance set to ${wallet.totalPoints} pts`,
+      description: `Wallet recalculated from ${posts.length} active approved post(s) — lifetime: ${calculatedEarnings} pts, available: ${wallet.totalPoints} pts`,
       createdAt: new Date(),
     });
 
@@ -671,7 +673,8 @@ export class PointsRewardService {
     return {
       doctorId,
       postsProcessed: posts.length,
-      newTotalPoints: wallet.totalPoints,
+      lifetimePointsEarned: wallet.lifetimePointsEarned,
+      currentAvailablePoints: wallet.totalPoints,
       trustBadge: wallet.trustBadge,
       trustScore: wallet.trustScore,
     };
