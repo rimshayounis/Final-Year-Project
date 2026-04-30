@@ -31,6 +31,12 @@ export class ReportController {
     return { success: true, data: report };
   }
 
+  @Patch(':id/dismiss')
+async dismissReport(@Param('id') id: string) {
+  const data = await this.reportService.dismissReport(id);
+  return { success: true, data };
+}
+
   /** Admin: ban a reported account and mark the report reviewed */
   @Patch(':id/ban')
   async banAccount(

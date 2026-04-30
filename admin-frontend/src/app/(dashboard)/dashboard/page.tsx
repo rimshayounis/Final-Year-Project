@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 const BASE_URL       = 'http://localhost:3000/api';
-const ADMIN_BASE_URL = 'http://localhost:3001';
+const ADMIN_BASE_URL = 'http://localhost:3001/api';
 
 // ── SVG Icons ────────────────────────────────────────────────────────────────
 const Icons = {
