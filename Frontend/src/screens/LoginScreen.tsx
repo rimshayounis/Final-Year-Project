@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { userAPI, doctorAPI } from "../services/api";
 import apiClient from "../services/api";
 import { storeUser } from "../services/storage";
+import { SubscriptionAlertModal } from "../components/SubscriptionAlertModal";
 
 type LoginScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Login">;
@@ -29,6 +30,8 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
   const [bannedUserId,    setBannedUserId]    = useState<string>("");
   const [justification,   setJustification]  = useState("");
   const [sendingRequest,  setSendingRequest] = useState(false);
+  const [subAlert,        setSubAlert]       = useState({ visible: false, plan: "", endDate: "" });
+  const [currentUser,     setCurrentUser]    = useState<any>(null);
 
   const handleLogin = async () => {
     if (!email.trim()) {
@@ -51,7 +54,8 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
           ? await doctorAPI.login({ email: email.trim(), password, userType })
           : await userAPI.login({ email: email.trim(), password, userType });
 
-      console.log("Full Response:", JSON.stringify(response.data, null, 2));
+      console.log("📱 [LoginScreen] Full Response:", JSON.stringify(response.data, null, 2));
+      console.log("📱 [LoginScreen] Subscription field:", response.data.subscription);
 
       let userData;
       if (response.data.success) {
@@ -65,6 +69,22 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
       if (userData && userData._id) {
         const userName = userData.fullName || userData.name || "User";
         await storeUser(userData);
+
+        // ✨ Check subscription status for doctors
+        console.log("📱 [LoginScreen] userType:", userType);
+        console.log("📱 [LoginScreen] subscription?.isExpired:", response.data.subscription?.isExpired);
+        
+        if (userType === "doctor" && response.data.subscription?.isExpired) {
+          console.log("🚨 [LoginScreen] SUBSCRIPTION EXPIRED - Showing modal");
+          setCurrentUser(userData);
+          setSubAlert({
+            visible: true,
+            plan: response.data.subscription.plan,
+            endDate: response.data.subscription.endDate,
+          });
+          setLoading(false);
+          return;
+        }
 
         Alert.alert("Success", `Welcome back, ${userName}!`, [
           {
@@ -87,7 +107,7 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
         Alert.alert("Login Failed", "Unexpected response from server");
       }
     } catch (error: any) {
-      console.log("Error Response:", JSON.stringify(error.response?.data, null, 2));
+      console.log("❌ [LoginScreen] Error Response:", JSON.stringify(error.response?.data, null, 2));
       const errData = error.response?.data;
       const status  = error.response?.status;
       // 403 with banned flag OR just 403 (only thrown on login for banned accounts)
@@ -136,6 +156,18 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
   // ── Forgot Password — navigate to ForgotPassword screen ───────────────────
   const handleForgotPassword = () => {
     navigation.navigate("ForgotPassword", { userType });
+  };
+
+  // ── Handle Choose Plan button from subscription alert ─────────────────────
+  const handleChoosePlan = () => {
+    setSubAlert({ visible: false, plan: "", endDate: "" });
+    setCurrentUser(null);
+    if (userType === "doctor" && currentUser) {
+      navigation.navigate("DoctorSubscription", {
+        doctorId: currentUser._id,
+        doctorName: currentUser.fullName,
+      });
+    }
   };
 
   return (
@@ -187,6 +219,19 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
         </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ── Subscription Alert Modal ────────────────────────────────────────────── */}
+      <SubscriptionAlertModal
+        visible={subAlert.visible}
+        plan={subAlert.plan}
+        endDate={subAlert.endDate}
+        onChoosePlan={handleChoosePlan}
+        onDismiss={() => {
+          setSubAlert({ visible: false, plan: "", endDate: "" });
+          setCurrentUser(null);
+        }}
+      />
+
       <StatusBar barStyle="light-content" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
