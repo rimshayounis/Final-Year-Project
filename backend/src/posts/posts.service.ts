@@ -37,7 +37,7 @@ export class PostsService {
     // First pass: populate with refPath
     await this.postModel.populate(posts, {
       path: 'userId',
-      select: 'fullName email profileImage',
+      select: 'fullName email profileImage isBanned',
     });
 
     // Second pass: for any post where userId.fullName is still null,
@@ -53,12 +53,21 @@ export class PostsService {
       }
       await this.postModel.populate(stillUnpopulated, {
         path: 'userId',
-        select: 'fullName email profileImage',
+        select: 'fullName email profileImage isBanned',
         model: 'Doctor',
       });
     }
 
     return posts;
+  }
+
+  // ── Filter out posts from banned users/doctors ──
+  private filterBannedAuthorPosts(posts: PostDocument[]): PostDocument[] {
+    return posts.filter((post) => {
+      const author = post.userId as any;
+      if (!author) return false; // Exclude posts with no author
+      return !author.isBanned; // Exclude if author is banned
+    });
   }
 
 
@@ -114,11 +123,12 @@ export class PostsService {
       ...new Set(interests.flatMap((i) => this.INTEREST_CATEGORY_MAP[i] ?? [])),
     ];
 
-    // 3. Find other users who share at least one interest
+    // 3. Find other users who share at least one interest (excluding banned users)
     const sameInterestUsers = await this.userModel
       .find({
         'healthProfile.interests': { $in: interests },
         _id: { $ne: new Types.ObjectId(userId) },
+        isBanned: false,
       })
       .select('_id')
       .lean()
@@ -181,12 +191,13 @@ export class PostsService {
     );
 
     await this.populateAuthors(docs);
+    const filteredPosts = this.filterBannedAuthorPosts(docs);
 
     return {
-      posts: docs,
-      total,
+      posts: filteredPosts,
+      total: filteredPosts.length,
       page,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(filteredPosts.length / limit),
       isPersonalized: true,
       matchedCategories,
     };
@@ -201,14 +212,17 @@ export class PostsService {
     if (category) query.category = category;
     const skip = (page - 1) * limit;
 
+    // Fetch more posts than requested to account for filtering banned users
+    const fetchLimit = Math.max(limit * 2, 50);
     const [posts, total] = await Promise.all([
-      this.postModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.postModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(fetchLimit).exec(),
       this.postModel.countDocuments(query),
     ]);
 
     await this.populateAuthors(posts);
+    const filteredPosts = this.filterBannedAuthorPosts(posts).slice(0, limit);
 
-    return { posts, total, page, totalPages: Math.ceil(total / limit) };
+    return { posts: filteredPosts, total, page, totalPages: Math.ceil(total / limit) };
   }
 
   async getUserPosts(
@@ -234,14 +248,17 @@ export class PostsService {
   ): Promise<{ posts: PostDocument[]; total: number; page: number; totalPages: number }> {
     const skip = (page - 1) * limit;
 
+    // Fetch more posts than requested to account for filtering banned users
+    const fetchLimit = Math.max(limit * 2, 50);
     const [posts, total] = await Promise.all([
-      this.postModel.find({ status: 'pending', isActive: true }).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.postModel.find({ status: 'pending', isActive: true }).sort({ createdAt: -1 }).skip(skip).limit(fetchLimit).exec(),
       this.postModel.countDocuments({ status: 'pending', isActive: true }),
     ]);
 
     await this.populateAuthors(posts);
+    const filteredPosts = this.filterBannedAuthorPosts(posts).slice(0, limit);
 
-    return { posts, total, page, totalPages: Math.ceil(total / limit) };
+    return { posts: filteredPosts, total, page, totalPages: Math.ceil(total / limit) };
   }
 
   async findOne(id: string): Promise<PostDocument> {
@@ -480,14 +497,17 @@ export class PostsService {
   ): Promise<{ posts: PostDocument[]; total: number; page: number; totalPages: number }> {
     const skip = (page - 1) * limit;
 
+    // Fetch more posts than requested to account for filtering banned users
+    const fetchLimit = Math.max(limit * 2, 50);
     const [posts, total] = await Promise.all([
-      this.postModel.find({ category, status: 'approved', isActive: true }).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.postModel.find({ category, status: 'approved', isActive: true }).sort({ createdAt: -1 }).skip(skip).limit(fetchLimit).exec(),
       this.postModel.countDocuments({ category, status: 'approved', isActive: true }),
     ]);
 
     await this.populateAuthors(posts);
+    const filteredPosts = this.filterBannedAuthorPosts(posts).slice(0, limit);
 
-    return { posts, total, page, totalPages: Math.ceil(total / limit) };
+    return { posts: filteredPosts, total, page, totalPages: Math.ceil(total / limit) };
   }
   // Admin: get all posts including private ones (isActive: false)
   async getAllPostsAdmin(

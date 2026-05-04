@@ -194,7 +194,7 @@ export class AppointmentAvailabilityService {
   async getAllDoctorsWithAvailability(): Promise<any[]> {
     const records = await this.availabilityModel
       .find({ isActive: true })
-      .populate('doctorId', 'fullName email profileImage doctorProfile subscriptionPlan completedCount avgRating ratingCount')
+      .populate('doctorId', 'fullName email profileImage doctorProfile subscriptionPlan completedCount avgRating ratingCount isBanned')
       .exec();
 
     return records.map(r => r.toObject());

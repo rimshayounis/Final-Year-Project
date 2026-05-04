@@ -11,6 +11,8 @@ export default function DoctorProfileViewScreen() {
     <ProfileScreen
       id={doctorId}
       role="doctor"
+      viewerId={userId}
+      viewerRole="user"
       onBack={() => navigation.goBack()}
       onBookAppointment={(doctor) =>
         navigation.navigate('DoctorAppointmentDetail', { doctor, userId })

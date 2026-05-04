@@ -82,6 +82,8 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
         <ProfileScreen
           id={viewingUserId}
           role="user"
+          viewerId={id}
+          viewerRole={role}
           onBack={handleBackFromUser}
         />
       );
@@ -123,6 +125,8 @@ export default function DashboardScreen({ route, navigation }: DashboardScreenPr
             id={id}
             role={role}
             isOwner={true}
+            viewerId={id}
+            viewerRole={role}
             onCreateAppointment={
               role === 'doctor'
                 ? () => navigation.navigate('CreateAppointment', { doctorId: id })

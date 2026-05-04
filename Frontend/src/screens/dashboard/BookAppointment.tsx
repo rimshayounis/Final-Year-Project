@@ -161,7 +161,7 @@ export default function BookAppointmentScreen() {
         const baseUrl = API_URL.replace('/api', '');
         const doctorsData: Doctor[] = await Promise.all(
           response.data.data
-            .filter((item: any) => item.doctorId)
+            .filter((item: any) => item.doctorId && !item.doctorId.isBanned)
             .map(async (item: any) => {
               const raw = item.doctorId.doctorProfile?.specialization || 'General';
               const specialization = raw.trim().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
