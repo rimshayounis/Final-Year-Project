@@ -7,9 +7,10 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { Doctor, DoctorDocument } from './schemas/doctor.schema';
+import { Post, PostDocument } from '../posts/schemas/post.schema';
 import { MailService } from '../mail/mail.service';
 import { SubscriptionPlanService } from '../subscription-plan/subscription-plan.service';
 import {
@@ -24,6 +25,7 @@ import {
 export class DoctorsService {
   constructor(
     @InjectModel(Doctor.name) private doctorModel: Model<DoctorDocument>,
+    @InjectModel(Post.name)   private postModel:   Model<PostDocument>,
     private readonly mailService: MailService,
     private readonly subscriptionPlanService: SubscriptionPlanService,
   ) {}
@@ -239,7 +241,11 @@ export class DoctorsService {
   async deleteDoctor(doctorId: string) {
     const doctor = await this.doctorModel.findByIdAndDelete(doctorId);
     if (!doctor) throw new NotFoundException('Doctor not found');
-    return { success: true, message: 'Doctor deleted' };
+    
+    // Cascade delete: remove all posts by this doctor
+    await this.postModel.deleteMany({ userId: new Types.ObjectId(doctorId), userModel: 'Doctor' });
+    
+    return { success: true, message: 'Doctor and their posts deleted' };
   }
 
   async getBankDetails(doctorId: string) {

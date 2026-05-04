@@ -4,6 +4,7 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { User, UserSchema } from './schemas/user.schema';
 import { UserProfile, UserProfileSchema } from '../user-profile/schemas/user-profile.schema';
+import { Post, PostSchema } from '../posts/schemas/post.schema';
 import { MailModule } from '../mail/mail.module';
 import { NotificationModule } from '../notification/notification.module';
 import { FriendSuggestionScheduler } from './friend-suggestion.scheduler';
@@ -13,6 +14,7 @@ import { FriendSuggestionScheduler } from './friend-suggestion.scheduler';
     MongooseModule.forFeature([
       { name: User.name,        schema: UserSchema },
       { name: UserProfile.name, schema: UserProfileSchema },
+      { name: Post.name,        schema: PostSchema },
     ]),
     MailModule,
     NotificationModule,

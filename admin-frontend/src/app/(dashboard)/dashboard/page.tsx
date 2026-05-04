@@ -598,7 +598,7 @@ export default function DashboardPage() {
                           {heldAppts.map(a => (
                             <div key={a._id} className="held-row">
                               <span className="held-cell">{(a.userId as any)?.fullName || '—'}</span>
-                              <span className="held-cell">Dr. {(a.doctorId as any)?.fullName || '—'}</span>
+                              <span className="held-cell">{(a.doctorId as any)?.fullName || '—'}</span>
                               <span className="held-cell">{a.date} · {a.time}</span>
                               <span className="held-cell held-amt">PKR {(a.heldAmount || 0).toLocaleString()}</span>
                               <span className="held-chip">Held</span>

@@ -11,6 +11,7 @@ import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
 import { UserProfile, UserProfileDocument } from '../user-profile/schemas/user-profile.schema';
+import { Post, PostDocument } from '../posts/schemas/post.schema';
 import { MailService } from '../mail/mail.service';
 import {
   RegisterUserDto,
@@ -27,6 +28,7 @@ export class UsersService {
   constructor(
     @InjectModel(User.name)        private userModel:    Model<UserDocument>,
     @InjectModel(UserProfile.name) private profileModel: Model<UserProfileDocument>,
+    @InjectModel(Post.name)        private postModel:    Model<PostDocument>,
     private readonly mailService: MailService,
   ) {}
 
@@ -363,7 +365,11 @@ export class UsersService {
   async deleteUser(userId: string) {
     const user = await this.userModel.findByIdAndDelete(userId);
     if (!user) throw new NotFoundException('User not found');
-    return { success: true, message: 'User deleted' };
+    
+    // Cascade delete: remove all posts by this user
+    await this.postModel.deleteMany({ userId: new Types.ObjectId(userId) });
+    
+    return { success: true, message: 'User and their posts deleted' };
   }
 
   async changePassword(

@@ -200,7 +200,7 @@ export default function FeedbackPage() {
                       <div className="fb-doc-avatar">{d.name[0]?.toUpperCase() || 'D'}</div>
                       <RatingBadge rating={d.avgRating} />
                     </div>
-                    <div className="fb-doc-name">Dr. {d.name}</div>
+                    <div className="fb-doc-name">{d.name}</div>
                     {d.specialization && <div className="fb-doc-spec">{d.specialization}</div>}
                     <MentorLevelBadge level={mentorLevels[d.doctorId]} size="sm" />
                     <StarRating rating={Math.round(d.avgRating)} />
